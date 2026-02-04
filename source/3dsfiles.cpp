@@ -272,8 +272,8 @@ bool IsFileExists(const char * filename) {
 //----------------------------------------------------------------------
 void file3dsGoToChildDirectory(const char* childDir)
 {
-    strncat(currentDir, &childDir[0], _MAX_PATH);
-    strncat(currentDir, "/", _MAX_PATH);
+    strncat(currentDir, &childDir[0], _MAX_PATH - 1);
+    strncat(currentDir, "/", _MAX_PATH - 1);
 }
 
 StoredFile file3dsGetStoredFileById(const std::string& id) {
