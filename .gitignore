@@ -7,3 +7,6 @@ build
 Thumbs.db
 releases/*
 .vscode/*
+build_scripts
+build_logs
+build_flags.txt

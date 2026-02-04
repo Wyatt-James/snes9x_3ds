@@ -74,8 +74,7 @@ GX_TRANSFER_FORMAT {
 
 
 
-u32 *gpuCommandBuffer1;
-u32 *gpuCommandBuffer2;
+u32 *gpuCommandBuffers[2];
 int gpuCommandBufferSize = 0;
 int gpuCurrentCommandBuffer = 0;
 SGPU3DS GPU3DS;
@@ -462,15 +461,15 @@ bool gpu3dsInitialize()
     // Create the command buffers
     //
     gpuCommandBufferSize = COMMAND_BUFFER_SIZE;
-    gpuCommandBuffer1 = (u32 *)linearAlloc(COMMAND_BUFFER_SIZE / 2);
-    gpuCommandBuffer2 = (u32 *)linearAlloc(COMMAND_BUFFER_SIZE / 2);
-    if (gpuCommandBuffer1 == NULL || gpuCommandBuffer2 == NULL)
+    gpuCommandBuffers[0] = (u32 *)linearAlloc(COMMAND_BUFFER_SIZE / 2);
+    gpuCommandBuffers[1] = (u32 *)linearAlloc(COMMAND_BUFFER_SIZE / 2);
+    if (gpuCommandBuffers[0] == NULL || gpuCommandBuffers[1] == NULL)
         return false;
-	GPUCMD_SetBuffer(gpuCommandBuffer1, gpuCommandBufferSize, 0);
+	GPUCMD_SetBuffer(gpuCommandBuffers[0], gpuCommandBufferSize, 0);
     gpuCurrentCommandBuffer = 0;
 
 #ifndef RELEASE
-    printf ("Buffer: %8x\n", (u32) gpuCommandBuffer1);
+    printf ("Buffer: %8x\n", (u32) gpuCommandBuffers[0]);
 #endif
 
 #ifdef RELEASE
@@ -552,8 +551,8 @@ void gpu3dsFinalize()
     if (GPU3DS.frameBuffer) vramFree(GPU3DS.frameBuffer);
     if (GPU3DS.frameDepthBuffer) vramFree(GPU3DS.frameDepthBuffer);
 
-    LINEARFREE_SAFE(gpuCommandBuffer1);
-    LINEARFREE_SAFE(gpuCommandBuffer2);
+    LINEARFREE_SAFE(gpuCommandBuffers[0]);
+    LINEARFREE_SAFE(gpuCommandBuffers[1]);
 
 #ifndef RELEASE
     printf("gfxExit:\n");
@@ -716,14 +715,7 @@ void gpu3dsStartNewFrame()
 
     impl3dsPrepareForNewFrame();
 
-    if (gpuCurrentCommandBuffer == 0)
-    {
-	    GPUCMD_SetBuffer(gpuCommandBuffer1, gpuCommandBufferSize, 0);
-    }
-    else
-    {
-	    GPUCMD_SetBuffer(gpuCommandBuffer2, gpuCommandBufferSize, 0);
-    }
+    GPUCMD_SetBuffer(gpuCommandBuffers[gpuCurrentCommandBuffer], gpuCommandBufferSize, 0);
 }
 
 

@@ -9,6 +9,10 @@
 
 #include "gpulib.h"
 
+#ifndef GPUCMD_AddIncrementalWrites_Inline
+#define GPUCMD_AddIncrementalWrites_Inline GPUCMD_AddIncrementalWrites
+#endif
+
 void GPU_SetFloatUniform(GPU_SHADER_TYPE type, u32 startreg, u32* data, u32 numreg)
 {
 	if(!data)return;
@@ -35,7 +39,7 @@ void GPU_SetViewport(u32* depthBuffer, u32* colorBuffer, u32 x, u32 y, u32 w, u3
 	param[0x0]=((u32)depthBuffer)>>3;
 	param[0x1]=((u32)colorBuffer)>>3;
 	param[0x2]=f116e;
-	GPUCMD_AddIncrementalWrites(GPUREG_DEPTHBUFFER_LOC, param, 0x00000003);
+	GPUCMD_AddIncrementalWrites_Inline(GPUREG_DEPTHBUFFER_LOC, param, 0x00000003);
 
 	GPUCMD_AddWrite(GPUREG_RENDERBUF_DIM, f116e);
 	GPUCMD_AddWrite(GPUREG_DEPTHBUFFER_FORMAT, 0x00000003); //depth buffer format
@@ -46,21 +50,21 @@ void GPU_SetViewport(u32* depthBuffer, u32* colorBuffer, u32 x, u32 y, u32 w, u3
 	param[0x1]=f32tof31(2.0f / fw) << 1;
 	param[0x2]=f32tof24(fh/2);
 	param[0x3]=f32tof31(2.0f / fh) << 1;
-	GPUCMD_AddIncrementalWrites(GPUREG_VIEWPORT_WIDTH, param, 0x00000004);
+	GPUCMD_AddIncrementalWrites_Inline(GPUREG_VIEWPORT_WIDTH, param, 0x00000004);
 
 	GPUCMD_AddWrite(GPUREG_VIEWPORT_XY, (y<<16)|(x&0xFFFF));
 
 	param[0x0]=0x00000000;
 	param[0x1]=0x00000000;
 	param[0x2]=((h-1)<<16)|((w-1)&0xFFFF);
-	GPUCMD_AddIncrementalWrites(GPUREG_SCISSORTEST_MODE, param, 0x00000003);
+	GPUCMD_AddIncrementalWrites_Inline(GPUREG_SCISSORTEST_MODE, param, 0x00000003);
 
 	//enable depth buffer
 	param[0x0]=0x0000000F;
 	param[0x1]=0x0000000F;
 	param[0x2]=0x00000002;
 	param[0x3]=0x00000002;
-	GPUCMD_AddIncrementalWrites(GPUREG_COLORBUFFER_READ, param, 0x00000004);
+	GPUCMD_AddIncrementalWrites_Inline(GPUREG_COLORBUFFER_READ, param, 0x00000004);
 }
 
 void GPU_SetScissorTest(GPU_SCISSORMODE mode, u32 left, u32 bottom, u32 right, u32 top)
@@ -70,7 +74,7 @@ void GPU_SetScissorTest(GPU_SCISSORMODE mode, u32 left, u32 bottom, u32 right, u
 	param[0x0] = mode;
 	param[0x1] = (bottom<<16)|(left&0xFFFF);
 	param[0x2] = ((top-1)<<16)|((right-1)&0xFFFF);
-	GPUCMD_AddIncrementalWrites(GPUREG_SCISSORTEST_MODE, param, 0x00000003);
+	GPUCMD_AddIncrementalWrites_Inline(GPUREG_SCISSORTEST_MODE, param, 0x00000003);
 }
 
 void GPU_DepthMap(float zScale, float zOffset)
@@ -182,7 +186,7 @@ void GPU_SetAttributeBuffers(u8 totalAttributes, u32* baseAddress, u64 attribute
 	GPUCMD_AddWrite(GPUREG_VSH_NUM_ATTR, (totalAttributes-1));
 
     u32 permutationArray[] = {attributePermutation&0xFFFFFFFF, (attributePermutation>>32)&0xFFFF};
-	GPUCMD_AddIncrementalWrites(GPUREG_VSH_ATTRIBUTES_PERMUTATION_LOW, permutationArray, 2);
+	GPUCMD_AddIncrementalWrites_Inline(GPUREG_VSH_ATTRIBUTES_PERMUTATION_LOW, permutationArray, 2);
 }
 
 const u8 GPU_TEVID[]={0xC0,0xC8,0xD0,0xD8,0xF0,0xF8};
@@ -199,7 +203,7 @@ void GPU_SetTexEnv(u8 id, u16 rgbSources, u16 alphaSources, u16 rgbOperands, u16
 	param[0x2]=(alphaCombine<<16)|(rgbCombine);
 	param[0x3]=constantColor;
 	param[0x4]=0x00000000; // ?
-	GPUCMD_AddIncrementalWrites(GPUREG_0000|GPU_TEVID[id], param, 0x00000005);
+	GPUCMD_AddIncrementalWrites_Inline(GPUREG_0000|GPU_TEVID[id], param, 0x00000005);
 }
 
 void GPU_DrawArray(GPU_Primitive_t primitive, u32 first, u32 count)
