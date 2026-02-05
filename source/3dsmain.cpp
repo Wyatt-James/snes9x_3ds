@@ -2159,6 +2159,7 @@ void updateSecondScreenContent()
 
 
 #if !defined(RELEASE) && !defined(DEBUG_CPU) && !defined(DEBUG_APU)
+        t3dsSetTotalForPercentage(t3dsGetTime(1)); // aptMainLoop (total)
         printf ("\n\n");
         for (int i=0; i<100; i++)
         {
@@ -2226,7 +2227,7 @@ void emulatorLoop()
 
 	while (true)
 	{
-        t3dsStartTiming(1, "aptMainLoop");
+        t3dsStartTiming(1, "aptMainLoop (total)");
 
         startFrameTick = svcGetSystemTick();
         aptMainLoop();

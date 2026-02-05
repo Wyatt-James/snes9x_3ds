@@ -24,6 +24,7 @@ extern T3DS_Clock t3dsClocks[T3DS_NUM_CLOCKS];
 void t3dsResetTimings(void);
 void t3dsCount(int bucket, char *name);
 void t3dsShowTotalTiming(int bucket);
+void t3dsSetTotalForPercentage(u64 time);
 
 static inline void t3dsStartTiming(int bucket, char *clockName)
 {
@@ -38,6 +39,8 @@ static inline void t3dsEndTiming(int bucket)
     clock->count++;
 }
 
+static inline u64 t3dsGetTime(int bucket) {return t3dsClocks[bucket].totalTicks;}
+
 #else // RELEASE
 #define T3DS_NUM_CLOCKS 0
 static inline void t3dsResetTimings(void)                       {} // Stub
@@ -45,6 +48,8 @@ static inline void t3dsCount(int bucket, char *name)            {} // Stub
 static inline void t3dsShowTotalTiming(int bucket)              {} // Stub
 static inline void t3dsStartTiming(int bucket, char *clockName) {} // Stub
 static inline void t3dsEndTiming(int bucket)                    {} // Stub
+static inline void t3dsSetTotalForPercentage(u64 time)          {} // Stub
+static inline u64  t3dsGetTime(int bucket)                      {return 0;} // Stub
 #endif // RELEASE
 
 #endif
