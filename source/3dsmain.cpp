@@ -249,7 +249,12 @@ void initThumbnailThread() {
     int i = 0;
 	s32 prio = 0;
 	svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
-	thumbnailCachingThread = threadCreate(threadThumbnailCaching, (void*)(500), STACKSIZE, prio-1, -2, false);
+
+    // Priority cannot exceed 0x3F. Clamp.
+    if (prio < 0x3F)
+        prio++;
+
+	thumbnailCachingThread = threadCreate(threadThumbnailCaching, (void*)(500), STACKSIZE, prio, -2, false);
 }
 
 
