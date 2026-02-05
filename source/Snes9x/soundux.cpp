@@ -6,6 +6,7 @@
 #undef TRUE
 #endif
 
+#include <arm_acle.h>
 #include <stdio.h>
 #include "snes9x.h"
 #include "apu.h"
@@ -146,19 +147,11 @@ static int OldNoiseFreq[32] =
 #undef	ABS
 #define	ABS(a)	((a) < 0 ? -(a) : (a))
 
-#define CLIP16(v) \
-	if ((v) < -32768) \
-		(v) = -32768; \
-	else \
-	if ((v) > 32767) \
-		(v) = 32767
+#define saturate16(v) (__ssat(v, 16))
+#define saturate8(v)  (__ssat(v, 8))
 
-#define CLIP8(v) \
-	if ((v) < -128) \
-		(v) = -128; \
-	else \
-	if ((v) > 127) \
-		(v) = 127
+#define CLIP16(v) do {v = saturate16(v);} while(0)
+#define CLIP8(v) do {v = saturate8(v);} while(0)
 
 void S9xAPUSetEndOfSample (int i, Channel *);
 void S9xAPUSetEndX (int);
