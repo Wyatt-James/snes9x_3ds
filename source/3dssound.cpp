@@ -275,8 +275,7 @@ bool snd3dsInitialize()
 
     snd3DS.isPlaying = false;
     snd3DS.audioType = 0;
-    Result ret = 0;
-    ret = csndInit();
+    Result ret = csndInit();
 
 #ifndef RELEASE
     printf ("Trying to initialize CSND, ret = %x\n", ret);
@@ -358,22 +357,20 @@ bool snd3dsInitialize()
     Result cpuRes = APT_SetAppCpuTimeLimit(30);
 
 #ifndef RELEASE
-        printf ("snd3dsInit - DSP Stack: %x\n", snd3DS.mixingThreadStack);
+        printf ("snd3dsInit - DSP Stack size: %x\n", 0x4000);
         printf ("snd3dsInit - DSP ThreadFunc: %x\n", &snd3dsMixingThread);
 #endif
         IAPU.DSPReplayIndex = 0;
         IAPU.DSPWriteIndex = 0;
-        ret = svcCreateThread(&snd3DS.mixingThreadHandle, snd3dsMixingThread, 0,
-            (u32*)(snd3DS.mixingThreadStack+0x4000), 0x18, 1);
-        if (ret)
+        if ((snd3DS.mixingThread = threadCreate(snd3dsMixingThread, NULL, 0x4000, 0x18, 1, false)) == NULL)
         {
-            printf("Unable to start DSP thread: %x\n", ret);
+            printf("Unable to start DSP thread\n");
             snd3dsFinalize();
             DEBUG_WAIT_L_KEY
             return false;
         }
 #ifndef RELEASE
-        printf ("snd3dsInit - Create DSP thread %x\n", snd3DS.mixingThreadHandle);
+        printf ("snd3dsInit - Create DSP thread %x\n", threadGetHandle(snd3DS.mixingThread));
 #endif
     }
 
@@ -392,14 +389,15 @@ void snd3dsFinalize()
 {
      snd3DS.terminateMixingThread = true;
 
-     if (snd3DS.mixingThreadHandle)
+     if (snd3DS.mixingThread)
      {
          // Wait (at most 1 second) for the sound thread to finish,
 #ifndef RELEASE
          printf ("Join mixingThreadHandle\n");
 #endif
-         svcWaitSynchronization(snd3DS.mixingThreadHandle, 1000 * 1000000);
-         svcCloseHandle(snd3DS.mixingThreadHandle);
+         threadJoin(snd3DS.mixingThread, 1000 * 1000000);
+         threadFree(snd3DS.mixingThread);
+         snd3DS.mixingThread = NULL;
      }
 
     if (snd3DS.fullBuffers)  linearFree(snd3DS.fullBuffers);
