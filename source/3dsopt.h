@@ -13,7 +13,7 @@ typedef struct
 {
     char *name;
     int count;
-    u64 startTick, totalTick;
+    u64 startTick, totalTicks;
 } T3DS_Clock;
 
 #ifndef RELEASE
@@ -34,7 +34,7 @@ static inline void t3dsStartTiming(int bucket, char *clockName)
 static inline void t3dsEndTiming(int bucket)
 {
     T3DS_Clock* clock = &t3dsClocks[bucket];
-    clock->totalTick += (svcGetSystemTick() - clock->startTick);
+    clock->totalTicks += (svcGetSystemTick() - clock->startTick);
     clock->count++;
 }
 
