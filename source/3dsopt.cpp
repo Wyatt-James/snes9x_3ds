@@ -1,62 +1,42 @@
-
-
-
-
-#define _3DSOPT_CPP_
 #include "3dsopt.h"
 #include "3dssnes9x.h"
 
-#define TICKS_PER_SEC (268123)
-
-//--------------------------------------------------------------------------------
-// Initialize optimizations
-//--------------------------------------------------------------------------------
-
-
-
-char *emptyString = "";
-
-// Optimization variables
-//
-
-
-//struct ST3DSOpt t3dsOpt;
-
-void t3dsResetTimings()
-{
 #ifndef RELEASE
-	for (int i = 0; i < 100; i++)
+
+T3DS_Clock t3dsClocks[T3DS_NUM_CLOCKS];
+
+void t3dsResetTimings(void)
+{
+	for (int i = 0; i < T3DS_NUM_CLOCKS; i++)
     {
-        t3dsTotalTicks[i] = 0; 
-        t3dsTotalCount[i] = 0;
-        t3dsClockName[i] = emptyString;
+        T3DS_Clock* clock = &t3dsClocks[i];
+        clock->totalTick = 0; 
+        clock->count = 0;
+        clock->name = "";
     }
-#endif
 }
-
-
-
 
 void t3dsCount(int bucket, char *clockName)
 {
-#ifndef RELEASE
-    t3dsStartTicks[bucket] = -1; 
-    t3dsClockName[bucket] = clockName;
-    t3dsTotalCount[bucket]++;
-#endif
+    T3DS_Clock* clock = &t3dsClocks[bucket];
+    clock->startTick = -1;
+    clock->name = clockName;
+    clock->count++;
 }
 
-
-
+// These are TOTAL timings, cumulative of all frames since the clocks were last reset.
 void t3dsShowTotalTiming(int bucket)
 {
-#ifndef RELEASE
-    if (t3dsTotalTicks[bucket] > 0)
-        printf ("%-20s: %2d %4d ms %d\n", t3dsClockName[bucket], bucket,
-        (int)(t3dsTotalTicks[bucket] / TICKS_PER_SEC), 
-        t3dsTotalCount[bucket]);
-    else if (t3dsStartTicks[bucket] == -1 && t3dsTotalCount[bucket] > 0)
-        printf ("%-20s: %2d %d\n", t3dsClockName[bucket], bucket,
-        t3dsTotalCount[bucket]);
-#endif
+    T3DS_Clock* clock = &t3dsClocks[bucket];
+
+    if (clock->totalTick > 0)
+    {
+        printf ("%-20s: %2d %4dms %d\n", clock->name, bucket, (int)(clock->totalTick / (u64)CPU_TICKS_PER_MSEC), clock->count);
+    }
+    else if (clock->startTick == -1 && clock->count > 0)
+    {
+        printf ("%-20s: %2d %d\n", clock->name, bucket, clock->count);
+    }
 }
+
+#endif // RELEASE

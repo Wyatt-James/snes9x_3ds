@@ -2,52 +2,49 @@
 #ifndef _3DSOPT_H_
 #define _3DSOPT_H_
 
-
 #include <3ds.h>
 
 #include "snes9x.h"
 #include "port.h"
 #include "memmap.h"
 #include "3dssnes9x.h"
- 
 
-#ifdef _3DSOPT_CPP_
+typedef struct
+{
+    char *name;
+    int count;
+    u64 startTick, totalTick;
+} T3DS_Clock;
 
-char *t3dsClockName[100];
-int t3dsTotalCount[100];
-u64 t3dsStartTicks[100];
-u64 t3dsTotalTicks[100];
+#ifndef RELEASE
 
-#else
+#define T3DS_NUM_CLOCKS 100
+extern T3DS_Clock t3dsClocks[T3DS_NUM_CLOCKS];
 
-extern char *t3dsClockName[100];
-extern int t3dsTotalCount[100];
-extern u64 t3dsStartTicks[100];
-extern u64 t3dsTotalTicks[100];
-
-#endif
-
-
-void t3dsResetTimings();
+void t3dsResetTimings(void);
 void t3dsCount(int bucket, char *name);
 void t3dsShowTotalTiming(int bucket);
 
-
-inline void t3dsStartTiming(int bucket, char *clockName)
+static inline void t3dsStartTiming(int bucket, char *clockName)
 {
-#ifndef RELEASE
-    t3dsStartTicks[bucket] = svcGetSystemTick(); 
-    t3dsClockName[bucket] = clockName;
-#endif
+    t3dsClocks[bucket].startTick = svcGetSystemTick();
+    t3dsClocks[bucket].name = clockName;
 }
 
-inline void t3dsEndTiming(int bucket)
+static inline void t3dsEndTiming(int bucket)
 {
-#ifndef RELEASE
-    u64 endTicks = svcGetSystemTick(); 
-    t3dsTotalTicks[bucket] += (endTicks - (u64)t3dsStartTicks[bucket]);
-    t3dsTotalCount[bucket]++;
-#endif
+    T3DS_Clock* clock = &t3dsClocks[bucket];
+    clock->totalTick += (svcGetSystemTick() - clock->startTick);
+    clock->count++;
 }
+
+#else // RELEASE
+#define T3DS_NUM_CLOCKS 0
+static inline void t3dsResetTimings(void)                       {} // Stub
+static inline void t3dsCount(int bucket, char *name)            {} // Stub
+static inline void t3dsShowTotalTiming(int bucket)              {} // Stub
+static inline void t3dsStartTiming(int bucket, char *clockName) {} // Stub
+static inline void t3dsEndTiming(int bucket)                    {} // Stub
+#endif // RELEASE
 
 #endif
