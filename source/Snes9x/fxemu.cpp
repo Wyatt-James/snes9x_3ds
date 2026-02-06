@@ -14,16 +14,103 @@ uint32 (**fx_ppfFunctionTable)(uint32) = 0;
 void (**fx_ppfPlotTable)() = 0;
 void (**fx_ppfOpcodeTable)() = 0;
 
+#define FXEMU_ENABLE_CALL_COUNTING 0
 
+enum
+{
+	F_FxCacheWriteAccess,
+	F_FxFlushCache,
+	F_fx_flushCache,
+	F_fx_updateRamBank,
+	F_fx_readRegisterSpace,
+	F_fx_dirtySCBR,
+	F_fx_computeScreenPointersY,
+	F_fx_computeScreenPointersN,
+	F_fx_writeRegisterSpace,
+	F_FxReset,
+	F_fx_checkStartAddress,
+	F_FxEmulate,
+	F_FxBreakPointSet,
+	F_FxBreakPointClear,
+	F_FxStepOver,
+	F_FxGetErrorCode,
+	F_FxGetIllegalAddress,
+	F_FxGetColorRegister,
+	F_FxGetPlotOptionRegister,
+	F_FxGetSourceRegisterIndex,
+	F_FxGetDestinationRegisterIndex,
+	F_FxPipe,
+	F_COUNT // Number of function log slots
+};
+
+typedef struct
+{
+	char* name;
+	int count;
+	int max;
+} CallCount;
+
+#if FXEMU_ENABLE_CALL_COUNTING == 1
+CallCount callCounts[F_COUNT] = {
+	[F_FxCacheWriteAccess]            = {"FxCacheWriteAccess           ", 0, 0},
+	[F_FxFlushCache]                  = {"FxFlushCache                 ", 0, 0},
+	[F_fx_flushCache]                 = {"fx_flushCache                ", 0, 0},
+	[F_fx_updateRamBank]              = {"fx_updateRamBank             ", 0, 0},
+	[F_fx_readRegisterSpace]          = {"fx_readRegisterSpace         ", 0, 0},
+	[F_fx_dirtySCBR]                  = {"fx_dirtySCBR                 ", 0, 0},
+	[F_fx_computeScreenPointersY]     = {"fx_computeScreenPointersY    ", 0, 0},
+	[F_fx_computeScreenPointersN]     = {"fx_computeScreenPointersN    ", 0, 0},
+	[F_fx_writeRegisterSpace]         = {"fx_writeRegisterSpace        ", 0, 0},
+	[F_FxReset]                       = {"FxReset                      ", 0, 0},
+	[F_fx_checkStartAddress]          = {"fx_checkStartAddress         ", 0, 0},
+	[F_FxEmulate]                     = {"FxEmulate                    ", 0, 0},
+	[F_FxBreakPointSet]               = {"FxBreakPointSet              ", 0, 0},
+	[F_FxBreakPointClear]             = {"FxBreakPointClear            ", 0, 0},
+	[F_FxStepOver]                    = {"FxStepOver                   ", 0, 0},
+	[F_FxGetErrorCode]                = {"FxGetErrorCode               ", 0, 0},
+	[F_FxGetIllegalAddress]           = {"FxGetIllegalAddress          ", 0, 0},
+	[F_FxGetColorRegister]            = {"FxGetColorRegister           ", 0, 0},
+	[F_FxGetPlotOptionRegister]       = {"FxGetPlotOptionRegister      ", 0, 0},
+	[F_FxGetSourceRegisterIndex]      = {"FxGetSourceRegisterIndex     ", 0, 0},
+	[F_FxGetDestinationRegisterIndex] = {"FxGetDestinationRegisterIndex", 0, 0},
+	[F_FxPipe]                        = {"FxPipe                       ", 0, 0},
+};
+
+void fxPrintCounts(void)
+{
+	for (int i = 0; i < F_COUNT; i++)
+		printf("%s %2d %3d\n", callCounts[i].name, callCounts[i].count, callCounts[i].max);
+}
+
+void fxStartFrame(void)
+{
+	for (int i = 0; i < F_COUNT; i++)
+		callCounts[i].count = 0;
+}
+
+static void logFunctionCall(int id)
+{
+	callCounts[id].count++;
+	if (callCounts[id].count > callCounts[id].max)
+		callCounts[id].max = callCounts[id].count;
+}
+
+#else
+void fxPrintCounts(void) {} // Stub
+void fxStartFrame(void) {} // Stub
+static void logFunctionCall(int id) {} // Stub
+#endif
 
 void FxCacheWriteAccess(uint16 vAddress)
 {
+	logFunctionCall(F_FxCacheWriteAccess);
     if((vAddress & 0x00f) == 0x00f)
 	GSU.vCacheFlags |= 1 << ((vAddress&0x1f0) >> 4);
 }
 
 void FxFlushCache()
 {
+	logFunctionCall(F_FxFlushCache);
     GSU.vCacheFlags = 0;
     GSU.vCacheBaseReg = 0;
     GSU.bCacheActive = FALSE;
@@ -32,6 +119,7 @@ void FxFlushCache()
 
 void fx_flushCache()
 {
+	logFunctionCall(F_fx_flushCache);
     GSU.vCacheFlags = 0;
     GSU.bCacheActive = FALSE;
 }
@@ -39,6 +127,7 @@ void fx_flushCache()
 
 void fx_updateRamBank(uint8 Byte)
 {
+	logFunctionCall(F_fx_updateRamBank);
 	// Update BankReg and Bank pointer
     GSU.vRamBankReg = (uint32)Byte & (FX_RAM_BANKS-1);
     GSU.pvRamBank = GSU.apvRamBank[Byte & 0x3];
@@ -47,30 +136,28 @@ void fx_updateRamBank(uint8 Byte)
 
 static void fx_readRegisterSpace()
 {
-    int i;
-    uint8 *p;
+	logFunctionCall(F_fx_readRegisterSpace);
     static uint32 avHeight[] = { 128, 160, 192, 256 };
     static uint32 avMult[] = { 16, 32, 32, 64 };
 
     GSU.vErrorCode = 0;
 
+	// Compliant optimized (0x2cc -> 0x20c)
     /* Update R0-R15 */
-    p = GSU.pvRegisters;
-    for(i=0; i<16; i++)
+    uint8* p = GSU.pvRegisters;
+    for(int i = 0; i < 16; i++)
     {
-			GSU.avReg[i] = *p++;
-			GSU.avReg[i] += ((uint32)(*p++)) << 8;
+			GSU.avReg[i] = p[0] | ((uint32)(p[1])) << 8;
+			p += 2;
     }
 
     /* Update other registers */
-    p = GSU.pvRegisters;
-    GSU.vStatusReg = (uint32)p[GSU_SFR];
-    GSU.vStatusReg |= ((uint32)p[GSU_SFR+1]) << 8;
-    GSU.vPrgBankReg = (uint32)p[GSU_PBR];
-    GSU.vRomBankReg = (uint32)p[GSU_ROMBR];
-    GSU.vRamBankReg = ((uint32)p[GSU_RAMBR]) & (FX_RAM_BANKS-1);
-    GSU.vCacheBaseReg = (uint32)p[GSU_CBR];
-    GSU.vCacheBaseReg |= ((uint32)p[GSU_CBR+1]) << 8;
+	p = GSU.pvRegisters;
+    GSU.vStatusReg = ((uint32) p[GSU_SFR]) | (((uint32) p[GSU_SFR+1]) << 8);
+    uint32 vPrgBankReg = GSU.vPrgBankReg =  (uint32) p[GSU_PBR];
+	uint32 vRomBankReg = GSU.vRomBankReg =  (uint32) p[GSU_ROMBR];
+    uint32 vRamBankReg = GSU.vRamBankReg = ((uint32) p[GSU_RAMBR]) & (FX_RAM_BANKS-1);
+    GSU.vCacheBaseReg = ((uint32) p[GSU_CBR]) | (((uint32)p[GSU_CBR+1]) << 8);
 
     /* Update status register variables */
     GSU.vZero = !(GSU.vStatusReg & FLG_Z);
@@ -79,16 +166,16 @@ static void fx_readRegisterSpace()
     GSU.vCarry = (GSU.vStatusReg & FLG_CY) >> 2;
     
     /* Set bank pointers */
-    GSU.pvRamBank = GSU.apvRamBank[GSU.vRamBankReg & 0x3];
-    GSU.pvRomBank = GSU.apvRomBank[GSU.vRomBankReg];
-    GSU.pvPrgBank = GSU.apvRomBank[GSU.vPrgBankReg];
+    GSU.pvRamBank = GSU.apvRamBank[vRamBankReg & 0x3];
+    GSU.pvRomBank = GSU.apvRomBank[vRomBankReg];
+    GSU.pvPrgBank = GSU.apvRomBank[vPrgBankReg];
 
     /* Set screen pointers */
-    GSU.pvScreenBase = &GSU.pvRam[ USEX8(p[GSU_SCBR]) << 10 ];
-    i = (int)(!!(p[GSU_SCMR] & 0x04));
-    i |= ((int)(!!(p[GSU_SCMR] & 0x20))) << 1;
+    GSU.pvScreenBase = &GSU.pvRam[USEX8(p[GSU_SCBR]) << 10];
+	uint8 pvGsuScmr = p[GSU_SCMR];
+    int i = ((int)(!!(pvGsuScmr & 0x04))) | (((int)(!!(pvGsuScmr & 0x20))) << 1);
     GSU.vScreenHeight = GSU.vScreenRealHeight = avHeight[i];
-    GSU.vMode = p[GSU_SCMR] & 0x03;
+    uint32 vMode = GSU.vMode = pvGsuScmr & 0x03;
 
     if(i == 3)
 		GSU.vScreenSize = (256/8) * (256/8) * 32;
@@ -98,24 +185,19 @@ static void fx_readRegisterSpace()
     if (GSU.vPlotOptionReg & 0x10)
 		/* OBJ Mode (for drawing into sprites) */
 		GSU.vScreenHeight = 256;
- 
 
     if(GSU.pvScreenBase + GSU.vScreenSize > GSU.pvRam + (GSU.nRamBanks * 65536))
 		GSU.pvScreenBase =  GSU.pvRam + (GSU.nRamBanks * 65536) - GSU.vScreenSize;
 
-    GSU.pfPlot = fx_apfPlotTable[GSU.vMode];
-    GSU.pfRpix = fx_apfPlotTable[GSU.vMode + 5];
-
-    fx_ppfOpcodeTable[0x04c] = GSU.pfPlot;
-    fx_ppfOpcodeTable[0x14c] = GSU.pfRpix;
-    fx_ppfOpcodeTable[0x24c] = GSU.pfPlot;
-    fx_ppfOpcodeTable[0x34c] = GSU.pfRpix;
+    fx_ppfOpcodeTable[0x04c] = fx_ppfOpcodeTable[0x24c] = GSU.pfPlot = fx_apfPlotTable[vMode];
+    fx_ppfOpcodeTable[0x14c] = fx_ppfOpcodeTable[0x34c] = GSU.pfRpix = fx_apfPlotTable[vMode + 5];
 
     fx_computeScreenPointers ();
 }
 
 void fx_dirtySCBR()
 {
+	logFunctionCall(F_fx_dirtySCBR);
 	GSU.vSCBRDirty = TRUE;
 }
 
@@ -123,145 +205,83 @@ void fx_computeScreenPointers ()
 {
     if (GSU.vMode != GSU.vPrevMode || GSU.vPrevScreenHeight != GSU.vScreenHeight || GSU.vSCBRDirty)
     {
-		int i;
+		logFunctionCall(F_fx_computeScreenPointersY);
+		uint32 i;
 		GSU.vSCBRDirty = FALSE;
 
+		uint32 vModeAdj = GSU.vMode;
+		if (vModeAdj >= 3)
+			vModeAdj = 2;
+
+		uint32 s1 = 4 + vModeAdj,
+			   s2 = 8 + vModeAdj,
+			   s3 = 16 - (7 + vModeAdj);
+
 		/* Make a list of pointers to the start of each screen column */
+		// Case 128 using the doubleshift is 2 more instructions in the
+		// inner loop. The double shift is the same number of
+		// instructions in the loop as without.
 		switch (GSU.vScreenHeight)
 		{
-			case 128:
-			switch (GSU.vMode)
-			{
-				case 0:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 4);
-					GSU.x[i] = i << 8;
-				}
-				break;
-				case 1:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 5);
-					GSU.x[i] = i << 9;
-				}
-				break;
-				case 2:
-				case 3:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 6);
-					GSU.x[i] = i << 10;
-				}
-				break;
-			}
-			break;
-			case 160:
-			switch (GSU.vMode)
-			{
-				case 0:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 4);
-					GSU.x[i] = (i << 8) + (i << 6);
-				}
-				break;
-				case 1:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 5);
-					GSU.x[i] = (i << 9) + (i << 7);
-				}
-				break;
-				case 2:
-				case 3:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 6);
-					GSU.x[i] = (i << 10) + (i << 8);
-				}
-				break;
-			}
-			break;
+			case 128: s3 = 30; // s3 is not used for height 128, so we rightshift enough to zero its result.
+			case 160: s3++;    // 16 - (6 + vModeAdj)
 			case 192:
-			switch (GSU.vMode)
 			{
-				case 0:
 				for (i = 0; i < 32; i++)
 				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 4);
-					GSU.x[i] = (i << 8) + (i << 7);
-				}
-				break;
-				case 1:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 5);
-					GSU.x[i] = (i << 9) + (i << 8);
-				}
-				break;
-				case 2:
-				case 3:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + (i << 6);
-					GSU.x[i] = (i << 10) + (i << 9);
+					GSU.apvScreen[i] = GSU.pvScreenBase + (i << s1);
+					GSU.x[i] = (i << s2) + ((i << 16) >> s3);
 				}
 				break;
 			}
-			break;
 			case 256:
-			switch (GSU.vMode)
 			{
-				case 0:
+				s1 = 9 + vModeAdj;
+				s2 = 8 + vModeAdj;
+				s3 = 4 + vModeAdj;
+			
 				for (i = 0; i < 32; i++)
 				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + 
-					((i & 0x10) << 9) + ((i & 0xf) << 8);
-					GSU.x[i] = ((i & 0x10) << 8) + ((i & 0xf) << 4);
-				}
-				break;
-				case 1:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + 
-					((i & 0x10) << 10) + ((i & 0xf) << 9);
-					GSU.x[i] = ((i & 0x10) << 9) + ((i & 0xf) << 5);
-				}
-				break;
-				case 2:
-				case 3:
-				for (i = 0; i < 32; i++)
-				{
-					GSU.apvScreen[i] = GSU.pvScreenBase + 
-					((i & 0x10) << 11) + ((i & 0xf) << 10);
-					GSU.x[i] = ((i & 0x10) << 10) + ((i & 0xf) << 6);
+					GSU.apvScreen[i] = GSU.pvScreenBase + ((i & 0x10) << s1) + ((i & 0xf) << s2);
+					GSU.x[i] = ((i & 0x10) << s2) + ((i & 0xf) << s3);
 				}
 				break;
 			}
-			break;
 		}
 		GSU.vPrevMode = GSU.vMode;
 		GSU.vPrevScreenHeight = GSU.vScreenHeight;
-    }
+	}
+	else
+	{
+		logFunctionCall(F_fx_computeScreenPointersN);
+	}
 }
 
 static void fx_writeRegisterSpace()
 {
-    int i;
-    uint8 *p;
+	logFunctionCall(F_fx_writeRegisterSpace);
+	uint8* p;
+	
+	// Non-compliant optimized (0x118)
+	// WYATT_TODO if I can properly ensure the alignment here, it'd be a decent speedup.
+    // for(int i = 0; i < 16; i++)
+    // {
+	// 	*(uint16*) __builtin_assume_aligned(&((uint16*) GSU.pvRegisters)[i], _Alignof(uint16)) = GSU.avReg[i];
+    // }
     
+	// Compliant Optimized (0x1dc -> 0x19c)
     p = GSU.pvRegisters;
-    for(i=0; i<16; i++)
+    for(int i = 0; i < 16; i++)
     {
-		*p++ = (uint8)GSU.avReg[i];
-		*p++ = (uint8)(GSU.avReg[i] >> 8);
+		uint32 reg = GSU.avReg[i];
+		*p++ = (uint8)reg;
+		*p++ = (uint8)(reg >> 8);
     }
 
     /* Update status register */
     if( USEX16(GSU.vZero) == 0 ) SF(Z);
     	else CF(Z);
-    if( GSU.vSign & 0x8000 ) SF(S);
+    if(GSU.vSign & 0x8000) SF(S);
     	else CF(S);
     if(GSU.vOverflow >= 0x8000 || GSU.vOverflow < -0x8000) SF(OV);
     	else CF(OV);
@@ -269,19 +289,27 @@ static void fx_writeRegisterSpace()
     	else CF(CY);
     
     p = GSU.pvRegisters;
-    p[GSU_SFR] = (uint8)GSU.vStatusReg;
-    p[GSU_SFR+1] = (uint8)(GSU.vStatusReg>>8);
+	{
+		uint32 vStatusReg = GSU.vStatusReg;
+		p[GSU_SFR] = (uint8)vStatusReg;
+		p[GSU_SFR+1] = (uint8)(vStatusReg>>8);
+	}
+
     p[GSU_PBR] = (uint8)GSU.vPrgBankReg;
     p[GSU_ROMBR] = (uint8)GSU.vRomBankReg;
     p[GSU_RAMBR] = (uint8)GSU.vRamBankReg;
-    p[GSU_CBR] = (uint8)GSU.vCacheBaseReg;
-    p[GSU_CBR+1] = (uint8)(GSU.vCacheBaseReg>>8);
-    
+	
+	{
+		uint32 vCacheBaseReg = GSU.vCacheBaseReg;
+		p[GSU_CBR]   = (uint8)vCacheBaseReg;
+		p[GSU_CBR+1] = (uint8)(vCacheBaseReg>>8);
+	}
 }
 
 /* Reset the FxChip */
 void FxReset(struct FxInit_s *psFxInfo)
 {
+	logFunctionCall(F_FxReset);
     int i;
     static uint32 (**appfFunction[])(uint32) = { &fx_apfFunctionTable[0] };
     static void (**appfPlot[])() = { &fx_apfPlotTable[0] };
@@ -355,6 +383,7 @@ void FxReset(struct FxInit_s *psFxInfo)
 
 static uint8 fx_checkStartAddress()
 {
+	logFunctionCall(F_fx_checkStartAddress);
     /* Check if we start inside the cache */
     if(GSU.bCacheActive && R15 >= GSU.vCacheBaseReg && R15 < (GSU.vCacheBaseReg+512))
 			return TRUE;
@@ -381,6 +410,7 @@ static uint8 fx_checkStartAddress()
 /* Execute until the next stop instruction */
 int FxEmulate(uint32 nInstructions)
 {
+	logFunctionCall(F_FxEmulate);
     uint32 vCount;
 
     /* Read registers and initialize GSU session */
@@ -412,17 +442,20 @@ int FxEmulate(uint32 nInstructions)
 /* Breakpoints */
 void FxBreakPointSet(uint32 vAddress)
 {
+	logFunctionCall(F_FxBreakPointSet);
     GSU.bBreakPoint = TRUE;
     GSU.vBreakPoint = USEX16(vAddress);
 }
 void FxBreakPointClear()
 {
+	logFunctionCall(F_FxBreakPointClear);
     GSU.bBreakPoint = FALSE;
 }
 
 /* Step by step execution */
 int FxStepOver(uint32 nInstructions)
 {
+	logFunctionCall(F_FxStepOver);
     uint32 vCount;
     fx_readRegisterSpace();
 
@@ -451,36 +484,43 @@ int FxStepOver(uint32 nInstructions)
 /* Errors */
 int FxGetErrorCode()
 {
+	logFunctionCall(F_FxGetErrorCode);
     return GSU.vErrorCode;
 }
 
 int FxGetIllegalAddress()
 {
+	logFunctionCall(F_FxGetIllegalAddress);
     return GSU.vIllegalAddress;
 }
 
 /* Access to internal registers */
 uint32 FxGetColorRegister()
 {
+	logFunctionCall(F_FxGetColorRegister);
     return GSU.vColorReg & 0xff;
 }
 
 uint32 FxGetPlotOptionRegister()
 {
+	logFunctionCall(F_FxGetPlotOptionRegister);
     return GSU.vPlotOptionReg & 0x1f;
 }
 
 uint32 FxGetSourceRegisterIndex()
 {
+	logFunctionCall(F_FxGetSourceRegisterIndex);
     return GSU.pvSreg - GSU.avReg;
 }
 
 uint32 FxGetDestinationRegisterIndex()
 {
+	logFunctionCall(F_FxGetDestinationRegisterIndex);
     return GSU.pvDreg - GSU.avReg;
 }
 
 uint8 FxPipe()
 {
+	logFunctionCall(F_FxPipe);
     return GSU.vPipe;
 }
