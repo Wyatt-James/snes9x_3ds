@@ -359,15 +359,20 @@ struct FxRegs_s
 
 /* Execute instruction from the pipe, and fetch next byte to the pipe */
 #define FX_STEP { uint32 vOpcode = (uint32)PIPE; FETCHPIPE; \
-(*fx_ppfOpcodeTable[ (GSU.vStatusReg & 0x300) | vOpcode ])(); } \
+(fx_apfOpcodeTable[ (GSU.vStatusReg & 0x300) | vOpcode ])(); } \
 
 #define FX_FUNCTION_RUN			0
 #define FX_FUNCTION_RUN_TO_BREAKPOINT	1
 #define FX_FUNCTION_STEP_OVER		2
 
+/* Number of opcode tables */
+#define FX_OPCODE_TABLE_NUM_MODES 4
+#define FX_OPCODE_TABLE_PAGE_SIZE 0x100
+#define FX_OPCODE_TABLE_SIZE (FX_OPCODE_TABLE_NUM_MODES * FX_OPCODE_TABLE_PAGE_SIZE)
+
 extern uint32 (**fx_ppfFunctionTable)(uint32);
 extern void (**fx_ppfPlotTable)();
-extern void (**fx_ppfOpcodeTable)();
+extern void (*fx_ppfOpcodeTable[FX_OPCODE_TABLE_SIZE])();
 
 extern uint32 (*fx_apfFunctionTable[])(uint32);
 extern void (*fx_apfOpcodeTable[])();

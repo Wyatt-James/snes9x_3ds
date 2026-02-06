@@ -1546,16 +1546,16 @@ static uint32 fx_run(uint32 nInstructions)
         READR14;
         while( true )
         {
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
         }
     }
     else
@@ -1565,16 +1565,16 @@ static uint32 fx_run(uint32 nInstructions)
         READR14;
         for (int i = 0; LIKELY(i < loopCount); i++ )
         {
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
-            FX_STEP; if (!(TF(G))) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
+            FX_STEP; if (!TF(G)) break;
         }
     }
 
@@ -1586,16 +1586,16 @@ static uint32 fx_run(uint32 nInstructions)
     // READR14;
     // for (int i = 0; LIKELY(i < loopCount); i += step)
     // {
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
-    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
+    //     FX_STEP; if (!TF(G)) break;
     // }
     
 

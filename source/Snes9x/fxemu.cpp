@@ -12,7 +12,6 @@ struct FxRegs_s GSU = FxRegs_s_null;
 
 uint32 (**fx_ppfFunctionTable)(uint32) = 0;
 void (**fx_ppfPlotTable)() = 0;
-void (**fx_ppfOpcodeTable)() = 0;
 
 #define FXEMU_ENABLE_CALL_COUNTING 0
 
@@ -189,8 +188,8 @@ static void fx_readRegisterSpace()
     if(GSU.pvScreenBase + GSU.vScreenSize > GSU.pvRam + (GSU.nRamBanks * 65536))
 		GSU.pvScreenBase =  GSU.pvRam + (GSU.nRamBanks * 65536) - GSU.vScreenSize;
 
-    fx_ppfOpcodeTable[0x04c] = fx_ppfOpcodeTable[0x24c] = GSU.pfPlot = fx_apfPlotTable[vMode];
-    fx_ppfOpcodeTable[0x14c] = fx_ppfOpcodeTable[0x34c] = GSU.pfRpix = fx_apfPlotTable[vMode + 5];
+    fx_apfOpcodeTable[0x04c] = fx_apfOpcodeTable[0x24c] = GSU.pfPlot = fx_apfPlotTable[vMode];
+    fx_apfOpcodeTable[0x14c] = fx_apfOpcodeTable[0x34c] = GSU.pfRpix = fx_apfPlotTable[vMode + 5];
 
     fx_computeScreenPointers ();
 }
@@ -311,14 +310,20 @@ void FxReset(struct FxInit_s *psFxInfo)
 {
 	logFunctionCall(F_FxReset);
     int i;
+	
+	// These seem to be for a potential debug feature where different
+	// opcode sets could be loaded based on config flags, but the array
+	// only has one set, as you can see.
     static uint32 (**appfFunction[])(uint32) = { &fx_apfFunctionTable[0] };
     static void (**appfPlot[])() = { &fx_apfPlotTable[0] };
-    static void (**appfOpcode[])() = { &fx_apfOpcodeTable[0] };
+    // static void (**appfOpcode[])() = { &fx_apfOpcodeTable[0] };
+
+	uint32 opcodeTableId = psFxInfo->vFlags & 0x3;
 
     /* Get function pointers for the current emulation mode */
-    fx_ppfFunctionTable = appfFunction[psFxInfo->vFlags & 0x3];
-    fx_ppfPlotTable = appfPlot[psFxInfo->vFlags & 0x3];
-    fx_ppfOpcodeTable = appfOpcode[psFxInfo->vFlags & 0x3];
+    fx_ppfFunctionTable = appfFunction[opcodeTableId];
+    fx_ppfPlotTable = appfPlot[opcodeTableId];
+    // fx_ppfOpcodeTable = appfOpcode[psFxInfo->vFlags & 0x3];
     
     /* Clear all internal variables */
     memset((uint8*)&GSU,0,sizeof(struct FxRegs_s));
