@@ -25,6 +25,7 @@ void t3dsResetTimings(void);
 void t3dsCount(int bucket, char *name);
 void t3dsShowTotalTiming(int bucket);
 void t3dsSetTotalForPercentage(u64 time);
+void t3dsSetCountForPercentage(u64 count);
 
 static inline void t3dsStartTiming(int bucket, char *clockName)
 {

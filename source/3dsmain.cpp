@@ -2165,6 +2165,7 @@ void updateSecondScreenContent()
 
 #if !defined(RELEASE) && !defined(DEBUG_CPU) && !defined(DEBUG_APU)
         t3dsSetTotalForPercentage(CPU_TICKS_PER_MSEC * (1000 / 60.0) * t3dsGetCount(1)); // aptMainLoop (total)
+        t3dsSetCountForPercentage(t3dsGetCount(1)); // aptMainLoop (total)
         printf ("\n\n");
         for (int i=0; i<100; i++)
         {

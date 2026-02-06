@@ -5,10 +5,12 @@
 
 T3DS_Clock t3dsClocks[T3DS_NUM_CLOCKS];
 static u64 totalTime = 1;
+static u64 totalCount = 1;
 
 void t3dsResetTimings(void)
 {
     totalTime = 1;
+    totalCount = 1;
 	for (int i = 0; i < T3DS_NUM_CLOCKS; i++)
     {
         T3DS_Clock* clock = &t3dsClocks[i];
@@ -46,7 +48,10 @@ void t3dsShowTotalTiming(int bucket)
 
     if (clock->totalTicks > 0)
     {
-        printf ("%-20s: %3d%% %4dms %d\n", clock->name, t3dsCalculatePercentage(clock), (int)(clock->totalTicks / (u64)CPU_TICKS_PER_MSEC), clock->count);
+        char timePrintBuf[6];
+        snprintf(timePrintBuf, sizeof(timePrintBuf), "%f", clock->totalTicks / ((double) CPU_TICKS_PER_MSEC * totalCount));
+        printf ("%-20s:%3d%% %sms %d\n", clock->name, t3dsCalculatePercentage(clock), timePrintBuf, clock->count);
+        // printf ("%-20s: %3d%% %4dms %d\n", clock->name, t3dsCalculatePercentage(clock), (int)(clock->totalTicks / (u64)CPU_TICKS_PER_MSEC), clock->count);
     }
     else if (clock->startTick == -1 && clock->count > 0)
     {
@@ -60,6 +65,14 @@ void t3dsSetTotalForPercentage(u64 time)
         totalTime = time;
     else
         time = 1;
+}
+
+void t3dsSetCountForPercentage(u64 count)
+{
+    if (count != 0)
+        totalCount = count;
+    else
+        count = 1;
 }
 
 #endif // RELEASE
