@@ -1538,10 +1538,10 @@ static uint32 fx_run(uint32 nInstructions)
     */
 
     //printf ("fx: %d\n", nInstructions);
+#define LIKELY(cond_) __builtin_expect(!!(cond_), 1)
     
     // Optimizeed version for SuperFX execution.
-    //
-    if (nInstructions == 0xffffffff) 
+    if (nInstructions == 0xffffffff)
     {
         READR14;
         while( true )
@@ -1563,7 +1563,7 @@ static uint32 fx_run(uint32 nInstructions)
         GSU.vCounter = nInstructions;
         int loopCount = GSU.vCounter / 10;  // vCounter is either 350 or 700.
         READR14;
-        for (int i = 0; i < loopCount; i++ )
+        for (int i = 0; LIKELY(i < loopCount); i++ )
         {
             FX_STEP; if (!(TF(G))) break;
             FX_STEP; if (!(TF(G))) break;
@@ -1577,6 +1577,26 @@ static uint32 fx_run(uint32 nInstructions)
             FX_STEP; if (!(TF(G))) break;
         }
     }
+
+    
+    // Version optimized for code size while still retaining the unroll (0x490 -> 0x270)
+    // GSU.vCounter = nInstructions;
+    // int loopCount = (GSU.vCounter / 10); // vCounter is either 350 or 700.
+    // int step = (nInstructions == 0xffffffff) ? 0 : 1;
+    // READR14;
+    // for (int i = 0; LIKELY(i < loopCount); i += step)
+    // {
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    //     FX_STEP; if (!(TF(G))) break;
+    // }
     
 
  /*
