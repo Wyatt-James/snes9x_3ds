@@ -49,7 +49,7 @@ void t3dsShowTotalTiming(int bucket)
     if (clock->totalTicks > 0)
     {
         char timePrintBuf[6];
-        snprintf(timePrintBuf, sizeof(timePrintBuf), "%f", clock->totalTicks / ((double) CPU_TICKS_PER_MSEC * totalCount));
+        snprintf(timePrintBuf, sizeof(timePrintBuf), "%lf", clock->totalTicks / ((double) CPU_TICKS_PER_MSEC * totalCount));
         printf ("%-20s:%3d%% %sms %d\n", clock->name, t3dsCalculatePercentage(clock), timePrintBuf, clock->count);
         // printf ("%-20s: %3d%% %4dms %d\n", clock->name, t3dsCalculatePercentage(clock), (int)(clock->totalTicks / (u64)CPU_TICKS_PER_MSEC), clock->count);
     }
