@@ -188,8 +188,8 @@ static void fx_readRegisterSpace()
     if(GSU.pvScreenBase + GSU.vScreenSize > GSU.pvRam + (GSU.nRamBanks * 65536))
 		GSU.pvScreenBase =  GSU.pvRam + (GSU.nRamBanks * 65536) - GSU.vScreenSize;
 
-    fx_apfOpcodeTable[0x04c] = fx_apfOpcodeTable[0x24c] = GSU.pfPlot = fx_apfPlotTable[vMode];
-    fx_apfOpcodeTable[0x14c] = fx_apfOpcodeTable[0x34c] = GSU.pfRpix = fx_apfPlotTable[vMode + 5];
+    GSU.pfPlot = fx_apfPlotTable[vMode];
+    GSU.pfRpix = fx_apfPlotTable[vMode + 5];
 
     fx_computeScreenPointers ();
 }
@@ -316,7 +316,6 @@ void FxReset(struct FxInit_s *psFxInfo)
 	// only has one set, as you can see.
     static uint32 (**appfFunction[])(uint32) = { &fx_apfFunctionTable[0] };
     static void (**appfPlot[])() = { &fx_apfPlotTable[0] };
-    // static void (**appfOpcode[])() = { &fx_apfOpcodeTable[0] };
 
 	uint32 opcodeTableId = psFxInfo->vFlags & 0x3;
 

@@ -357,7 +357,7 @@ struct FxRegs_s
 #define CFGR USEX8(GSU.pvRegisters[GSU_CFGR])
 #define CLSR USEX8(GSU.pvRegisters[GSU_CLSR])
 
-/* Execute instruction from the pipe, and fetch next byte to the pipe */
+/* Execute instruction from the pipe, and fetch next byte to the pipe */ // WYATT_TODO fix this.
 #define FX_STEP { uint32 vOpcode = (uint32)PIPE; FETCHPIPE; \
 (fx_apfOpcodeTable[ (GSU.vStatusReg & 0x300) | vOpcode ])(); } \
 
@@ -375,16 +375,12 @@ extern void (**fx_ppfPlotTable)();
 extern void (*fx_ppfOpcodeTable[FX_OPCODE_TABLE_SIZE])();
 
 extern uint32 (*fx_apfFunctionTable[])(uint32);
-extern void (*fx_apfOpcodeTable[])();
 extern void (*fx_apfPlotTable[])();
 extern uint32 (*fx_a_apfFunctionTable[])(uint32);
-extern void (*fx_a_apfOpcodeTable[])();
 extern void (*fx_a_apfPlotTable[])();
 extern uint32 (*fx_r_apfFunctionTable[])(uint32);
-extern void (*fx_r_apfOpcodeTable[])();
 extern void (*fx_r_apfPlotTable[])();
 extern uint32 (*fx_ar_apfFunctionTable[])(uint32);
-extern void (*fx_ar_apfOpcodeTable[])();
 extern void (*fx_ar_apfPlotTable[])();
 
 /* Set this define if branches are relative to the instruction in the delay slot */
