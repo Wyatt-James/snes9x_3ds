@@ -178,9 +178,9 @@ static inline void fx_with(int reg) {
 /* 30-3b - stw (rn) - store word */
 static inline void fx_stw_r(int reg) {
     ASSUME_REG(0, 11);
-    GSU.vLastRamAdr = GSU.avReg[reg];
-    RAM(GSU.avReg[reg]) = (uint8)SREG;
-    RAM(GSU.avReg[reg]^1) = (uint8)(SREG>>8);
+    uint32 r = GSU.vLastRamAdr = GSU.avReg[reg];
+    RAM(r) = (uint8)SREG;
+    RAM(r^1) = (uint8)(SREG>>8);
     CLRFLAGS; R15++;
 }
 
