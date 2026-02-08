@@ -10,6 +10,7 @@
  * 3  - CopyFB
  * 4  - Flush
  * 5  - Transfer
+ * 6  - vMode SMC Swaps
  * 
  * 11 - S9xUpdateScreen
  * 

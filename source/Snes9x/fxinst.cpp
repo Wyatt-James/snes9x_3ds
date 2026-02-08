@@ -5,10 +5,15 @@
 
 #include "fxemu.h"
 #include "fxinst.h"
+#include "fxinst_smc.h"
 #include <string.h>
 #include <stdio.h>
+#include <3ds.h>
+#include "../cache.h"
+#include "../3dssmc.h"
+#include "../3dsopt.h"
+#include "macros.h"
 
-#define ASSUME(cond_) if (!(cond_)) __builtin_unreachable()
 #define ASSUME_REG(min_, max_) ASSUME(reg >= min_ && reg <= max_)
 #define ASSUME_IMM(min_, max_) ASSUME(imm >= min_ && imm <= max_)
 #define ASSUME_LKN(min_, max_) ASSUME(lkn >= min_ && lkn <= max_)
@@ -30,6 +35,234 @@ int gsu_bank [512] = {0};
  * (xx) = 16 bit address (0x0000 - 0xffff)
  *
  */
+
+/* Self-modifying Code Sources */
+
+// We need to unroll loops to get our NOPs
+#pragma GCC push_options
+#pragma GCC optimize ("O3")
+
+// Generates a function of exactly FX_PLOT_MAX_SIZE bytes.
+// Subtracts 1 to account for the return instruction.
+SMC_DEST void fx_plot_current(void)
+{
+    EMIT_NOPS((FX_PLOT_MAX_SIZE / 4) - 1);
+}
+
+// __attribute__((section(".text"))) char fx_plot_currentNOP_SPACE[((((0xf0) > ((((0x118) > ((((0x16c) > (0xc)) ? (0x16c) : (0xc)))) ? (0x118) : ((((0x16c) > (0xc)) ? (0x16c) : (0xc)))))) ? (0xf0) : ((((0x118) > ((((0x16c) > (0xc)) ? (0x16c) : (0xc)))) ? (0x118) : ((((0x16c) > (0xc)) ? (0x16c) : (0xc)))))) / 4)] = {__asm__ inline("nop" :::)}; static inline void fx_plot_current(void) {((void fx_plot_current(void) *) fx_plot_currentNOP_SPACE)();}
+
+// Generates a function of exactly FX_RPIX_MAX_SIZE bytes.
+// Subtracts 1 to account for the return instruction.
+SMC_DEST void fx_rpix_current(void)
+{
+    EMIT_NOPS((FX_RPIX_MAX_SIZE / 4) - 1);
+}
+
+#pragma GCC pop_options
+// void (*t3dsCountPtr)(int, char*) = t3dsCount;
+
+/* 4c - plot - plot pixel with R1,R2 as x,y and the color register as the color */
+SMC_SOURCE void fx_plot_2bit(void)
+{
+    uint32 x = USEX8(R1);
+    uint32 y = USEX8(R2);
+    uint8 *a;
+    uint8 v,c;
+    // t3dsCountPtr(7, "Plot 2bit");
+
+    R15++;
+    CLRFLAGS;
+    R1++;
+
+#ifdef CHECK_LIMITS
+    if(y >= GSU.vScreenHeight) return;
+#endif
+    if(GSU.vPlotOptionReg & 0x02)
+	c = (x^y)&1 ? (uint8)(GSU.vColorReg>>4) : (uint8)GSU.vColorReg;
+    else
+	c = (uint8)GSU.vColorReg;
+    
+    if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf)) return;
+    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
+    v = 128 >> (x&7);
+
+    if(c & 0x01) a[0] |= v;
+    else a[0] &= ~v;
+    if(c & 0x02) a[1] |= v;
+    else a[1] &= ~v;
+}
+
+/* 4c - plot - plot pixel with R1,R2 as x,y and the color register as the color */
+SMC_SOURCE void fx_plot_4bit(void)
+{
+    uint32 x = USEX8(R1);
+    uint32 y = USEX8(R2);
+    uint8 *a;
+    uint8 v,c;
+    // t3dsCountPtr(8, "Plot 4bit");
+
+    R15++;
+    CLRFLAGS;
+    R1++;
+    
+#ifdef CHECK_LIMITS
+    if(UNLIKELY(y >= GSU.vScreenHeight))
+        return;
+#endif
+    int shift = GSU.vPlotOptionReg & 0x02 ? x^y&1 : 0;
+    c = GSU.vColorReg >> (shift * 4);
+
+    if(UNLIKELY(!(GSU.vPlotOptionReg & 0x01) && !(c & 0xf)))
+        return;
+
+    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
+    v = 128 >> (x&7);
+
+    if(c & 0x01) a[0x00] |= v;
+    else a[0x00] &= ~v;
+    if(c & 0x02) a[0x01] |= v;
+    else a[0x01] &= ~v;
+    if(c & 0x04) a[0x10] |= v;
+    else a[0x10] &= ~v;
+    if(c & 0x08) a[0x11] |= v;
+    else a[0x11] &= ~v;
+}
+
+/* 8c - plot - plot pixel with R1,R2 as x,y and the color register as the color */
+SMC_SOURCE void fx_plot_8bit(void)
+{
+    uint32 x = USEX8(R1);
+    uint32 y = USEX8(R2);
+    uint8 *a;
+    uint8 v,c;
+    // t3dsCountPtr(9, "Plot 8bit");
+
+    R15++;
+    CLRFLAGS;
+    R1++;
+    
+#ifdef CHECK_LIMITS
+    if(y >= GSU.vScreenHeight) return;
+#endif
+    c = (uint8)GSU.vColorReg;
+    if( !(GSU.vPlotOptionReg & 0x10) )
+    {
+	if( !(GSU.vPlotOptionReg & 0x01) && !(c&0xf)) return;
+    }
+    else
+	if( !(GSU.vPlotOptionReg & 0x01) && !c) return;
+
+    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
+    v = 128 >> (x&7);
+
+    if(c & 0x01) a[0x00] |= v;
+    else a[0x00] &= ~v;
+    if(c & 0x02) a[0x01] |= v;
+    else a[0x01] &= ~v;
+    if(c & 0x04) a[0x10] |= v;
+    else a[0x10] &= ~v;
+    if(c & 0x08) a[0x11] |= v;
+    else a[0x11] &= ~v;
+    if(c & 0x10) a[0x20] |= v;
+    else a[0x20] &= ~v;
+    if(c & 0x20) a[0x21] |= v;
+    else a[0x21] &= ~v;
+    if(c & 0x40) a[0x30] |= v;
+    else a[0x30] &= ~v;
+    if(c & 0x80) a[0x31] |= v;
+    else a[0x31] &= ~v;
+}
+
+/* 4o - plot - plot pixel with R1,R2 as x,y and the color register as the color */
+SMC_SOURCE void fx_plot_obj(void)
+{
+    printf ("ERROR fx_plot_obj called\n");
+}
+
+/* 2c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
+SMC_SOURCE void fx_rpix_2bit(void)
+{
+    uint32 x = USEX8(R1);
+    uint32 y = USEX8(R2);
+    uint8 *a;
+    uint8 v;
+
+    R15++;
+    CLRFLAGS;
+#ifdef CHECK_LIMITS
+    if(y >= GSU.vScreenHeight) return;
+#endif
+
+    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
+    v = 128 >> (x&7);
+
+    DREG = 0;
+    DREG |= ((uint32)((a[0] & v) != 0)) << 0;
+    DREG |= ((uint32)((a[1] & v) != 0)) << 1;
+    TESTR14;
+}
+
+/* 4c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
+SMC_SOURCE void fx_rpix_4bit(void)
+{
+    uint32 x = USEX8(R1);
+    uint32 y = USEX8(R2);
+    uint8 *a;
+    uint8 v;
+
+    R15++;
+    CLRFLAGS;
+
+#ifdef CHECK_LIMITS
+    if(y >= GSU.vScreenHeight) return;
+#endif
+
+    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
+    v = 128 >> (x&7);
+
+    DREG = 0;
+    DREG |= ((uint32)((a[0x00] & v) != 0)) << 0;
+    DREG |= ((uint32)((a[0x01] & v) != 0)) << 1;
+    DREG |= ((uint32)((a[0x10] & v) != 0)) << 2;
+    DREG |= ((uint32)((a[0x11] & v) != 0)) << 3;
+    TESTR14;
+}
+
+/* 4c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
+SMC_SOURCE void fx_rpix_8bit(void)
+{
+    uint32 x = USEX8(R1);
+    uint32 y = USEX8(R2);
+    uint8 *a;
+    uint8 v;
+
+    R15++;
+    CLRFLAGS;
+
+#ifdef CHECK_LIMITS
+    if(y >= GSU.vScreenHeight) return;
+#endif
+    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
+    v = 128 >> (x&7);
+
+    DREG = 0;
+    DREG |= ((uint32)((a[0x00] & v) != 0)) << 0;
+    DREG |= ((uint32)((a[0x01] & v) != 0)) << 1;
+    DREG |= ((uint32)((a[0x10] & v) != 0)) << 2;
+    DREG |= ((uint32)((a[0x11] & v) != 0)) << 3;
+    DREG |= ((uint32)((a[0x20] & v) != 0)) << 4;
+    DREG |= ((uint32)((a[0x21] & v) != 0)) << 5;
+    DREG |= ((uint32)((a[0x30] & v) != 0)) << 6;
+    DREG |= ((uint32)((a[0x31] & v) != 0)) << 7;
+    GSU.vZero = DREG;
+    TESTR14;
+}
+
+/* 4c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
+SMC_SOURCE void fx_rpix_obj(void)
+{
+    printf ("ERROR fx_rpix_obj called\n");
+}
 
 /* 00 - stop - stop GSU execution (and maybe generate an IRQ) */
 static inline void fx_stop()
@@ -234,206 +467,6 @@ static inline void fx_ldb_r(int reg) {
     R15++; DREG = v;
     TESTR14;
     CLRFLAGS;
-}
-
-/* 4c - plot - plot pixel with R1,R2 as x,y and the color register as the color */
-static inline void fx_plot_2bit()
-{
-    uint32 x = USEX8(R1);
-    uint32 y = USEX8(R2);
-    uint8 *a;
-    uint8 v,c;
-
-    R15++;
-    CLRFLAGS;
-    R1++;
-
-#ifdef CHECK_LIMITS
-    if(y >= GSU.vScreenHeight) return;
-#endif
-    if(GSU.vPlotOptionReg & 0x02)
-	c = (x^y)&1 ? (uint8)(GSU.vColorReg>>4) : (uint8)GSU.vColorReg;
-    else
-	c = (uint8)GSU.vColorReg;
-    
-    if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf)) return;
-    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    v = 128 >> (x&7);
-
-    if(c & 0x01) a[0] |= v;
-    else a[0] &= ~v;
-    if(c & 0x02) a[1] |= v;
-    else a[1] &= ~v;
-}
-
-/* 2c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
-static inline void fx_rpix_2bit()
-{
-    uint32 x = USEX8(R1);
-    uint32 y = USEX8(R2);
-    uint8 *a;
-    uint8 v;
-
-    R15++;
-    CLRFLAGS;
-#ifdef CHECK_LIMITS
-    if(y >= GSU.vScreenHeight) return;
-#endif
-
-    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    v = 128 >> (x&7);
-
-    DREG = 0;
-    DREG |= ((uint32)((a[0] & v) != 0)) << 0;
-    DREG |= ((uint32)((a[1] & v) != 0)) << 1;
-    TESTR14;
-}
-
-/* 4c - plot - plot pixel with R1,R2 as x,y and the color register as the color */
-static inline void fx_plot_4bit()
-{
-    uint32 x = USEX8(R1);
-    uint32 y = USEX8(R2);
-    uint8 *a;
-    uint8 v,c;
-
-    R15++;
-    CLRFLAGS;
-    R1++;
-    
-#ifdef CHECK_LIMITS
-    if(y >= GSU.vScreenHeight) return;
-#endif
-    if(GSU.vPlotOptionReg & 0x02)
-	c = (x^y)&1 ? (uint8)(GSU.vColorReg>>4) : (uint8)GSU.vColorReg;
-    else
-	c = (uint8)GSU.vColorReg;
-
-    if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf)) return;
-
-    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    v = 128 >> (x&7);
-
-    if(c & 0x01) a[0x00] |= v;
-    else a[0x00] &= ~v;
-    if(c & 0x02) a[0x01] |= v;
-    else a[0x01] &= ~v;
-    if(c & 0x04) a[0x10] |= v;
-    else a[0x10] &= ~v;
-    if(c & 0x08) a[0x11] |= v;
-    else a[0x11] &= ~v;
-}
-
-/* 4c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
-static inline void fx_rpix_4bit()
-{
-    uint32 x = USEX8(R1);
-    uint32 y = USEX8(R2);
-    uint8 *a;
-    uint8 v;
-
-    R15++;
-    CLRFLAGS;
-
-#ifdef CHECK_LIMITS
-    if(y >= GSU.vScreenHeight) return;
-#endif
-
-    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    v = 128 >> (x&7);
-
-    DREG = 0;
-    DREG |= ((uint32)((a[0x00] & v) != 0)) << 0;
-    DREG |= ((uint32)((a[0x01] & v) != 0)) << 1;
-    DREG |= ((uint32)((a[0x10] & v) != 0)) << 2;
-    DREG |= ((uint32)((a[0x11] & v) != 0)) << 3;
-    TESTR14;
-}
-
-/* 8c - plot - plot pixel with R1,R2 as x,y and the color register as the color */
-static inline void fx_plot_8bit()
-{
-    uint32 x = USEX8(R1);
-    uint32 y = USEX8(R2);
-    uint8 *a;
-    uint8 v,c;
-
-    R15++;
-    CLRFLAGS;
-    R1++;
-    
-#ifdef CHECK_LIMITS
-    if(y >= GSU.vScreenHeight) return;
-#endif
-    c = (uint8)GSU.vColorReg;
-    if( !(GSU.vPlotOptionReg & 0x10) )
-    {
-	if( !(GSU.vPlotOptionReg & 0x01) && !(c&0xf)) return;
-    }
-    else
-	if( !(GSU.vPlotOptionReg & 0x01) && !c) return;
-
-    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    v = 128 >> (x&7);
-
-    if(c & 0x01) a[0x00] |= v;
-    else a[0x00] &= ~v;
-    if(c & 0x02) a[0x01] |= v;
-    else a[0x01] &= ~v;
-    if(c & 0x04) a[0x10] |= v;
-    else a[0x10] &= ~v;
-    if(c & 0x08) a[0x11] |= v;
-    else a[0x11] &= ~v;
-    if(c & 0x10) a[0x20] |= v;
-    else a[0x20] &= ~v;
-    if(c & 0x20) a[0x21] |= v;
-    else a[0x21] &= ~v;
-    if(c & 0x40) a[0x30] |= v;
-    else a[0x30] &= ~v;
-    if(c & 0x80) a[0x31] |= v;
-    else a[0x31] &= ~v;
-}
-
-/* 4c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
-static inline void fx_rpix_8bit()
-{
-    uint32 x = USEX8(R1);
-    uint32 y = USEX8(R2);
-    uint8 *a;
-    uint8 v;
-
-    R15++;
-    CLRFLAGS;
-
-#ifdef CHECK_LIMITS
-    if(y >= GSU.vScreenHeight) return;
-#endif
-    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    v = 128 >> (x&7);
-
-    DREG = 0;
-    DREG |= ((uint32)((a[0x00] & v) != 0)) << 0;
-    DREG |= ((uint32)((a[0x01] & v) != 0)) << 1;
-    DREG |= ((uint32)((a[0x10] & v) != 0)) << 2;
-    DREG |= ((uint32)((a[0x11] & v) != 0)) << 3;
-    DREG |= ((uint32)((a[0x20] & v) != 0)) << 4;
-    DREG |= ((uint32)((a[0x21] & v) != 0)) << 5;
-    DREG |= ((uint32)((a[0x30] & v) != 0)) << 6;
-    DREG |= ((uint32)((a[0x31] & v) != 0)) << 7;
-    GSU.vZero = DREG;
-    TESTR14;
-}
-
-/* 4o - plot - plot pixel with R1,R2 as x,y and the color register as the color */
-static inline void fx_plot_obj()
-{
-    printf ("ERROR fx_plot_obj called\n");
-}
-
-/* 4c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
-static inline void fx_rpix_obj()
-{
-    printf ("ERROR fx_rpix_obj called\n");
 }
 
 /* 4d - swap - swap upper and lower byte of a register */
@@ -1082,9 +1115,6 @@ static inline void fx_sm_r(int reg) {
 
 static uint32 fx_run(uint32 nInstructions)
 {
-#define LIKELY(cond_) __builtin_expect(!!(cond_), 1)
-#define UNLIKELY(cond_) __builtin_expect(!!(cond_), 0)
-
     //printf ("fx: %d\n", nInstructions);
 
     GSU.vCounter = nInstructions;
@@ -1099,8 +1129,6 @@ static uint32 fx_run(uint32 nInstructions)
 
 		// If you replace this, you must:
 		// - Replace fx_stop's break with goto loop_end or equivalent
-		// - Replace 0x04c and 0x24c with GSU.pfPlot
-		// - Replace 0x14c and 0x34c with GSU.pfRpix
 		switch (vOpcode) {
             case 0x000: case 0x100: case 0x200: case 0x300: fx_stop(); goto loop_end;
             case 0x001: case 0x101: case 0x201: case 0x301: fx_nop(); break;
@@ -1178,7 +1206,7 @@ static uint32 fx_run(uint32 nInstructions)
             case 0x049: case 0x249:
             case 0x04a: case 0x24a:
             case 0x04b: case 0x24b: fx_ldw_r(vLow); break;
-            case 0x04c: case 0x24c: GSU.pfPlot(); break;
+            case 0x04c: case 0x24c: fx_plot_current(); break;
             case 0x04d: case 0x14d: case 0x24d: case 0x34d: fx_swap(); break;
             case 0x04e: case 0x24e: fx_color(); break;
             case 0x04f: case 0x14f: case 0x24f: case 0x34f: fx_not(); break;
@@ -1382,7 +1410,7 @@ static uint32 fx_run(uint32 nInstructions)
             case 0x149: case 0x349: 
             case 0x14a: case 0x34a: 
             case 0x14b: case 0x34b: fx_ldb_r(vLow); break;
-            case 0x14c: case 0x34c: GSU.pfRpix(); break;
+            case 0x14c: case 0x34c: fx_rpix_current(); break;
             case 0x14e: case 0x34e: fx_cmode(); break;
             case 0x150:
             case 0x151:
@@ -1708,7 +1736,7 @@ static uint32 fx_run(uint32 nInstructions)
     return (nInstructions - GSU.vInstCount);
 }
 
-static uint32 fx_run_to_breakpoint(uint32 nInstructions)
+COLD static uint32 fx_run_to_breakpoint(uint32 nInstructions)
 {
     printf ("run_to_bp\n");
     uint32 vCounter = 0;
@@ -1730,7 +1758,7 @@ static uint32 fx_run_to_breakpoint(uint32 nInstructions)
     return vCounter;
 }
 
-static uint32 fx_step_over(uint32 nInstructions)
+COLD static uint32 fx_step_over(uint32 nInstructions)
 {
     printf ("run_step_over\n");
     
@@ -1755,6 +1783,51 @@ static uint32 fx_step_over(uint32 nInstructions)
     return vCounter;
 }
 
+COLD static s32 fx_clear_plotter_icache(void)
+{
+    // Copy the function, then flush the data cache and invalidate ICache
+    invalidateICache();
+    // invalidateICacheRange((void*) &fx_plot_current, FX_PLOT_MAX_SIZE); // This doesn't work.
+    // invalidateICacheRange((void*) &fx_rpix_current, FX_RPIX_MAX_SIZE);
+    return 0;
+}
+
+COLD void fx_select_plotter(void)
+{
+    static uint32 current_vMode = ~0;
+    uint32 vMode = GSU.vMode;
+
+    if (vMode >= 2)
+        vMode--; // Adjust for the duplicate 4bit
+    
+    if (current_vMode == vMode)
+        return;
+    
+    current_vMode = vMode;
+
+    static const FunctionAttrib funcs[][2] =
+    {
+        {{(void*) &fx_plot_2bit, FX_PLOT_2BIT_SIZE}, {(void*) &fx_rpix_2bit, FX_RPIX_2BIT_SIZE}},
+        {{(void*) &fx_plot_4bit, FX_PLOT_4BIT_SIZE}, {(void*) &fx_rpix_4bit, FX_RPIX_4BIT_SIZE}},
+     // {{(void*) &fx_plot_4bit, FX_PLOT_4BIT_SIZE}, {(void*) &fx_rpix_4bit, FX_RPIX_4BIT_SIZE}},
+        {{(void*) &fx_plot_8bit, FX_PLOT_8BIT_SIZE}, {(void*) &fx_rpix_8bit, FX_RPIX_8BIT_SIZE}},
+        {{(void*) &fx_plot_obj,  FX_PLOT_OBJ_SIZE},  {(void*) &fx_rpix_obj,  FX_RPIX_OBJ_SIZE}},
+    };
+
+    FunctionAttrib plotFunc = funcs[vMode][0];
+    FunctionAttrib rpixFunc = funcs[vMode][1];
+    
+    void* plotDst = ((void*) &fx_plot_current);
+    void* rpixDst = ((void*) &fx_rpix_current);
+
+    memcpy(plotDst, plotFunc.ptr, plotFunc.size);
+    memcpy(rpixDst, rpixFunc.ptr, rpixFunc.size);
+    svcFlushProcessDataCache(CUR_PROCESS_HANDLE, (u32) plotDst, plotFunc.size);
+    svcFlushProcessDataCache(CUR_PROCESS_HANDLE, (u32) rpixDst, rpixFunc.size);
+    svcBackdoor(&fx_clear_plotter_icache);
+    t3dsCount(6, "vMode SMC Swaps");
+}
+
 #ifdef FX_FUNCTION_TABLE
 uint32 (*FX_FUNCTION_TABLE[])(uint32) =
 #else
@@ -1764,16 +1837,4 @@ uint32 (*fx_apfFunctionTable[])(uint32) =
     &fx_run,
     &fx_run_to_breakpoint,
     &fx_step_over,
-};
-
-/*** Special table for the different plot configurations ***/
-
-#ifdef FX_PLOT_TABLE
-void (*FX_PLOT_TABLE[])() =
-#else
-void (*fx_apfPlotTable[])() =
-#endif
-{
-    &fx_plot_2bit,    &fx_plot_4bit,	&fx_plot_4bit,	&fx_plot_8bit,	&fx_plot_obj,
-    &fx_rpix_2bit,    &fx_rpix_4bit,    &fx_rpix_4bit,	&fx_rpix_8bit,	&fx_rpix_obj,
 };

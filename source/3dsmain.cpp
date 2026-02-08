@@ -40,6 +40,7 @@
 #include "3dsimpl.h"
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
+#include "3dssmc.h"
 
 inline std::string operator "" s(const char* s, size_t length) {
     return std::string(s, length);
@@ -2347,6 +2348,11 @@ void emulatorLoop()
 //---------------------------------------------------------
 int main()
 {
+    if (!n3dsInitSmcRegion()) {
+        fprintf(stderr, "Could not initialize self-modifying code region.\n");
+        return 1;
+    }
+
     emulatorInitialize();
     drawStartScreen();
     gspWaitForVBlank();
