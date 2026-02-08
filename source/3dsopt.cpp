@@ -1,11 +1,35 @@
 #include "3dsopt.h"
-#include "3dssnes9x.h"
+
+#include <3ds.h>
+#include <stdio.h>
 
 #ifndef RELEASE
 
 T3DS_Clock t3dsClocks[T3DS_NUM_CLOCKS];
-static u64 totalTime = 1;
-static u64 totalCount = 1;
+static uint64_t totalTime = 1;
+static uint64_t totalCount = 1;
+
+
+void t3dsCount(int bucket, char *clockName)
+{
+    T3DS_Clock* clock = &t3dsClocks[bucket];
+    clock->startTick = -1;
+    clock->name = clockName;
+    clock->count++;
+}
+
+void t3dsStartTiming(int bucket, char *clockName)
+{
+    t3dsClocks[bucket].startTick = svcGetSystemTick();
+    t3dsClocks[bucket].name = clockName;
+}
+
+void t3dsEndTiming(int bucket)
+{
+    T3DS_Clock* clock = &t3dsClocks[bucket];
+    clock->totalTicks += (svcGetSystemTick() - clock->startTick);
+    clock->count++;
+}
 
 void t3dsResetTimings(void)
 {
@@ -20,17 +44,9 @@ void t3dsResetTimings(void)
     }
 }
 
-void t3dsCount(int bucket, char *clockName)
-{
-    T3DS_Clock* clock = &t3dsClocks[bucket];
-    clock->startTick = -1;
-    clock->name = clockName;
-    clock->count++;
-}
-
 static inline int t3dsCalculatePercentage(T3DS_Clock* clock)
 {
-    u64 percentage = (clock->totalTicks * 1000) / totalTime; 
+    uint64_t percentage = (clock->totalTicks * 1000) / totalTime; 
     int percentageRemainder = percentage % 10;
     percentage /= 10;
 
@@ -51,15 +67,15 @@ void t3dsShowTotalTiming(int bucket)
         char timePrintBuf[6];
         snprintf(timePrintBuf, sizeof(timePrintBuf), "%lf", clock->totalTicks / ((double) CPU_TICKS_PER_MSEC * totalCount));
         printf ("%-20s:%3d%% %sms %d\n", clock->name, t3dsCalculatePercentage(clock), timePrintBuf, clock->count);
-        // printf ("%-20s: %3d%% %4dms %d\n", clock->name, t3dsCalculatePercentage(clock), (int)(clock->totalTicks / (u64)CPU_TICKS_PER_MSEC), clock->count);
+        // printf ("%-20s: %3d%% %4dms %d\n", clock->name, t3dsCalculatePercentage(clock), (int)(clock->totalTicks / (uint64_t)CPU_TICKS_PER_MSEC), clock->count);
     }
     else if (clock->startTick == -1 && clock->count > 0)
     {
-        printf ("%-20s: %d\n", clock->name, clock->count);
+        printf ("%-20s:        %d\n", clock->name, clock->count);
     }
 }
 
-void t3dsSetTotalForPercentage(u64 time)
+void t3dsSetTotalForPercentage(uint64_t time)
 {
     if (time != 0)
         totalTime = time;
@@ -67,7 +83,7 @@ void t3dsSetTotalForPercentage(u64 time)
         time = 1;
 }
 
-void t3dsSetCountForPercentage(u64 count)
+void t3dsSetCountForPercentage(uint64_t count)
 {
     if (count != 0)
         totalCount = count;
