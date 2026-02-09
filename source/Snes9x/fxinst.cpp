@@ -14,7 +14,6 @@
 #define ASSUME_LKN(min_, max_) ASSUME(lkn >= min_ && lkn <= max_)
 
 extern struct FxRegs_s GSU;
-int gsu_bank [512] = {0};
 
 /* Set this define if you wish the plot instruction to check for y-pos limits */
 /* (I don't think it's nessecary) */
