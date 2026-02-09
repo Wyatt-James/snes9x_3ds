@@ -19,7 +19,6 @@ enum
 {
 	F_FxCacheWriteAccess,
 	F_FxFlushCache,
-	F_fx_flushCache,
 	F_fx_updateRamBank,
 	F_fx_readRegisterSpace,
 	F_fx_dirtySCBR,
@@ -53,7 +52,6 @@ typedef struct
 CallCount callCounts[F_COUNT] = {
 	[F_FxCacheWriteAccess]            = {"FxCacheWriteAccess           ", 0, 0},
 	[F_FxFlushCache]                  = {"FxFlushCache                 ", 0, 0},
-	[F_fx_flushCache]                 = {"fx_flushCache                ", 0, 0},
 	[F_fx_updateRamBank]              = {"fx_updateRamBank             ", 0, 0},
 	[F_fx_readRegisterSpace]          = {"fx_readRegisterSpace         ", 0, 0},
 	[F_fx_dirtySCBR]                  = {"fx_dirtySCBR                 ", 0, 0},
@@ -114,15 +112,6 @@ void FxFlushCache()
     GSU.vCacheBaseReg = 0;
     GSU.bCacheActive = FALSE;
 }
-
-
-void fx_flushCache()
-{
-	logFunctionCall(F_fx_flushCache);
-    GSU.vCacheFlags = 0;
-    GSU.bCacheActive = FALSE;
-}
-
 
 void fx_updateRamBank(uint8 Byte)
 {

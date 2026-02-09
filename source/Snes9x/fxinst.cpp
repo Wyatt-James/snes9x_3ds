@@ -58,25 +58,25 @@ static inline void fx_cache()
     uint32 c = R15 & 0xfff0;
     if(GSU.vCacheBaseReg != c || !GSU.bCacheActive)
     {
-	fx_flushCache();
-	GSU.vCacheBaseReg = c;
-	GSU.bCacheActive = TRUE;
+        GSU.vCacheFlags = 0;
+        GSU.vCacheBaseReg = c;
+        GSU.bCacheActive = TRUE;
 #if 0
-	if(c < (0x10000-512))
-	{
-	    uint8 const* t = &ROM(c);
-	    memcpy(GSU.pvCache,t,512);
-	}
-	else
-	{
-	    uint8 const* t1;
-	    uint8 const* t2;
-	    uint32 i = 0x10000 - c;
-	    t1 = &ROM(c);
-	    t2 = &ROM(0);
-	    memcpy(GSU.pvCache,t1,i);
-	    memcpy(&GSU.pvCache[i],t2,512-i);
-	}
+        if(c < (0x10000-512))
+        {
+            uint8 const* t = &ROM(c);
+            memcpy(GSU.pvCache,t,512);
+        }
+        else
+        {
+            uint8 const* t1;
+            uint8 const* t2;
+            uint32 i = 0x10000 - c;
+            t1 = &ROM(c);
+            t2 = &ROM(0);
+            memcpy(GSU.pvCache,t1,i);
+            memcpy(&GSU.pvCache[i],t2,512-i);
+        }
 #endif	
     }
     R15++;
