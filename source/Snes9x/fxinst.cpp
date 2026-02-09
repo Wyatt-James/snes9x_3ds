@@ -1085,7 +1085,9 @@ static uint32 fx_run(uint32 nInstructions)
 #define LIKELY(cond_) __builtin_expect(!!(cond_), 1)
 #define UNLIKELY(cond_) __builtin_expect(!!(cond_), 0)
 
-    //printf ("fx: %d\n", nInstructions);
+    // Just so happens to store each in a dedicated register
+    void (*pfPlot)() = GSU.pfPlot;
+    void (*pfRpix)() = GSU.pfRpix;
 
     GSU.vCounter = nInstructions;
     READR14;
@@ -1178,7 +1180,7 @@ static uint32 fx_run(uint32 nInstructions)
             case 0x049: case 0x249:
             case 0x04a: case 0x24a:
             case 0x04b: case 0x24b: fx_ldw_r(vLow); break;
-            case 0x04c: case 0x24c: GSU.pfPlot(); break;
+            case 0x04c: case 0x24c: pfPlot(); break;
             case 0x04d: case 0x14d: case 0x24d: case 0x34d: fx_swap(); break;
             case 0x04e: case 0x24e: fx_color(); break;
             case 0x04f: case 0x14f: case 0x24f: case 0x34f: fx_not(); break;
@@ -1382,7 +1384,7 @@ static uint32 fx_run(uint32 nInstructions)
             case 0x149: case 0x349: 
             case 0x14a: case 0x34a: 
             case 0x14b: case 0x34b: fx_ldb_r(vLow); break;
-            case 0x14c: case 0x34c: GSU.pfRpix(); break;
+            case 0x14c: case 0x34c: pfRpix(); break;
             case 0x14e: case 0x34e: fx_cmode(); break;
             case 0x150:
             case 0x151:
