@@ -15,6 +15,48 @@
 
 extern struct FxRegs_s GSU;
 
+#if 1
+#undef PIPE
+#undef FETCHPIPE
+
+register uint8* localPipe asm ("r10");
+
+// static inline void fetch_pipe()
+// {
+//     __asm__ (
+//         "ldr r10, [%0, #60]   \n\t" // Load FX R15 into r10
+//         "uxth r10, r10            "
+//         "ldrb r10, [%1, r10]      " // Load the byte into R10
+//         :
+//         : "r" (GSU.avReg),
+//           "r" (GSU.pvPrgBank)
+//         : "r10"
+//     );
+// }
+
+// static inline uint32 get_pipe()
+// {
+//     uint32 pVal;
+//     __asm__(
+//         "mov %0, r10"
+//         : "=r" (pVal)
+//         :
+//     );
+//     return pVal;
+// }
+
+#define PIPE ((uint32) localPipe)
+#define GETPIPE(target_) __asm__("mov %0, r10" : "=r" (target_) ::)
+#define SETPIPE(val_) localPipe = (uint8*)(val_)
+#define FETCHPIPE SETPIPE(PRGBANK(R15))
+#define PUSH_RESERVED __asm__ ("push {r8, r9, r10}")
+#define POP_RESERVED __asm__ ("pop {r8, r9, r10}")
+#else
+#define SETPIPE(val_) PIPE = (val_)
+#define PUSH_RESERVED
+#define POP_RESERVED
+#endif
+
 /* Set this define if you wish the plot instruction to check for y-pos limits */
 /* (I don't think it's nessecary) */
 #define CHECK_LIMITS
@@ -42,7 +84,7 @@ static inline void fx_stop()
 	SF(IRQ);
 
     GSU.vPlotOptionReg = 0;
-    GSU.vPipe = 1;
+    SETPIPE(1);
     CLRFLAGS;
     R15++;
 }
@@ -66,7 +108,8 @@ static inline void fx_cache()
         if(c < (0x10000-512))
         {
             uint8 const* t = &ROM(c);
-            memcpy(GSU.pvCache,t,512);
+
+            memcpy(GSU.pvCache,t,512); // !!REG
         }
         else
         {
@@ -75,8 +118,8 @@ static inline void fx_cache()
             uint32 i = 0x10000 - c;
             t1 = &ROM(c);
             t2 = &ROM(0);
-            memcpy(GSU.pvCache,t1,i);
-            memcpy(&GSU.pvCache[i],t2,512-i);
+            memcpy(GSU.pvCache,t1,i); // !!REG
+            memcpy(&GSU.pvCache[i],t2,512-i); // !!REG
         }
 #endif	
     }
@@ -1234,25 +1277,58 @@ static uint32 fx_run(uint32 nInstructions)
 {
 #define LIKELY(cond_) __builtin_expect(!!(cond_), 1)
 #define UNLIKELY(cond_) __builtin_expect(!!(cond_), 0)
+    PUSH_RESERVED;
+    SETPIPE(GSU.vPipe);
 
     // Just so happens to store each in a dedicated register
-    void (*pfPlot)() = GSU.pfPlot;
-    void (*pfRpix)() = GSU.pfRpix;
+#if 1
+    register void (*pfPlot)() asm ("r8");
+#else
+    void (*pfPlot)();
+#endif
+    pfPlot = GSU.pfPlot;
+    void (*pfRpix)() = GSU.pfRpix; // pfRpix is a MUCH rarer call than pfPlot, so don't reserve a reg.
 
     GSU.vCounter = nInstructions;
     READR14;
     while(LIKELY(GSU.vCounter-- > 0))
     {
-        uint32 vOpcode = (uint32)GSU.vPipe | (GSU.vStatusReg & (FLG_ALT1 | FLG_ALT2));
+        uint32 vOpcode = (uint32)PIPE | (GSU.vStatusReg & (FLG_ALT1 | FLG_ALT2));
         uint32 vLow = vOpcode & 0xf;
-        GSU.vPipe = GSU.pvPrgBank[((uint32)((uint16)(GSU.avReg[15])))];
+
+        // __asm__ inline (
+        //     "ldr r10, [%0, #60]   \n\t" // Load FX R15 into r10
+        //     "nop\n\t"
+        //     "nop\n\t"
+        //     "nop\n\t"
+        //     "nop\n\t"
+        //     "uxth r10, r10        \n\t" // Clear top 16 bits
+        //     "nop\n\t"
+        //     "nop\n\t"
+        //     "nop\n\t"
+        //     "nop\n\t"
+        //     "ldrb r10, [%1, r10]      " // Load the byte into R10
+        //     :
+        //     : "r" (GSU.avReg), "r" (GSU.pvPrgBank)
+        //     : "r10"
+        // );
+        // fetch_pipe();
+
+        __asm__ (
+            "ldr r2, [r4, #60]    \n\t"
+            "ldr r0, [r4, #472] \n\t"
+            "uxth lr, r2          \n\t"
+            "ldrb r10, [r0, lr]   \n\t"
+         ::: "r2", "r0", "lr", "r10"
+        );
+        // FETCHPIPE;
 
         ASSUME(vOpcode < 0x400);
 
 		// If you replace this, you must:
 		// - Replace fx_stop's break with goto loop_end or equivalent
-		// - Replace 0x04c and 0x24c with GSU.pfPlot
-		// - Replace 0x14c and 0x34c with GSU.pfRpix
+		// - Replace 0x04c and 0x24c with pfPlot
+		// - Replace 0x14c and 0x34c with pfRpix
 		switch (vOpcode) {
             case 0x000: case 0x100: case 0x200: case 0x300: fx_stop(); goto loop_end;
             case 0x001: case 0x101: case 0x201: case 0x301: fx_nop(); break;
@@ -1857,6 +1933,10 @@ static uint32 fx_run(uint32 nInstructions)
     GSU.vPipeAdr = USEX16(R15-1) | (USEX8(GSU.vPrgBankReg)<<16);
 #endif
 */
+    // __asm__("strb r10, [r4, #109]" :::); // GSU.vPipe = r10
+    // __asm__("strb r10, [%0]" :"=r" (GSU.vPipe) ::); // GSU.vPipe = r10
+    __asm__("" :"=r" (GSU.vPipe) :"r" (localPipe):); // GSU.vPipe = r10
+    POP_RESERVED;
     return (nInstructions - GSU.vInstCount);
 }
 
