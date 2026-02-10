@@ -151,7 +151,7 @@ struct FxRegs_s
     uint32	vPipeAdr;		/* The address of where the pipe was read from */
 
     /* status register optimization stuff */
-    uint32	vSign;			/* v & 0x8000 */ // TODO compress these into one register
+    uint32	vSign;			/* v & 0x8000 */ // WYATT_TODO compress these into one register
     uint32	vZero;			/* v == 0 */
     uint32	vCarry;			/* a value of 1 or 0 */
     int32	vOverflow;		/* (v >= 0x8000 || v < -0x8000) */

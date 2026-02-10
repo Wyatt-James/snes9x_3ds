@@ -243,7 +243,7 @@ static inline void fx_loop()
 }
 
 /* 3d - alt1 - set alt1 mode */
-// TODO see if this can be collapsed
+// WYATT_TODO see if this can be collapsed
 static inline void fx_alt1() {
     SF(ALT1);
     CF(B);
@@ -307,7 +307,7 @@ static inline void fx_plot_2bit()
 #endif
 
     if(GSU.vPlotOptionReg & 0x02)
-	    c = (x ^ y) & 1 ? (uint8)(GSU.vColorReg >> 4) : (uint8)GSU.vColorReg; // TODO check this ASM
+	    c = (x ^ y) & 1 ? (uint8)(GSU.vColorReg >> 4) : (uint8)GSU.vColorReg; // WYATT_TODO check this ASM
     else
 	    c = (uint8)GSU.vColorReg;
     
@@ -342,7 +342,7 @@ static inline void fx_rpix_2bit()
     v = 128 >> (x&7);
 
     DREG = 0;
-    DREG |= ((uint32)((a[0] & v) != 0)) << 0; // TODO check this ASM
+    DREG |= ((uint32)((a[0] & v) != 0)) << 0; // WYATT_TODO check this ASM
     DREG |= ((uint32)((a[1] & v) != 0)) << 1;
     TESTR14;
 }
@@ -541,7 +541,7 @@ static inline void fx_cmode()
     else
 	    GSU.vScreenHeight = GSU.vScreenRealHeight;
 
-    fx_computeScreenPointers(); // TODO this should be cached or SOMETHING. It's very expensive.
+    fx_computeScreenPointers(); // WYATT_TODO this should be cached or SOMETHING. It's very expensive.
     CLRFLAGS;
     R15++;
 }
@@ -866,7 +866,7 @@ static inline void fx_ljmp_r(int reg) {
     GSU.pvPrgBank = GSU.apvRomBank[GSU.vPrgBankReg];
     R15 = SREG;
     GSU.bCacheActive = FALSE;
-    fx_cache(); // TODO Do we actually want this double-inlined?
+    fx_cache(); // WYATT_TODO Do we actually want this double-inlined?
     R15--;
 }
 
