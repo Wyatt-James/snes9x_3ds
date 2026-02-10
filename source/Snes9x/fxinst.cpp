@@ -427,9 +427,10 @@ static inline void fx_plot_8bit()
 
     c = (uint8)GSU.vColorReg;
     
-    if( !(GSU.vPlotOptionReg & 0x10) )
+    if( !(GSU.vPlotOptionReg & 0x10) ) {
 	    if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf))
             return;
+    }
     else
 	    if( !(GSU.vPlotOptionReg & 0x01) && !c)
             return;
@@ -789,7 +790,8 @@ static inline void fx_sbk()
 /* 91-94 - link #n - R11 = R15 + immediate */
 static inline void fx_link_i(int lkn) {
     ASSUME_LKN(1, 4);
-    R11 = R15 + lkn; CLRFLAGS;
+    R11 = R15 + lkn;
+    CLRFLAGS;
     R15++;
 }
 
@@ -828,7 +830,7 @@ static inline void fx_div2()
     if(s == -1)
 	    v = 0;
     else
-	    v = (uint32)(s>>1);
+	    v = (uint32)(s >> 1);
     R15++;
     DREG = v;
     GSU.vSign = v;
