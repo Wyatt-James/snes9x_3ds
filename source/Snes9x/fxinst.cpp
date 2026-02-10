@@ -243,6 +243,7 @@ static inline void fx_loop()
 }
 
 /* 3d - alt1 - set alt1 mode */
+// TODO see if this can be collapsed
 static inline void fx_alt1() {
     SF(ALT1);
     CF(B);
