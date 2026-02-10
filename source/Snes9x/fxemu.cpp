@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 /* The FxChip Emulator's internal variables */
-struct FxRegs_s GSU = FxRegs_s_null;
+struct FxRegs_s GSU;
 
 uint32 (**fx_ppfFunctionTable)(uint32) = 0;
 void (**fx_ppfPlotTable)() = 0;

@@ -34,12 +34,10 @@ extern struct FxRegs_s GSU;
 static inline void fx_stop()
 {
     CF(G);
-    GSU.vCounter = 0;
-    GSU.vInstCount = GSU.vCounter;
 
     /* Check if we need to generate an IRQ */
     if(!(GSU.pvRegisters[GSU_CFGR] & 0x80))
-	SF(IRQ);
+	    SF(IRQ);
 
     GSU.vPlotOptionReg = 0;
     GSU.vPipe = 1;
@@ -1239,9 +1237,9 @@ static uint32 fx_run(uint32 nInstructions)
     void (*pfPlot)() = GSU.pfPlot;
     void (*pfRpix)() = GSU.pfRpix;
 
-    GSU.vCounter = nInstructions;
+    uint32 vCounter = nInstructions;
     READR14;
-    while(LIKELY(GSU.vCounter-- > 0))
+    while(LIKELY(vCounter-- > 0))
     {
         uint32 vOpcode = (uint32)GSU.vPipe | (GSU.vStatusReg & (FLG_ALT1 | FLG_ALT2));
         uint32 vLow = vOpcode & 0xf;
@@ -1857,7 +1855,7 @@ static uint32 fx_run(uint32 nInstructions)
     GSU.vPipeAdr = USEX16(R15-1) | (USEX8(GSU.vPrgBankReg)<<16);
 #endif
 */
-    return (nInstructions - GSU.vInstCount);
+    return nInstructions;
 }
 
 static uint32 fx_run_to_breakpoint(uint32 nInstructions)

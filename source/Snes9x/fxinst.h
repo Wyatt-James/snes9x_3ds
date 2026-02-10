@@ -198,14 +198,6 @@ struct FxRegs_s
     uint32	vSCBRDirty;		/* if SCBR is written, our cached screen pointers need updating */
 };
 
-#define  FxRegs_s_null { \
-   {0},    0,      0,      0,      0,   0,    0,   0,    0,    0, \
-  NULL, NULL,      0,      0,      0,   0,    0,   0,    0,    0, \
-     0,    0,      0,      0,   NULL,   0, NULL,   0, NULL,    0, \
-     0, NULL, {NULL},    {0},      0,   0,    0,   0, NULL, NULL, \
-  NULL, NULL,   NULL, {NULL}, {NULL},   0, NULL, {0},    0,    0, \
-}
-
 /* GSU registers */
 #define GSU_R0 0x000
 #define GSU_R1 0x002
