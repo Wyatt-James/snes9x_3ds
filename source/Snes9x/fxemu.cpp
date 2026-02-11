@@ -219,6 +219,7 @@ void fx_computeScreenPointers ()
 				{
 					GSU.apvScreen[i] = GSU.pvScreenBase + (i << s1);
 					GSU.x[i] = (i << s2) + ((i << 16) >> s3);
+					// Old version: GSU.x[i] = (i << s2) + (i << s3) // (s3 was alone, not subtraced from 16)
 				}
 				break;
 			}
