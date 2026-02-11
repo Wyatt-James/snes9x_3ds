@@ -537,7 +537,7 @@ static inline void fx_cmode()
     else
 	    GSU.vScreenHeight = GSU.vScreenRealHeight;
 
-    fx_computeScreenPointers(); // WYATT_TODO this should be cached or SOMETHING. It's very expensive.
+    fx_computeScreenPointers(); // Moving this here increases register pressure too much. Leave it in the other file.
     CLRFLAGS;
     R15++;
 }
