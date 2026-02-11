@@ -359,6 +359,7 @@ static inline void fx_plot_4bit()
 #ifdef CHECK_LIMITS
     if(y >= GSU.vScreenHeight) return;
 #endif
+
     if(GSU.vPlotOptionReg & 0x02)
 	    c = (x^y)&1 ? (uint8)(GSU.vColorReg>>4) : (uint8)GSU.vColorReg;
     else
