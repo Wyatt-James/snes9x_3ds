@@ -339,9 +339,8 @@ static inline void fx_rpix_2bit()
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
     v = 128 >> (x&7);
 
-    DREG = 0;
-    DREG |= ((uint32)((a[0] & v) != 0)) << 0; // WYATT_TODO check this ASM
-    DREG |= ((uint32)((a[1] & v) != 0)) << 1;
+    DREG = (((uint32)((a[0] & v) != 0)) << 0)
+         | (((uint32)((a[1] & v) != 0)) << 1);
     TESTR14;
 }
 
@@ -399,11 +398,10 @@ static inline void fx_rpix_4bit()
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
     v = 128 >> (x&7);
 
-    DREG = 0;
-    DREG |= ((uint32)((a[0x00] & v) != 0)) << 0;
-    DREG |= ((uint32)((a[0x01] & v) != 0)) << 1;
-    DREG |= ((uint32)((a[0x10] & v) != 0)) << 2;
-    DREG |= ((uint32)((a[0x11] & v) != 0)) << 3;
+    DREG = (((uint32)((a[0x00] & v) != 0)) << 0)
+         | (((uint32)((a[0x01] & v) != 0)) << 1)
+         | (((uint32)((a[0x10] & v) != 0)) << 2)
+         | (((uint32)((a[0x11] & v) != 0)) << 3);
     TESTR14;
 }
 
@@ -471,16 +469,15 @@ static inline void fx_rpix_8bit()
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
     v = 128 >> (x&7);
 
-    DREG = 0;
-    DREG |= ((uint32)((a[0x00] & v) != 0)) << 0;
-    DREG |= ((uint32)((a[0x01] & v) != 0)) << 1;
-    DREG |= ((uint32)((a[0x10] & v) != 0)) << 2;
-    DREG |= ((uint32)((a[0x11] & v) != 0)) << 3;
-    DREG |= ((uint32)((a[0x20] & v) != 0)) << 4;
-    DREG |= ((uint32)((a[0x21] & v) != 0)) << 5;
-    DREG |= ((uint32)((a[0x30] & v) != 0)) << 6;
-    DREG |= ((uint32)((a[0x31] & v) != 0)) << 7;
-    GSU.vZero = DREG;
+    GSU.vZero = 
+    DREG = (((uint32)((a[0x00] & v) != 0)) << 0)
+         | (((uint32)((a[0x01] & v) != 0)) << 1)
+         | (((uint32)((a[0x10] & v) != 0)) << 2)
+         | (((uint32)((a[0x11] & v) != 0)) << 3)
+         | (((uint32)((a[0x20] & v) != 0)) << 4)
+         | (((uint32)((a[0x21] & v) != 0)) << 5)
+         | (((uint32)((a[0x30] & v) != 0)) << 6)
+         | (((uint32)((a[0x31] & v) != 0)) << 7);
     TESTR14;
 }
 
