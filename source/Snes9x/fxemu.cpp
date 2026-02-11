@@ -191,15 +191,17 @@ void fx_dirtySCBR()
 
 void fx_computeScreenPointers ()
 {
-    if (GSU.vMode != GSU.vPrevMode || GSU.vPrevScreenHeight != GSU.vScreenHeight || GSU.vSCBRDirty)
+	uint32 vModeAdj = GSU.vMode, vModeAdjOld = GSU.vPrevMode;
+	if (vModeAdj >= 3)
+		vModeAdj = 2;
+	if (vModeAdjOld >= 3)
+		vModeAdjOld = 2;
+
+    if (vModeAdj != vModeAdjOld || GSU.vPrevScreenHeight != GSU.vScreenHeight || GSU.vSCBRDirty)
     {
 		logFunctionCall(F_fx_computeScreenPointersY);
 		uint32 i;
 		GSU.vSCBRDirty = FALSE;
-
-		uint32 vModeAdj = GSU.vMode;
-		if (vModeAdj >= 3)
-			vModeAdj = 2;
 
 		uint32 s1 = 4 + vModeAdj,
 			   s2 = 8 + vModeAdj,
