@@ -1239,9 +1239,9 @@ static uint32 fx_run(uint32 nInstructions)
     READR14;
     while(LIKELY(vCounter-- > 0))
     {
-        uint32 vOpcode = (uint32)GSU.vPipe | (GSU.vStatusReg & (FLG_ALT1 | FLG_ALT2));
+        uint32 vOpcode = (uint32)PIPE | (GSU.vStatusReg & (FLG_ALT1 | FLG_ALT2));
         uint32 vLow = vOpcode & 0xf;
-        GSU.vPipe = GSU.pvPrgBank[((uint32)((uint16)(GSU.avReg[15])))];
+        FETCHPIPE;
 
         ASSUME(vOpcode < 0x400);
 
