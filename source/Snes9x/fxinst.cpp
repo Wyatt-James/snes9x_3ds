@@ -928,8 +928,8 @@ static inline void fx_lms_r(int reg) {
     R15++;
     FETCHPIPE;
     R15++;
-    GSU.avReg[reg]  =  (uint32) RAM(GSU.vLastRamAdr);
-    GSU.avReg[reg] |= ((uint32) RAM(GSU.vLastRamAdr + 1)) << 8;
+    GSU.avReg[reg] =   (uint32) RAM(GSU.vLastRamAdr)
+                   | (((uint32) RAM(GSU.vLastRamAdr + 1)) << 8);
     CLRFLAGS;
 }
 
