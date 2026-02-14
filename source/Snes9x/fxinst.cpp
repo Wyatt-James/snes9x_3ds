@@ -493,9 +493,7 @@ static inline void fx_rpix_obj()
 /* 4d - swap - swap upper and lower byte of a register */
 static inline void fx_swap()
 {
-    uint8 c = (uint8) SREG;
-    uint8 d = (uint8)(SREG >> 8);
-    uint32 v = (((uint32)c) << 8)|((uint32) d);
+    uint32 v = __builtin_bswap16(SREG);
     R15++;
     DREG = v;
     GSU.vSign = v;
@@ -773,8 +771,9 @@ static inline void fx_umult_i(int imm) {
 /* 90 - sbk - store word to last accessed RAM address */
 static inline void fx_sbk()
 {
-    RAM(GSU.vLastRamAdr) = (uint8)SREG;
-    RAM(GSU.vLastRamAdr^1) = (uint8)(SREG>>8); // WYATT_TODO check this ASM
+    uint16 sReg = SREG;
+    RAM(GSU.vLastRamAdr) = (uint8)sReg;
+    RAM(GSU.vLastRamAdr^1) = (uint8)(sReg>>8); // WYATT_TODO this RAM alignment can probably be optimized to a 16-bit store
     CLRFLAGS;
     R15++;
 }
@@ -790,7 +789,7 @@ static inline void fx_link_i(int lkn) {
 /* 95 - sex - sign extend 8 bit to 16 bit */
 static inline void fx_sex()
 {
-    uint32 v = (uint32)SEX8(SREG);
+    uint32 v = SEX8(SREG);
     R15++;
     DREG = v;
     GSU.vSign = v;
