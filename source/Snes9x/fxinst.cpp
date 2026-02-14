@@ -109,14 +109,6 @@ static inline void fx_rol()
     CLRFLAGS;
 }
 
-/* 05 - bra - branch always */
-static inline void fx_bra() {
-    uint8 v = PIPE;
-    R15++;
-    FETCHPIPE;
-    R15 += SEX8(v);
-}
-
 /* Branch on condition */
 #define BRA_COND(cond) { \
     uint8 v = PIPE;      \
@@ -132,6 +124,9 @@ static inline void fx_bra() {
 #define TEST_Z (USEX16(GSU.vZero) == 0)
 #define TEST_OV (GSU.vOverflow >= 0x8000 || GSU.vOverflow < -0x8000)
 #define TEST_CY (GSU.vCarry & 1)
+
+/* 05 - bra - branch always */
+static inline void fx_bra() { BRA_COND( TRUE ); }
 
 /* 06 - blt - branch on less than */
 static inline void fx_blt() { BRA_COND( (TEST_S!=0) != (TEST_OV!=0) ); }
