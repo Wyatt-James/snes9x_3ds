@@ -916,7 +916,10 @@ static inline void fx_ibt_r(int reg) {
     CLRFLAGS;
 }
 
-static inline void fx_ibt_r14() { fx_ibt_r(14); READR14; }
+static inline void fx_ibt_r14() {
+    fx_ibt_r(14);
+    READR14;
+}
 
 /* a0-af(ALT1) - lms rn,(yy) - load word from RAM (short address) */
 static inline void fx_lms_r(int reg) {
@@ -1086,7 +1089,6 @@ static inline void fx_romb()
 }
 
 /* e0-ee - dec rn - decrement by one */
-#define FX_DEC(reg)
 static inline void fx_dec_r(int reg) {
     ASSUME_REG(0, 14);
     GSU.avReg[reg] -= 1;
