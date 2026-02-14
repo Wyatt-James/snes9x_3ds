@@ -264,7 +264,7 @@ static inline void fx_ldw_r(int reg)  {
     ASSUME_REG(0, 11);
     uint32 v;
     GSU.vLastRamAdr = GSU.avReg[reg];
-    v = (uint32)RAM(GSU.avReg[reg]);
+    v =   (uint32)RAM(GSU.avReg[reg]);
     v |= ((uint32)RAM(GSU.avReg[reg]^1))<<8;
     R15++;
     DREG = v;
