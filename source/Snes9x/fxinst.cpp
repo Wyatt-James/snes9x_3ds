@@ -12,6 +12,7 @@
 #define ASSUME_REG(min_, max_) ASSUME(reg >= min_ && reg <= max_)
 #define ASSUME_IMM(min_, max_) ASSUME(imm >= min_ && imm <= max_)
 #define ASSUME_LKN(min_, max_) ASSUME(lkn >= min_ && lkn <= max_)
+#define FETCHPIPE2(r15_) { PIPE = PRGBANK(r15_); } // For optimization
 
 extern struct FxRegs_s GSU;
 
@@ -110,14 +111,14 @@ static inline void fx_rol()
 }
 
 /* Branch on condition */
-#define BRA_COND(cond) { \
-    uint8 v = PIPE;      \
-    R15++;               \
-    FETCHPIPE;           \
-    if(cond)             \
-        R15 += SEX8(v);  \
-    else                 \
-        R15++;           \
+#define BRA_COND(cond) {     \
+    uint8 v = PIPE;          \
+    uint32 r15 = R15 + 1;    \
+    FETCHPIPE2(r15);         \
+    if(cond)                 \
+        R15 = r15 + SEX8(v); \
+    else                     \
+        R15 = r15 + 1;       \
 }
 
 #define TEST_S (GSU.vSign & 0x8000)
@@ -132,7 +133,7 @@ static inline void fx_bra() { BRA_COND( TRUE ); }
 static inline void fx_blt() { BRA_COND( (TEST_S!=0) != (TEST_OV!=0) ); }
 
 /* 07 - bge - branch on greater or equals */
-static inline void fx_bge() { BRA_COND( (TEST_S!=0) == (TEST_OV!=0)); }
+static inline void fx_bge() { BRA_COND( (TEST_S!=0) == (TEST_OV!=0) ); }
 
 /* 08 - bne - branch on not equal */
 static inline void fx_bne() { BRA_COND( !TEST_Z ); }
