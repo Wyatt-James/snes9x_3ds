@@ -143,7 +143,7 @@ struct FxRegs_s
     uint32	vRamBankReg;		/* Ram bank index register */
     uint32	vCacheBaseReg;		/* Cache base address register */
     uint32	vCacheFlags;		/* Saying what parts of the cache was written to */
-    uint32	vLastRamAdr;		/* Last RAM address accessed */
+    uint16	vLastRamAdr;		/* Last RAM address accessed */
     uint8	pvDreg;			/* Index of current destination register */
     uint8	pvSreg;			/* Index of current source register */
     uint8	vRomBuffer;		/* Current byte read by R14 */

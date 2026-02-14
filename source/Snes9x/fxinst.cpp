@@ -208,7 +208,7 @@ static inline void fx_with(int reg) {
 /* 30-3b - stw (rn) - store word */
 static inline void fx_stw_r(int reg) {
     ASSUME_REG(0, 11);
-    uint32 r = GSU.vLastRamAdr = GSU.avReg[reg];
+    uint16 r = GSU.vLastRamAdr = GSU.avReg[reg];
     RAM(r) = (uint8)SREG;
     RAM(r^1) = (uint8)(SREG>>8);
     CLRFLAGS;
@@ -774,7 +774,7 @@ static inline void fx_umult_i(int imm) {
 static inline void fx_sbk()
 {
     RAM(GSU.vLastRamAdr) = (uint8)SREG;
-    RAM(GSU.vLastRamAdr^1) = (uint8)(SREG>>8);
+    RAM(GSU.vLastRamAdr^1) = (uint8)(SREG>>8); // WYATT_TODO check this ASM
     CLRFLAGS;
     R15++;
 }
@@ -925,7 +925,7 @@ static inline void fx_ibt_r14() {
 /* a0-af(ALT1) - lms rn,(yy) - load word from RAM (short address) */
 static inline void fx_lms_r(int reg) {
     ASSUME_REG(0, 15);
-    GSU.vLastRamAdr = ((uint32)PIPE) << 1;
+    GSU.vLastRamAdr = PIPE << 1;
     R15++;
     FETCHPIPE;
     R15++;
@@ -944,7 +944,7 @@ static inline void fx_lms_r14() {
 static inline void fx_sms_r(int reg) {
     ASSUME_REG(0, 15);
     uint32 v = GSU.avReg[reg];
-    GSU.vLastRamAdr = ((uint32)PIPE) << 1;
+    GSU.vLastRamAdr = PIPE << 1;
     R15++;
     FETCHPIPE;
     RAM(GSU.vLastRamAdr) = (uint8)v;
@@ -1193,11 +1193,11 @@ static inline void fx_lm_r(int reg) {
     R15++;
     FETCHPIPE;
     R15++;
-    GSU.vLastRamAdr |= USEX8(PIPE) << 8;
+    GSU.vLastRamAdr |= PIPE << 8;
     FETCHPIPE;
     R15++;
-    GSU.avReg[reg] = RAM(GSU.vLastRamAdr);
-    GSU.avReg[reg] |= USEX8(RAM(GSU.vLastRamAdr^1)) << 8;
+    GSU.avReg[reg] = RAM(GSU.vLastRamAdr)
+                   | USEX8(RAM(GSU.vLastRamAdr^1)) << 8;
     CLRFLAGS;
 }
 static inline void fx_lm_r14() {
@@ -1214,7 +1214,7 @@ static inline void fx_sm_r(int reg) {
     R15++;
     FETCHPIPE;
     R15++;
-    GSU.vLastRamAdr |= USEX8(PIPE) << 8;
+    GSU.vLastRamAdr |= PIPE << 8;
     FETCHPIPE;
     RAM(GSU.vLastRamAdr) = (uint8)v;
     RAM(GSU.vLastRamAdr^1) = (uint8)(v>>8);
