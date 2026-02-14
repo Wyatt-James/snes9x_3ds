@@ -166,33 +166,33 @@ static inline void fx_to_r(int reg) {
     ASSUME_REG(0, 13);
     if(TF(B))
     {
-        GSU.avReg[(reg)] = SREG;
+        GSU.avReg[reg] = SREG;
         CLRFLAGS;
     }
     else
-        GSU.pvDreg = &GSU.avReg[reg];
+        GSU.pvDreg = reg;
 
     R15++;
 }
 
 static inline void fx_to_r14() {
     if(TF(B)) {
-        GSU.avReg[(14)] = SREG;
+        GSU.avReg[14] = SREG;
         CLRFLAGS;
         READR14;
     }
     else
-        GSU.pvDreg = &GSU.avReg[14];
+        GSU.pvDreg = 14;
     R15++;
 }
 
 static inline void fx_to_r15() {
     if(TF(B)) {
-        GSU.avReg[(15)] = SREG;
+        GSU.avReg[15] = SREG;
         CLRFLAGS;
     }
     else {
-        GSU.pvDreg = &GSU.avReg[15];
+        GSU.pvDreg = 15;
         R15++;
     }
 }
@@ -201,7 +201,7 @@ static inline void fx_to_r15() {
 static inline void fx_with(int reg) {
     ASSUME_REG(0, 15);
     SF(B);
-    GSU.pvSreg = GSU.pvDreg = &GSU.avReg[reg];
+    GSU.pvSreg = GSU.pvDreg = reg;
     R15++;
 }
 
@@ -968,7 +968,7 @@ static inline void fx_from_r(int reg) {
         CLRFLAGS;
     }
     else {
-        GSU.pvSreg = &GSU.avReg[reg];
+        GSU.pvSreg = reg;
         R15++;
     }
 }

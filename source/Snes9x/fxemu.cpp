@@ -320,7 +320,7 @@ void FxReset(struct FxInit_s *psFxInfo)
     memset((uint8*)&GSU,0,sizeof(struct FxRegs_s));
 
     /* Set default registers */
-    GSU.pvSreg = GSU.pvDreg = &R0;
+    GSU.pvSreg = GSU.pvDreg = 0;
 
     /* Set RAM and ROM pointers */
     GSU.pvRegisters = psFxInfo->pvRegisters;
@@ -506,13 +506,13 @@ uint32 FxGetPlotOptionRegister()
 uint32 FxGetSourceRegisterIndex()
 {
 	logFunctionCall(F_FxGetSourceRegisterIndex);
-    return GSU.pvSreg - GSU.avReg;
+    return GSU.pvSreg;
 }
 
 uint32 FxGetDestinationRegisterIndex()
 {
 	logFunctionCall(F_FxGetDestinationRegisterIndex);
-    return GSU.pvDreg - GSU.avReg;
+    return GSU.pvDreg;
 }
 
 uint8 FxPipe()

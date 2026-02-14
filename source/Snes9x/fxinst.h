@@ -144,8 +144,8 @@ struct FxRegs_s
     uint32	vCacheBaseReg;		/* Cache base address register */
     uint32	vCacheFlags;		/* Saying what parts of the cache was written to */
     uint32	vLastRamAdr;		/* Last RAM address accessed */
-    uint32 *	pvDreg;			/* Pointer to current destination register */
-    uint32 *	pvSreg;			/* Pointer to current source register */
+    uint8	pvDreg;			/* Index of current destination register */
+    uint8	pvSreg;			/* Index of current source register */
     uint8	vRomBuffer;		/* Current byte read by R14 */
     uint8	vPipe;			/* Instructionset pipe */
     uint32	vPipeAdr;		/* The address of where the pipe was read from */
@@ -270,7 +270,7 @@ struct FxRegs_s
 #define TSZ(num) TS(S, (num & 0x8000)); TS(Z, (!USEX16(num)) )
 
 /* Clear flags */
-#define CLRFLAGS GSU.vStatusReg &= ~(FLG_ALT1|FLG_ALT2|FLG_B); GSU.pvDreg = GSU.pvSreg = &R0;
+#define CLRFLAGS GSU.vStatusReg &= ~(FLG_ALT1|FLG_ALT2|FLG_B); GSU.pvDreg = GSU.pvSreg = 0;
 
 /* Read current RAM-Bank */
 #define RAM(adr) GSU.pvRamBank[USEX16(adr)]
@@ -295,10 +295,10 @@ struct FxRegs_s
 #define ABS(x) ((x)<0?-(x):(x))
 
 /* Access source register */
-#define SREG (*GSU.pvSreg)
+#define SREG (GSU.avReg[GSU.pvSreg])
 
 /* Access destination register */
-#define DREG (*GSU.pvDreg)
+#define DREG (GSU.avReg[GSU.pvDreg])
 
 #ifndef FX_DO_ROMBUFFER
 
@@ -314,7 +314,7 @@ struct FxRegs_s
 #define READR14 GSU.vRomBuffer = ROM(R14)
 
 /* Test and/or read R14 */
-#define TESTR14 if(GSU.pvDreg == &R14) READR14
+#define TESTR14 if(GSU.pvDreg == 14) READR14
 
 #endif
 
