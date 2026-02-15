@@ -301,9 +301,9 @@ static inline void fx_plot_2bit()
 #endif
 
     if(GSU.vPlotOptionReg & 0x02)
-	    c = (x ^ y) & 1 ? (uint8)(GSU.vColorReg >> 4) : (uint8)GSU.vColorReg; // WYATT_TODO check this ASM
+	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg; // WYATT_TODO check this ASM
     else
-	    c = (uint8)GSU.vColorReg;
+	    c = GSU.vColorReg;
     
     if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf)) 
         return;
@@ -357,9 +357,9 @@ static inline void fx_plot_4bit()
 #endif
 
     if(GSU.vPlotOptionReg & 0x02)
-	    c = (x^y)&1 ? (uint8)(GSU.vColorReg>>4) : (uint8)GSU.vColorReg;
+	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg;
     else
-	    c = (uint8)GSU.vColorReg;
+	    c = GSU.vColorReg;
 
     if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf))
         return;
@@ -418,7 +418,7 @@ static inline void fx_plot_8bit()
     if(y >= GSU.vScreenHeight) return;
 #endif
 
-    c = (uint8)GSU.vColorReg;
+    c = GSU.vColorReg;
     
     if( !(GSU.vPlotOptionReg & 0x10) ) {
 	    if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf))
@@ -507,7 +507,7 @@ static inline void fx_color()
 {
     uint8 c = (uint8) SREG;
     if(GSU.vPlotOptionReg & 0x04)
-	    c = (c&0xf0) | (c>>4);
+	    c = (c & 0xf0) | (c >> 4);
 
     if(GSU.vPlotOptionReg & 0x08)
     {
@@ -1056,7 +1056,7 @@ static inline void fx_getc()
     uint8 c = GSU.vRomBuffer;
 #endif
     if(GSU.vPlotOptionReg & 0x04)
-	    c = (c&0xf0) | (c>>4);
+	    c = (c & 0xf0) | (c >> 4);
 
     if(GSU.vPlotOptionReg & 0x08)
     {
@@ -1074,7 +1074,7 @@ static inline void fx_getc()
 static inline void fx_ramb()
 {
     GSU.vRamBankReg = SREG & (FX_RAM_BANKS-1);
-    GSU.pvRamBank = GSU.apvRamBank[GSU.vRamBankReg & 0x3];
+    GSU.pvRamBank = GSU.apvRamBank[GSU.vRamBankReg & (FX_RAM_BANKS-1)];
     CLRFLAGS;
     R15++;
 }
