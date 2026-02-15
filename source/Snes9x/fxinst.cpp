@@ -925,9 +925,9 @@ static inline void fx_ibt_r14() {
 static inline void fx_lms_r(int reg) {
     ASSUME_REG(0, 15);
     GSU.vLastRamAdr = PIPE << 1;
-    R15++;
-    FETCHPIPE;
-    R15++;
+    uint32 r15 = R15 + 1;
+    FETCHPIPE2(r15);
+    R15 = r15 + 1;
     GSU.avReg[reg] =   (uint32) RAM(GSU.vLastRamAdr)
                    | (((uint32) RAM(GSU.vLastRamAdr + 1)) << 8);
     CLRFLAGS;
@@ -1170,12 +1170,12 @@ static inline void fx_getbs()
 static inline void fx_iwt_r(int reg) {
     ASSUME_REG(0, 15);
     uint32 v = PIPE;
-    R15++;
-    FETCHPIPE;
-    R15++;
+    uint32 r15 = R15 + 1;
+    FETCHPIPE2(r15);
+    r15++;
     v |= USEX8(PIPE) << 8;
-    FETCHPIPE;
-    R15++;
+    FETCHPIPE2(r15);
+    R15 = r15 + 1;
     GSU.avReg[reg] = v;
     CLRFLAGS;
 }
@@ -1189,12 +1189,12 @@ static inline void fx_iwt_r14() {
 static inline void fx_lm_r(int reg) {
     ASSUME_REG(0, 15);
     GSU.vLastRamAdr = PIPE;
-    R15++;
-    FETCHPIPE;
-    R15++;
+    uint32 r15 = R15 + 1;
+    FETCHPIPE2(r15);
+    r15++;
     GSU.vLastRamAdr |= PIPE << 8;
-    FETCHPIPE;
-    R15++;
+    FETCHPIPE2(r15);
+    R15 = r15 + 1;
     GSU.avReg[reg] = RAM(GSU.vLastRamAdr)
                    | USEX8(RAM(GSU.vLastRamAdr^1)) << 8;
     CLRFLAGS;
