@@ -47,7 +47,7 @@ extern int FxEmulate(uint32 nInstructions);
 
 /* Write access to the cache */
 extern void FxCacheWriteAccess(uint16 vAddress);
-extern void FxFlushCache();	/* Callled when the G flag in SFR is set to zero */
+extern void FxFlushCache();	/* Called when the G flag in SFR is set to zero */
 
 /* Breakpoint */
 extern void FxBreakPointSet(uint32 vAddress);
