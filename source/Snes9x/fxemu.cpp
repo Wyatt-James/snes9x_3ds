@@ -8,7 +8,8 @@
 #include <stdio.h>
 
 /* The FxChip Emulator's internal variables */
-struct FxRegs_s GSU;
+/* Aligned to 3DS L1 cacheline boundary */
+struct FxRegs_s GSU __attribute__((aligned(32)));
 
 uint32 (**fx_ppfFunctionTable)(uint32) = 0;
 void (**fx_ppfPlotTable)() = 0;
