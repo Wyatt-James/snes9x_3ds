@@ -10,95 +10,95 @@
  *
  * The 16 generic 16 bit registers:
  * (Some have a special function in special circumstances)
- * 3000 - R0	default source/destination register
- * 3002 - R1	pixel plot X position register
- * 3004 - R2	pixel plot Y position register
+ * 3000 - R0    default source/destination register
+ * 3002 - R1    pixel plot X position register
+ * 3004 - R2    pixel plot Y position register
  * 3006 - R3
- * 3008 - R4	lower 16 bit result of lmult
+ * 3008 - R4    lower 16 bit result of lmult
  * 300a - R5 
- * 300c - R6	multiplier for fmult and lmult
- * 300e - R7	fixed point texel X position for merge
- * 3010 - R8	fixed point texel Y position for merge
+ * 300c - R6    multiplier for fmult and lmult
+ * 300e - R7    fixed point texel X position for merge
+ * 3010 - R8    fixed point texel Y position for merge
  * 3012 - R9 
  * 3014 - R10 
- * 3016 - R11	return address set by link
- * 3018 - R12	loop counter
- * 301a - R13	loop point address
- * 301c - R14	rom address for getb, getbh, getbl, getbs
- * 301e - R15	program counter 
+ * 3016 - R11   return address set by link
+ * 3018 - R12   loop counter
+ * 301a - R13   loop point address
+ * 301c - R14   rom address for getb, getbh, getbl, getbs
+ * 301e - R15   program counter 
  *
- * 3020-302f -	unused
+ * 3020-302f -  unused
  * 
  * Other internal registers
- * 3030 - SFR	status flag register (16bit)
- * 3032 -	unused
+ * 3030 - SFR   status flag register (16bit)
+ * 3032 -   unused
  * 3033 - BRAMR Backup RAM register (8bit)
- * 3034 - PBR	program bank register (8bit)
- * 3035 -	unused
- * 3036 - ROMBR	rom bank register (8bit)
- * 3037 - CFGR	control flags register (8bit)
- * 3038 - SCBR	screen base register (8bit)
- * 3039 - CLSR	clock speed register (8bit)
- * 303a - SCMR	screen mode register (8bit)
- * 303b - VCR	version code register (8bit) (read only)
- * 303c - RAMBR	ram bank register (8bit)
- * 303d -	unused
- * 303e - CBR	cache base register (16bit)
+ * 3034 - PBR   program bank register (8bit)
+ * 3035 -   unused
+ * 3036 - ROMBR rom bank register (8bit)
+ * 3037 - CFGR  control flags register (8bit)
+ * 3038 - SCBR  screen base register (8bit)
+ * 3039 - CLSR  clock speed register (8bit)
+ * 303a - SCMR  screen mode register (8bit)
+ * 303b - VCR   version code register (8bit) (read only)
+ * 303c - RAMBR ram bank register (8bit)
+ * 303d -   unused
+ * 303e - CBR   cache base register (16bit)
  *
- * 3040-30ff -	unused
+ * 3040-30ff -  unused
  *
- * 3100-32ff -	CACHERAM 512 bytes of GSU cache memory
+ * 3100-32ff -  CACHERAM 512 bytes of GSU cache memory
  *
  * SFR status flag register bits:
- *  0   -	
- *  1   Z	Zero flag
- *  2   CY	Carry flag
- *  3   S	Sign flag
- *  4   OV	Overflow flag
- *  5   G	Go flag (set to 1 when the GSU is running)
- *  6   R	Set to 1 when reading ROM using R14 address
- *  7   -	
- *  8   ALT1	Mode set-up flag for the next instruction
- *  9   ALT2	Mode set-up flag for the next instruction
- * 10   IL	Immediate lower 8-bit flag
- * 11   IH	Immediate higher 8-bit flag
- * 12   B	Set to 1 when the WITH instruction is executed
- * 13   -	
- * 14   -	
- * 15   IRQ	Set to 1 when GSU caused an interrupt
+ *  0   -   
+ *  1   Z   Zero flag
+ *  2   CY  Carry flag
+ *  3   S   Sign flag
+ *  4   OV  Overflow flag
+ *  5   G   Go flag (set to 1 when the GSU is running)
+ *  6   R   Set to 1 when reading ROM using R14 address
+ *  7   -   
+ *  8   ALT1    Mode set-up flag for the next instruction
+ *  9   ALT2    Mode set-up flag for the next instruction
+ * 10   IL  Immediate lower 8-bit flag
+ * 11   IH  Immediate higher 8-bit flag
+ * 12   B   Set to 1 when the WITH instruction is executed
+ * 13   -   
+ * 14   -   
+ * 15   IRQ Set to 1 when GSU caused an interrupt
  *              Set to 0 when read by 658c16
  *
  * BRAMR = 0, BackupRAM is disabled
  * BRAMR = 1, BackupRAM is enabled
  *
  * CFGR control flags register bits:
- *  0   -	
- *  1   -	
- *  2   -	
- *  3   -	
- *  4   -	
- *  5   MS0	Multiplier speed, 0=standard, 1=high speed
- *  6   -	
- *  7   IRQ	Set to 1 when GSU interrupt request is masked
+ *  0   -
+ *  1   -
+ *  2   -
+ *  3   -
+ *  4   -
+ *  5   MS0 Multiplier speed, 0=standard, 1=high speed
+ *  6   -
+ *  7   IRQ Set to 1 when GSU interrupt request is masked
  *
  * CLSR clock speed register bits:
- *  0   CLSR	clock speed, 0 = 10.7Mhz, 1 = 21.4Mhz
+ *  0   CLSR    clock speed, 0 = 10.7Mhz, 1 = 21.4Mhz
  *
  * SCMR screen mode register bits:
- *  0	MD0	color depth mode bit 0
- *  1	MD1	color depth mode bit 1
- *  2	HT0	screen height bit 1
- *  3	RAN	RAM access control
- *  4	RON	ROM access control
- *  5	HT1	screen height bit 2
- *  6	-	
- *  7	-	
+ *  0   MD0 color depth mode bit 0
+ *  1   MD1 color depth mode bit 1
+ *  2   HT0 screen height bit 1
+ *  3   RAN RAM access control
+ *  4   RON ROM access control
+ *  5   HT1 screen height bit 2
+ *  6   -
+ *  7   -
  *
- * RON = 0	SNES CPU has ROM access
- * RON = 1	GSU has ROM access
+ * RON = 0  SNES CPU has ROM access
+ * RON = 1  GSU has ROM access
  *
- * RAN = 0	SNES has game pak RAM access
- * RAN = 1	GSU has game pak RAM access
+ * RAN = 0  SNES has game pak RAM access
+ * RAN = 1  GSU has game pak RAM access
  *
  * HT1  HT0  Screen height mode
  *  0    0   128 pixels high
@@ -113,8 +113,8 @@
  *  1    1   256 color mode
  *
  * CBR cache base register bits:
- * 15-4	     Specify base address for data to cache from ROM or RAM
- *  3-0	     Are 0 when address is read
+ * 15-4      Specify base address for data to cache from ROM or RAM
+ *  3-0      Are 0 when address is read
  *
  * Write access to the program counter (301e) from
  * the SNES-CPU will start the GSU, and it will not
@@ -349,13 +349,9 @@ struct FxRegs_s
 #define CFGR USEX8(GSU.pvRegisters[GSU_CFGR])
 #define CLSR USEX8(GSU.pvRegisters[GSU_CLSR])
 
-/* Execute instruction from the pipe, and fetch next byte to the pipe */ // WYATT_TODO fix this.
-#define FX_STEP { uint32 vOpcode = (uint32)PIPE; FETCHPIPE; \
-(fx_apfOpcodeTable[ (GSU.vStatusReg & 0x300) | vOpcode ])(); } \
-
-#define FX_FUNCTION_RUN			0
-#define FX_FUNCTION_RUN_TO_BREAKPOINT	1
-#define FX_FUNCTION_STEP_OVER		2
+#define FX_FUNCTION_RUN 0
+#define FX_FUNCTION_RUN_TO_BREAKPOINT 1
+#define FX_FUNCTION_STEP_OVER 2
 
 /* Number of opcode tables */
 #define FX_OPCODE_TABLE_NUM_MODES 4
