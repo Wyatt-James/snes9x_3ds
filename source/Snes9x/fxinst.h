@@ -134,30 +134,30 @@
 struct FxRegs_s
 {
     /* FxChip registers */
-    uint32  avReg[16];       /* 16 Generic registers */
-    uint32  vColorReg;       /* Internal color register */
-    uint32  vPlotOptionReg;  /* Plot option register */
-    uint32  vStatusReg;      /* Status register */
-    uint32  vPrgBankReg;     /* Program bank index register */
-    uint32  vRomBankReg;     /* Rom bank index register */
-    uint32  vRamBankReg;     /* Ram bank index register */
-    uint32  vCacheBaseReg;   /* Cache base address register */
-    uint32  vCacheFlags;     /* Saying what parts of the cache was written to */
-    uint16  vLastRamAdr;     /* Last RAM address accessed */
-    uint8   pvDreg;          /* Index of current destination register */
-    uint8   pvSreg;          /* Index of current source register */
-    uint8   vRomBuffer;      /* Current byte read by R14 */
-    uint8   vPipe;           /* Instructionset pipe */
-    uint32  vPipeAdr;        /* The address of where the pipe was read from */
+    uint32  avReg[16];        /* 16 Generic registers */
+    uint16  vStatusReg;       /* Status register. 16 bits. */
+    uint16  vCacheBaseReg;    /* Cache base address register. Used only by the fx_cache instruction. */
+    uint16  vLastRamAdr;      /* Last RAM address accessed */
+    uint8   vPlotOptionReg;   /* Plot option register. 5 bits. */
+    uint8   vColorReg;        /* Internal color register. 8 bits. */
+    uint8   pvDreg;           /* Index of current destination register */
+    uint8   pvSreg;           /* Index of current source register */
+    uint8   vRomBuffer;       /* Current byte read by R14 */
+    uint8   vPipe;            /* Instructionset pipe */
+    uint8   vPrgBankReg;      /* Program bank index register */
+    uint8   vRomBankReg;      /* Rom bank index register */
+    uint8   vRamBankReg;      /* Ram bank index register */
 
     /* status register optimization stuff */
-    uint32  vSign;           /* v & 0x8000 */ // WYATT_TODO compress these into one register
-    uint32  vZero;           /* v == 0 */
-    uint32  vCarry;          /* a value of 1 or 0 */
-    int32   vOverflow;       /* (v >= 0x8000 || v < -0x8000) */
+    uint32  vSign;            /* v & 0x8000 */ // WYATT_TODO compress these into one register
+    uint32  vZero;            /* v == 0 */
+    uint32  vCarry;           /* a value of 1 or 0 */
+    int32   vOverflow;        /* (v >= 0x8000 || v < -0x8000) */
     
     /* Other emulator variables */
     
+    uint32  vCacheFlags;      /* Saying what parts of the cache was written to. One bit, any position. Used only by fx_cache. */
+    uint32  vPipeAdr;         /* The address of where the pipe was read from. Only used for debugging.*/
     int32   vErrorCode;
     uint32  vIllegalAddress;
     
@@ -180,8 +180,8 @@ struct FxRegs_s
     uint32  vScreenRealHeight;  /* 128, 160, 192 or 256 */
     uint32  vPrevScreenHeight;
     uint32  vScreenSize;
-    void    (*pfPlot)();
-    void    (*pfRpix)();
+    void    (*pfPlot)();        /* Current plot functions. Copied into local variables for the GSU session. */
+    void    (*pfRpix)();        /* Current plot functions. Copied into local variables for the GSU session. */
     
     uint8 * pvRamBank;          /* Pointer to current RAM-bank */
     uint8 * pvRomBank;          /* Pointer to current ROM-bank */
