@@ -1199,6 +1199,7 @@ static inline void fx_lm_r(int reg) {
                    | USEX8(RAM(GSU.vLastRamAdr^1)) << 8;
     CLRFLAGS;
 }
+
 static inline void fx_lm_r14() {
     fx_lm_r(14);
     READR14;
