@@ -117,8 +117,8 @@ void fx_updateRamBank(uint8 Byte)
 {
 	logFunctionCall(F_fx_updateRamBank);
 	// Update BankReg and Bank pointer
-    GSU.vRamBankReg = (uint32)Byte & (FX_RAM_BANKS-1);
-    GSU.pvRamBank = GSU.apvRamBank[Byte & 0x3];
+    GSU.vRamBankReg = Byte & (FX_RAM_BANKS-1);
+    GSU.pvRamBank = GSU.apvRamBank[Byte & (FX_RAM_BANKS-1)];
 }
 
 
@@ -141,20 +141,20 @@ static void fx_readRegisterSpace()
 
     /* Update other registers */
 	p = GSU.pvRegisters;
-    GSU.vStatusReg = ((uint32) p[GSU_SFR]) | (((uint32) p[GSU_SFR+1]) << 8);
-    uint32 vPrgBankReg = GSU.vPrgBankReg =  (uint32) p[GSU_PBR];
-	uint32 vRomBankReg = GSU.vRomBankReg =  (uint32) p[GSU_ROMBR];
-    uint32 vRamBankReg = GSU.vRamBankReg = ((uint32) p[GSU_RAMBR]) & (FX_RAM_BANKS-1);
-    GSU.vCacheBaseReg = ((uint32) p[GSU_CBR]) | (((uint32)p[GSU_CBR+1]) << 8);
+    GSU.vStatusReg    = p[GSU_SFR] | (p[GSU_SFR+1] << 8);
+    uint8 vPrgBankReg = GSU.vPrgBankReg = p[GSU_PBR];
+	uint8 vRomBankReg = GSU.vRomBankReg = p[GSU_ROMBR];
+    uint8 vRamBankReg = GSU.vRamBankReg = p[GSU_RAMBR] & (FX_RAM_BANKS-1);
+    GSU.vCacheBaseReg = p[GSU_CBR] | (p[GSU_CBR+1] << 8);
 
     /* Update status register variables */
-    GSU.vZero = !(GSU.vStatusReg & FLG_Z);
-    GSU.vSign = (GSU.vStatusReg & FLG_S) << 12;
-    GSU.vOverflow = (GSU.vStatusReg & FLG_OV) << 16;
-    GSU.vCarry = (GSU.vStatusReg & FLG_CY) >> 2;
+    GSU.vZero     = !(GSU.vStatusReg & FLG_Z);
+    GSU.vSign     =  (GSU.vStatusReg & FLG_S)  << 12;
+    GSU.vOverflow =  (GSU.vStatusReg & FLG_OV) << 16;
+    GSU.vCarry    =  (GSU.vStatusReg & FLG_CY) >> 2;
     
     /* Set bank pointers */
-    GSU.pvRamBank = GSU.apvRamBank[vRamBankReg & 0x3];
+    GSU.pvRamBank = GSU.apvRamBank[vRamBankReg & (FX_RAM_BANKS-1)];
     GSU.pvRomBank = GSU.apvRomBank[vRomBankReg];
     GSU.pvPrgBank = GSU.apvRomBank[vPrgBankReg];
 
@@ -281,18 +281,18 @@ static void fx_writeRegisterSpace()
     
     p = GSU.pvRegisters;
 	{
-		uint32 vStatusReg = GSU.vStatusReg;
-		p[GSU_SFR] = (uint8)vStatusReg;
+		uint16 vStatusReg = GSU.vStatusReg;
+		p[GSU_SFR]   = (uint8) vStatusReg;
 		p[GSU_SFR+1] = (uint8)(vStatusReg>>8);
 	}
 
-    p[GSU_PBR] = (uint8)GSU.vPrgBankReg;
-    p[GSU_ROMBR] = (uint8)GSU.vRomBankReg;
-    p[GSU_RAMBR] = (uint8)GSU.vRamBankReg;
+    p[GSU_PBR]   = GSU.vPrgBankReg;
+    p[GSU_ROMBR] = GSU.vRomBankReg;
+    p[GSU_RAMBR] = GSU.vRamBankReg;
 	
 	{
-		uint32 vCacheBaseReg = GSU.vCacheBaseReg;
-		p[GSU_CBR]   = (uint8)vCacheBaseReg;
+		uint16 vCacheBaseReg = GSU.vCacheBaseReg;
+		p[GSU_CBR]   = (uint8) vCacheBaseReg;
 		p[GSU_CBR+1] = (uint8)(vCacheBaseReg>>8);
 	}
 }
