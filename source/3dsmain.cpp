@@ -2251,7 +2251,7 @@ void emulatorLoop()
         else
             gfxSet3D(false);
 
-        updateSecondScreenContent();
+        updateSecondScreenContent(); // Takes about 1.2ms with debug printing enabled
 
         if (GPU3DS.emulatorState != EMUSTATE_EMULATE)
             break;
