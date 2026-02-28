@@ -1179,7 +1179,7 @@ uint8 OBJOnLine[SNES_HEIGHT_EXTENDED][128];
 
 void S9xSetupOBJ ()
 {
-	t3dsStartTiming(28, "S9xSetupOBJ");
+	t3dsLog(&t3dsMain, Snx_Misc);
 #ifdef MK_DEBUG_RTO
 	if(Settings.BGLayering) fprintf(stderr, "Entering SetupOBJS()\n");
 #endif
@@ -1388,8 +1388,7 @@ void S9xSetupOBJ ()
 #endif
 
 	IPPU.OBJChanged = FALSE;
-	t3dsEndTiming(28);
-
+	t3dsLog(&t3dsMain, Snx_SetupOBJ);
 }
 
 void DrawOBJS (bool8 OnMain = FALSE, uint8 D = 0, int priority = 0)
@@ -3949,25 +3948,25 @@ void RenderScreen (uint8 *Screen, bool8 sub, bool8 force_no_add, uint8 D)
 	#define DRAW_OBJS(p)  \
 		if (OB) \
 		{ \
-			t3dsStartTiming(26, "DrawOBJS"); \
+			t3dsLog(&t3dsMain, Snx_Misc); \
 			SelectTileOBJRenderer (sub || !SUB_OR_ADD(4)); \
 			DrawOBJS (!sub, D, p); \
-			t3dsEndTiming(26); \
+			t3dsLog(&t3dsMain, Snx_DrawOBJS); \
 		}	
 		
 	#define DRAW_BG(bg, d1, d2, p) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLog(&t3dsMain, Snx_Misc); \
 			SelectTileBGRenderer (sub || !SUB_OR_ADD(bg)); \
 			if (p == 0) \
 				DrawBackground (PPU.BGMode, bg, d1, d2, p); \
 			else \
 				DrawBackgroundPriority1 (PPU.BGMode, bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLog(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLog(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLog(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLog(&t3dsMain, Snx_DrawBG3); } \
 		}
 	
 	if (PPU.BGMode <= 6)
@@ -4326,7 +4325,7 @@ static void S9xDisplayString (const char *string)
 //
 void S9xUpdateScreenSoftware ()
 {
-	t3dsStartTiming(11, "S9xUpdateScreen");
+	t3dsLog(&t3dsMain, Snx_Misc);
     int32 x2 = 1;
 	
     GFX.S = GFX.Screen;
@@ -5119,7 +5118,7 @@ void S9xUpdateScreenSoftware ()
     } */
 	
     IPPU.PreviousLine = IPPU.CurrentLine;
-	t3dsEndTiming(11);
+	t3dsLog(&t3dsMain, Snx_UpdateScreen);
 }
 
 #ifdef GFX_MULTI_FORMAT

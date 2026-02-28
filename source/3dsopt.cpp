@@ -3,51 +3,57 @@
 #include <3ds.h>
 #include <stdio.h>
 
+// WYATT_TODO This should use a stack of some sort to allow for nesting
+
 #ifndef RELEASE
 
-T3DS_Clock t3dsClocks[T3DS_NUM_CLOCKS];
-static uint64_t totalTime = 1;
-static uint64_t totalCount = 1;
+#define MIN(a_, b_) ((a_) < (b_) ? (a_) : (b_))
+#define MAX(a_, b_) ((a_) > (b_) ? (a_) : (b_))
+#define ARRAY_COUNT(arr_) (sizeof(arr_) / sizeof(arr_[0]))
+#define DEFAULT_NAME "???"
 
+T3DS_Thread t3dsMain, t3dsSnd;
 
-void t3dsCount(int bucket, char *clockName)
+T3DS_NameDef t3dsNamesMain[] = {T3DS_MAIN_THREAD(T3DS_CATEGORY)},
+             t3dsNamesSnd[] = {T3DS_SND_THREAD(T3DS_CATEGORY)};
+
+size_t t3dsNameCountMain = (ARRAY_COUNT(t3dsNamesMain)),
+       t3dsNameCountSnd = (ARRAY_COUNT(t3dsNamesSnd));
+
+void t3dsReset(T3DS_Thread* thread)
 {
-    T3DS_Clock* clock = &t3dsClocks[bucket];
-    clock->startTick = -1;
-    clock->name = clockName;
-    clock->count++;
+    *thread = (T3DS_Thread) {.nextFrame = 1, .name = DEFAULT_NAME};
 }
 
-void t3dsStartTiming(int bucket, char *clockName)
+void t3dsSetThreadName(T3DS_Thread* thread, char* name)
 {
-    t3dsClocks[bucket].startTick = svcGetSystemTick();
-    t3dsClocks[bucket].name = clockName;
+    if (name == NULL)
+        name = DEFAULT_NAME;
+    thread->name = name;
 }
 
-void t3dsEndTiming(int bucket)
+void t3dsAdvanceFrame(T3DS_Thread* thread)
 {
-    T3DS_Clock* clock = &t3dsClocks[bucket];
-    clock->totalTicks += (svcGetSystemTick() - clock->startTick);
-    clock->count++;
-}
+    for (uint8_t id = 0; id <= thread->maxClock; id++) {
+        T3DS_Clock* c = &thread->clocks[id];
+        c->sum -= c->times[thread->nextFrame];
+        c->sum += c->times[thread->curFrame];
+        c->times[thread->nextFrame] = 0;
 
-void t3dsResetTimings(void)
-{
-    totalTime = 1;
-    totalCount = 1;
-	for (int i = 0; i < T3DS_NUM_CLOCKS; i++)
-    {
-        T3DS_Clock* clock = &t3dsClocks[i];
-        clock->totalTicks = 0; 
-        clock->count = 0;
-        clock->name = "";
+        c->count -= c->counts[thread->nextFrame];
+        c->count += c->counts[thread->curFrame];
+        c->counts[thread->nextFrame] = 0;
     }
+
+    thread->curFrame = thread->nextFrame;
+    thread->nextFrame = (thread->nextFrame + 1) % T3DS_WINDOW;
+    thread->numFrames = MIN(thread->numFrames + 1, T3DS_WINDOW - 1);
 }
 
-static inline int t3dsCalculatePercentage(T3DS_Clock* clock)
+static int t3dsCalculatePercentage(uint32_t sum, uint32_t totalTime)
 {
-    uint64_t percentage = (clock->totalTicks * 1000) / totalTime; 
-    int percentageRemainder = percentage % 10;
+    uint32_t percentage = sum * 1000 / totalTime;
+    uint32_t percentageRemainder = percentage % 10;
     percentage /= 10;
 
     // Round with a precision of 1 decimal place
@@ -57,38 +63,80 @@ static inline int t3dsCalculatePercentage(T3DS_Clock* clock)
     return percentage;
 }
 
-// These are TOTAL timings, cumulative of all frames since the clocks were last reset.
-void t3dsShowTotalTiming(int bucket)
+static void formatTime(char pBuf[6], uint32_t time)
 {
-    T3DS_Clock* clock = &t3dsClocks[bucket];
+    snprintf(pBuf, 6, "%f", ((float) time) * (1.0f / (1000.0f * T3DS_WINDOW)));
+}
 
-    if (clock->totalTicks > 0)
-    {
-        char timePrintBuf[6];
-        snprintf(timePrintBuf, sizeof(timePrintBuf), "%lf", clock->totalTicks / ((double) CPU_TICKS_PER_MSEC * totalCount));
-        printf ("%-20s:%3d%% %sms %d\n", clock->name, t3dsCalculatePercentage(clock), timePrintBuf, clock->count);
-        // printf ("%-20s: %3d%% %4dms %d\n", clock->name, t3dsCalculatePercentage(clock), (int)(clock->totalTicks / (uint64_t)CPU_TICKS_PER_MSEC), clock->count);
-    }
-    else if (clock->startTick == -1 && clock->count > 0)
-    {
-        printf ("%-20s:        %d\n", clock->name, clock->count);
+void t3dsPrint(T3DS_Thread* thread, T3DS_ClockType printFlags)
+{
+    uint32_t totalTime = 0;
+    for (uint8_t id = 0; id <= thread->maxClock; id++)
+        totalTime += thread->clocks[id].sum;
+    
+    if (totalTime == 0) totalTime = 1;
+
+    char pBuf[6];
+    formatTime(pBuf, totalTime);
+    printf ("%-20s:100%% %sms\n", thread->name, pBuf);
+
+    for (uint8_t id = 0; id <= thread->maxClock; id++) {
+        T3DS_Clock* c = &thread->clocks[id];
+
+        if ((c->clockType & printFlags) == 0)
+            continue;
+
+        // Only print clocks with times > 0
+        if (c->clockType == T3DS_CLOCK && c->sum > 0)
+        {
+            formatTime(pBuf, c->sum);
+            printf ("%-20s:%3d%% %sms %lu\n", c->name, t3dsCalculatePercentage(c->sum, totalTime), pBuf, c->count);
+        }
+
+        // If our time is 0, treat it as a counter
+        else if (c->clockType == T3DS_COUNTER && c->count > 0)
+        {
+            printf ("%-20s:        %lu\n", c->name, c->count);
+        }
     }
 }
 
-void t3dsSetTotalForPercentage(uint64_t time)
+void t3dsCount(T3DS_Thread* thread, uint8_t bucket)
 {
-    if (time != 0)
-        totalTime = time;
-    else
-        time = 1;
+    T3DS_Clock* c = &thread->clocks[bucket];
+    c->counts[thread->curFrame]++;
+    c->clockType = T3DS_COUNTER;
+    thread->maxClock = MAX(thread->maxClock, bucket);
 }
 
-void t3dsSetCountForPercentage(uint64_t count)
+void t3dsLog(T3DS_Thread* thread, uint8_t bucket)
 {
-    if (count != 0)
-        totalCount = count;
-    else
-        count = 1;
+    uint64_t system_tick = svcGetSystemTick();
+    uint64_t elapsed = system_tick - thread->tickReference;
+	thread->tickReference = system_tick;
+
+    T3DS_Clock* c = &thread->clocks[bucket];
+    c->times[thread->curFrame] += elapsed / (uint64_t) (CPU_TICKS_PER_USEC);
+    c->counts[thread->curFrame]++;
+    c->clockType = T3DS_CLOCK;
+    thread->maxClock = MAX(thread->maxClock, bucket);
+}
+
+void t3dsSetClockNames(T3DS_Thread* thread, size_t numNames, T3DS_NameDef names[])
+{
+    for (size_t i = 0; i < numNames; i++)
+    {
+        T3DS_NameDef* n = &names[i];
+        t3dsSetClockName(thread, n->bucket, n->name);
+    }
+}
+
+void t3dsSetClockName(T3DS_Thread* thread, uint8_t bucket, char* name)
+{
+    if (name == NULL)
+        name = DEFAULT_NAME;
+
+    thread->clocks[bucket].name = name;
 }
 
 #endif // RELEASE

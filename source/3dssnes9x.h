@@ -3,7 +3,11 @@
 // Uncomment this to convert before releasing this to remove
 // all the debugging stuff.
 //
-#define RELEASE 
+// #define RELEASE 
+
+// If 1, gfxhw.cpp will run detailed profiler measurements.
+// If 0, Snx_UpdateScreen will be profiled as a whole.
+#define GFXHW_DETAILED_PROFILER 0
 
 // Uncomment this to allow user to break into debug mode (for the 65816 CPU)
 // 

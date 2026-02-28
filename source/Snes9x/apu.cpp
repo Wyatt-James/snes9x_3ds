@@ -941,7 +941,6 @@ inline void S9xIncrementAPUTimers()
 void S9xUpdateAPUTimer (void)
 {
 	//int opcodesExecuted = 0;
-	//t3dsStartTiming(51, "APU");
 	int32 nextEventCycles = IAPU.NextAPUTimerPosDiv10000;
 	if (nextEventCycles >= CPU.Cycles)
 		nextEventCycles = CPU.Cycles;
@@ -1006,7 +1005,6 @@ void S9xUpdateAPUTimer (void)
 	}
 
 	//CPU.PrevCycles = CPU.Cycles;
-	//t3dsEndTiming(51);
 }
 
 

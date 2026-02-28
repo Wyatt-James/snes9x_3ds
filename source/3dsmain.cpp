@@ -2164,14 +2164,9 @@ void updateSecondScreenContent()
 
 
 #if !defined(RELEASE) && !defined(DEBUG_CPU) && !defined(DEBUG_APU)
-        t3dsSetTotalForPercentage(CPU_TICKS_PER_MSEC * (1000 / 60.0) * t3dsGetCount(1)); // aptMainLoop (total)
-        t3dsSetCountForPercentage(t3dsGetCount(1)); // aptMainLoop (total)
         printf ("\n\n");
-        for (int i=0; i<100; i++)
-        {
-            t3dsShowTotalTiming(i);
-        }
-        t3dsResetTimings();
+        t3dsPrint(&t3dsMain, T3DS_BOTH);
+        // t3dsPrint(&t3dsSnd, T3DS_BOTH);
 #endif
         frameCountTick = newTick;
     }
@@ -2233,10 +2228,11 @@ void emulatorLoop()
 
 	while (true)
 	{
-        t3dsStartTiming(1, "aptMainLoop (total)");
-
+        t3dsLog(&t3dsMain, Snx_Misc);
+        t3dsAdvanceFrame(&t3dsMain);
         startFrameTick = svcGetSystemTick();
         aptMainLoop();
+        t3dsLog(&t3dsMain, Snx_APT);
 
         if (GPU3DS.emulatorState == EMUSTATE_END || appSuspended)
             break;
@@ -2251,7 +2247,7 @@ void emulatorLoop()
         else
             gfxSet3D(false);
 
-        updateSecondScreenContent(); // Takes about 1.2ms with debug printing enabled
+        updateSecondScreenContent();
 
         if (GPU3DS.emulatorState != EMUSTATE_EMULATE)
             break;
@@ -2329,7 +2325,9 @@ void emulatorLoop()
                     if (settings3DS.ForceFrameRate == EmulatedFramerate::Match3DS) {
                         gspWaitForVBlank();
                     } else {
+                        t3dsLog(&t3dsMain, Snx_Misc);
                         svcSleepThread ((long)(timeDiffInMilliseconds * 1000));
+                        t3dsLog(&t3dsMain, Snx_Vsync);
                     }
                     skipDrawingFrame = false;
                 }
@@ -2350,6 +2348,10 @@ int main()
     emulatorInitialize();
     drawStartScreen();
     gspWaitForVBlank();
+
+    t3dsReset(&t3dsMain);
+    t3dsSetThreadName(&t3dsMain, "MAIN");
+    t3dsSetClockNames(&t3dsMain, t3dsNameCountMain, t3dsNamesMain);
 
     if (settings3DS.RomFsLoaded) {
         file3dsSetRomNameMappings("romfs:/mappings.txt");

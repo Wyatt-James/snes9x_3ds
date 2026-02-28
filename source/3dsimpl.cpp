@@ -531,7 +531,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	// Copy the SNES main/sub screen to the 3DS frame
 	// buffer
 	// (Can this be done in the V_BLANK?)
-	t3dsStartTiming(3, "CopyFB");
+	t3dsLog(&t3dsMain, Snx_Misc);
 	gpu3dsSetRenderTargetToFrameBuffer(screenSettings.GameScreen);
 	if (firstFrame)
 	{
@@ -589,7 +589,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 		0.1f);
 	gpu3dsDrawVertexes();
 
-	t3dsEndTiming(3);
+	t3dsLog(&t3dsMain, Snx_CopyFB);
 
 	if (!firstFrame)
 	{
@@ -598,10 +598,9 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 		// main/sub screen for the previous frame
 		// to complete
 		//
-		t3dsStartTiming(5, "Transfer");
 		gpu3dsTransferToScreenBuffer(screenSettings.GameScreen);
 		gpu3dsSwapScreenBuffers();
-		t3dsEndTiming(5);
+		t3dsLog(&t3dsMain, Snx_Transfer);
 
 	}
 	else
@@ -612,11 +611,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	// ----------------------------------------------
 	// Flush all draw commands of the current frame
 	// to the GPU.
-	t3dsStartTiming(4, "Flush");
 	gpu3dsFlush();
-	t3dsEndTiming(4);
-
-	t3dsEndTiming(1);
+	t3dsLog(&t3dsMain, Snx_Flush);
 
 
 	// For debugging only.

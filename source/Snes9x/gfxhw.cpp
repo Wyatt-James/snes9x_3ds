@@ -16,9 +16,16 @@
 #include "3dsgpu.h"
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
+#include "3dssnes9x.h"
 
 #define M7 19
 #define M8 19
+
+static inline void t3dsLogD(T3DS_Thread* thread, uint8_t bucket) {
+	#if GFXHW_DETAILED_PROFILER == 1 /* Defined in 3dssnes9x.h */
+		t3dsLog(thread, bucket);
+	#endif
+}
 
 void output_png();
 void ComputeClipWindows ();
@@ -86,7 +93,7 @@ bool layerDrawn[10];
 //-------------------------------------------------------------------
 void S9xDrawBackdropHardware(bool sub, int depth)
 {
-	t3dsStartTiming(25, "DrawBKClr");
+	t3dsLogD(&t3dsMain, Snx_Misc);
     uint32 starty = GFX.StartY;
     uint32 endy = GFX.EndY;
 
@@ -200,7 +207,7 @@ void S9xDrawBackdropHardware(bool sub, int depth)
 		
 		gpu3dsDrawVertexes();
 	}
-	t3dsEndTiming(25);
+	t3dsLogD(&t3dsMain, Snx_DrawBKClr);
 
 }
 
@@ -3028,7 +3035,7 @@ void S9xPrepareMode7(bool sub)
 	//printf ("xy= %d,%d - %d,%d \n", 
 	//	PalXMin, PalYMin, PalXMax, PalYMax);
 
-	t3dsStartTiming(70, "PrepM7");
+	t3dsLogD(&t3dsMain, Snx_Misc);
 	
 	IPPU.Mode7Prepared = 1;
 
@@ -3056,7 +3063,7 @@ void S9xPrepareMode7(bool sub)
 		GFX.ScreenColors = IPPU.ScreenColors;
 	} 
 
-	t3dsStartTiming(71, "PrepM7-Palette");
+	t3dsLogD(&t3dsMain, Snx_PrepM7_Palette);
 
 	if (!IPPU.Mode7EXTBGFlag)
 	{
@@ -3080,18 +3087,16 @@ void S9xPrepareMode7(bool sub)
 	if (IPPU.Mode7CharDirtyFlagCount)
 		S9xPrepareMode7CheckAndUpdateCharTiles();
 
-	t3dsEndTiming(71);
 
-	t3dsStartTiming(72, "PrepM7-FullTile");
+	t3dsLogD(&t3dsMain, Snx_PrepM7_FullTile);
 	gpu3dsDisableDepthTest();
 	gpu3dsBindTextureSnesMode7TileCache(GPU_TEXUNIT0);
 	gpu3dsSetTextureEnvironmentReplaceTexture0();
 	gpu3dsDisableAlphaTest();
 
 	S9xPrepareMode7CheckAndUpdateFullTexture();
-	t3dsEndTiming(72);
 
-	t3dsStartTiming(73, "PrepM7-CharFlag");
+	t3dsLogD(&t3dsMain, Snx_PrepM7_CharFlag);
 	//printf ("Tiles updated %d, char map %d\n", tilecount, charmapupdated);
 
 	// Restore the render target.
@@ -3132,9 +3137,7 @@ void S9xPrepareMode7(bool sub)
 
     gpu3dsIncrementMode7UpdateFrameCount();
 	
-	t3dsEndTiming(73);
-		
-	t3dsEndTiming(70);
+	t3dsLogD(&t3dsMain, Snx_PrepM7_Cleanup);
 }
 
 
@@ -3145,7 +3148,7 @@ extern int adjustableValue;
 //---------------------------------------------------------------------------
 void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTest)
 {
-	t3dsStartTiming(27, "DrawBG0_M7");
+	t3dsLogD(&t3dsMain, Snx_Misc);
 	//printf ("M7BG alphatest=%d\n", alphaTest);
 	//printf ("adjustableValue: %x\n", adjustableValue);
 
@@ -3280,7 +3283,7 @@ void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTest)
 	gpu3dsDrawMode7LineVertexes();
 	gpu3dsDrawVertexes(false, 4);
 	layerDrawn[bg] = true;
-	t3dsEndTiming(27);
+	t3dsLogD(&t3dsMain, Snx_DrawBG0_M7);
 }
 
 
@@ -3291,7 +3294,7 @@ extern SGPUTexture *snesMode7Tile0Texture;
 //---------------------------------------------------------------------------
 void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 {
-	t3dsStartTiming(27, "DrawBG0_M7");
+	t3dsLogD(&t3dsMain, Snx_Misc);
 	
 	S9xComputeAndEnableStencilFunction(bg, sub);
 	
@@ -3400,7 +3403,7 @@ void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 	//gpu3dsEnableAlphaTestNotEqualsZero();
 	gpu3dsDrawMode7LineVertexes();
 	gpu3dsDrawVertexes(false, 5);
-	t3dsEndTiming(27);
+	t3dsLogD(&t3dsMain, Snx_DrawBG0_M7);
 }
 
 
@@ -3414,7 +3417,7 @@ void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 
 void S9xRenderScreenHardware (bool8 sub, bool8 force_no_add, uint8 D)
 {
-	t3dsStartTiming(31, "RenderScnHW");
+	t3dsLogD(&t3dsMain, Snx_Misc);
     bool8 BG0;
     bool8 BG1;
     bool8 BG2;
@@ -3515,103 +3518,102 @@ void S9xRenderScreenHardware (bool8 sub, bool8 force_no_add, uint8 D)
 
 	int depth = 0;
 
-
 	#define DRAW_OBJS(p)  \
 		if (OB) \
 		{ \
-			t3dsStartTiming(26, "DrawOBJS"); \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawOBJSHardware (sub, OBAlpha, p); \
-			t3dsEndTiming(26); \
+			t3dsLogD(&t3dsMain, Snx_DrawOBJS); \
 		} 
 
 
 	#define DRAW_4COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + BGAlpha##bg, d1 * 256 + BGAlpha##bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLogD(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLogD(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLogD(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLogD(&t3dsMain, Snx_DrawBG3); } \
 		}
 
 	#define DRAW_16COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + BGAlpha##bg, d1 * 256 + BGAlpha##bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLogD(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLogD(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLogD(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLogD(&t3dsMain, Snx_DrawBG3); } \
 		}
 
 	#define DRAW_256COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + BGAlpha##bg, d1 * 256 + BGAlpha##bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLogD(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLogD(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLogD(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLogD(&t3dsMain, Snx_DrawBG3); } \
 		}
 
 	#define DRAW_4COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + BGAlpha##bg, d1 * 256 + BGAlpha##bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLogD(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLogD(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLogD(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLogD(&t3dsMain, Snx_DrawBG3); } \
 		}
 
 	#define DRAW_16COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + BGAlpha##bg, d1 * 256 + BGAlpha##bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLogD(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLogD(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLogD(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLogD(&t3dsMain, Snx_DrawBG3); } \
 		}
 
 	#define DRAW_256COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + BGAlpha##bg, d1 * 256 + BGAlpha##bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLogD(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLogD(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLogD(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLogD(&t3dsMain, Snx_DrawBG3); } \
 		}
 
 	#define DRAW_4COLOR_HIRES_BG_INLINE(bg, p, d0, d1) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawHiresBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + BGAlpha##bg, d1 * 256 + BGAlpha##bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLogD(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLogD(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLogD(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLogD(&t3dsMain, Snx_DrawBG3); } \
 		}
 
 
 	#define DRAW_16COLOR_HIRES_BG_INLINE(bg, p, d0, d1) \
 		if (BG##bg) \
 		{ \
-			if (bg == 0) { t3dsStartTiming(21, "DrawBG0"); } \
-			if (bg == 1) { t3dsStartTiming(22, "DrawBG1"); } \
-			if (bg == 2) { t3dsStartTiming(23, "DrawBG2"); } \
-			if (bg == 3) { t3dsStartTiming(24, "DrawBG3"); } \
+			t3dsLogD(&t3dsMain, Snx_RenderScnHW); \
 			S9xDrawHiresBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + BGAlpha##bg, d1 * 256 + BGAlpha##bg); \
-			t3dsEndTiming(21 + bg); \
+			if (bg == 0) { t3dsLogD(&t3dsMain, Snx_DrawBG0); } \
+			if (bg == 1) { t3dsLogD(&t3dsMain, Snx_DrawBG1); } \
+			if (bg == 2) { t3dsLogD(&t3dsMain, Snx_DrawBG2); } \
+			if (bg == 3) { t3dsLogD(&t3dsMain, Snx_DrawBG3); } \
 		}
 
 
@@ -3755,7 +3757,7 @@ void S9xRenderScreenHardware (bool8 sub, bool8 force_no_add, uint8 D)
 			break;
 	
 	}
-	t3dsEndTiming(31);
+	t3dsLogD(&t3dsMain, Snx_RenderScnHW);
 }
 
 
@@ -3912,7 +3914,7 @@ inline void S9xRenderColorMath()
 
 inline void S9xRenderClipToBlackAndColorMath()
 {
-	t3dsStartTiming(29, "Colormath");
+	t3dsLogD(&t3dsMain, Snx_Misc);
 
 	if ((GFX.r2130 & 0xc0) != 0)
 	{
@@ -3945,7 +3947,7 @@ inline void S9xRenderClipToBlackAndColorMath()
 		}
 	}
 
-	t3dsEndTiming(29);
+	t3dsLogD(&t3dsMain, Snx_Colormath);
 }
 
 
@@ -4003,7 +4005,7 @@ void S9xDrawStencilForWindows()
 	if (!IPPU.WindowingEnabled)
 		return;
 
-	t3dsStartTiming(30, "DrawWindowStencils");
+	t3dsLogD(&t3dsMain, Snx_Misc);
 
 	gpu3dsSetRenderTargetToDepthTexture();
 	gpu3dsSetTextureEnvironmentReplaceColor();
@@ -4044,7 +4046,7 @@ void S9xDrawStencilForWindows()
 
 	gpu3dsDrawVertexes();
 	//printf ("\n"); 
-	t3dsEndTiming(30);
+	t3dsLogD(&t3dsMain, Snx_DrawWindowStencils);
 }
 
 
@@ -4064,7 +4066,7 @@ void S9xUpdateScreenHardware ()
 		prevnewcacheTexturePosition = GPU3DS.newCacheTexturePosition;
 	}*/
 
-	t3dsStartTiming(11, "S9xUpdateScreen");
+	t3dsLog(&t3dsMain, Snx_Misc);
     int32 x2 = 1; 
 
     GFX.S = GFX.Screen;
@@ -4098,10 +4100,8 @@ void S9xUpdateScreenHardware ()
 
     /*if (PPU.RecomputeClipWindows)
     {
-		t3dsStartTiming(30, "ComputeClipWindows");
 		ComputeClipWindows ();
 		PPU.RecomputeClipWindows = FALSE;
-		t3dsEndTiming(30);
     }*/
 
 	// Vertical sections
@@ -4231,5 +4231,5 @@ void S9xUpdateScreenHardware ()
 	S9xResetVerticalSection(&IPPU.WindowLRSections);
 
     IPPU.PreviousLine = IPPU.CurrentLine;
-	t3dsEndTiming(11);
+	t3dsLog(&t3dsMain, Snx_UpdateScreen);
 }

@@ -63,16 +63,14 @@ void snd3dsMixSamples()
     #define MIN_FORWARD_BLOCKS          8
     #define MAX_FORWARD_BLOCKS          16
 
-    t3dsStartTiming(44, "Mix-Replay+S9xMix");
     bool generateSound = false;
     if (snd3DS.isPlaying && !snd3DS.generateSilence)
     {
         impl3dsGenerateSoundSamples();
         generateSound = true;
     }
-    t3dsEndTiming(44);
+    t3dsLog(&t3dsSnd, Mix_Replay_S9xMix);
 
-    t3dsStartTiming(41, "Mix-Timing");
     long generateAtSamplePosition = 0;
     while (true)
     {
@@ -110,9 +108,8 @@ void snd3dsMixSamples()
 
     snd3DS.startSamplePosition = generateAtSamplePosition;
     snd3DS.upToSamplePosition = generateAtSamplePosition + snd3dsSamplesPerLoop;
-    t3dsEndTiming(41);
+    t3dsLog(&t3dsSnd, Mix_Timing);
 
-    t3dsStartTiming(42, "Mix-ApplyMstVol");
     int p = generateAtSamplePosition % snd3dsSampleRate;
 
     if (snd3DS.audioType==1)
@@ -130,16 +127,15 @@ void snd3dsMixSamples()
             }
         }
     }
-    t3dsEndTiming(42);
+    t3dsLog(&t3dsSnd, Mix_ApplyMstVol);
 
     // Now that we have the samples, we have to copy it back into our buffers
     // for the 3DS to playback
     //
-    t3dsStartTiming(43, "Mix-Flush");
     blockCount++;
     if (blockCount % MIN_FORWARD_BLOCKS == 0)
         svcFlushProcessDataCache(CUR_PROCESS_HANDLE, (u32) snd3DS.fullBuffers, snd3dsSampleRate * 2 * 2);
-    t3dsEndTiming(43);
+    t3dsLog(&t3dsSnd, Mix_Flush);
 }
 
 
@@ -153,11 +149,19 @@ void snd3dsMixingThread(void *p)
     snd3DS.startSamplePosition = snd3DS.upToSamplePosition;
     //svcExitThread();
     //return;
+    t3dsReset(&t3dsSnd);
+    t3dsSetThreadName(&t3dsSnd, "SOUND");
+    t3dsSetClockNames(&t3dsSnd, t3dsNameCountSnd, t3dsNamesSnd);
 
     while (!snd3DS.terminateMixingThread)
     {
+        t3dsAdvanceFrame(&t3dsSnd);
+
+        t3dsLog(&t3dsSnd, Mix_Misc);
         if (!GPU3DS.isReal3DS)
             svcSleepThread(1000000 * 1);
+        t3dsLog(&t3dsSnd, Mix_Sleep);
+
         snd3dsMixSamples();
     }
     snd3DS.terminateMixingThread = -1;
