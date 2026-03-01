@@ -46,6 +46,8 @@
  *    percentage calculation will overflow. If that's a problem,
  *    replace it with a u64 to get up to ~4200 seconds, or remove
  *    rounding to get up to ~42 seconds.
+ * - If a t3dsLog call's elapsed time exceeds ~16 seconds, its elapsed
+ *    time will overflow. If that's a problem, replace it with a u64.
  * - Multithreading is not synchronized, but it's probably good enough
  *    for your usage. Calling print on any thread will never corrupt
  *    any other thread, but could print incorrect timings.
@@ -129,6 +131,7 @@ void t3dsLog(T3DS_Thread* thread, uint8_t bucket); // Update a category's timer
     c_(  4, Snx_CopyFB             , "CopyFB"                 ),  \
     c_(  5, Snx_Flush              , "Flush"                  ),  \
     c_(  6, Snx_Transfer           , "Transfer"               ),  \
+    c_(  7, Snx_EmulatorTasks      , "EmulatorTasks"          ),  \
     c_( 11, Snx_UpdateScreen       , "S9xUpdateScreen"        ),  \
     c_( 21, Snx_DrawBG0            , "DrawBG0"                ),  \
     c_( 22, Snx_DrawBG1            , "DrawBG1"                ),  \
@@ -141,10 +144,10 @@ void t3dsLog(T3DS_Thread* thread, uint8_t bucket); // Update a category's timer
     c_( 29, Snx_Colormath          , "Colormath"              ),  \
     c_( 30, Snx_DrawWindowStencils , "DrawWindowStencils"     ),  \
     c_( 31, Snx_RenderScnHW        , "RenderScnHW"            ),  \
-    c_( 70, Snx_PrepM7_Cleanup     , "PrepM7_Cleanup"         ),  \
-    c_( 71, Snx_PrepM7_Palette     , "PrepM7_Palette"         ),  \
-    c_( 72, Snx_PrepM7_FullTile    , "PrepM7_FullTile"        ),  \
-    c_( 73, Snx_PrepM7_CharFlag    , "PrepM7_CharFlag"        ),  \
+    c_( 32, Snx_PrepM7_Cleanup     , "PrepM7_Cleanup"         ),  \
+    c_( 33, Snx_PrepM7_Palette     , "PrepM7_Palette"         ),  \
+    c_( 34, Snx_PrepM7_FullTile    , "PrepM7_FullTile"        ),  \
+    c_( 35, Snx_PrepM7_CharFlag    , "PrepM7_CharFlag"        ),  \
 
 // Audio thread clock names and IDs
 #define T3DS_SND_THREAD(c_)                                       \

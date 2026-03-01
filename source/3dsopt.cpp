@@ -112,11 +112,11 @@ void t3dsCount(T3DS_Thread* thread, uint8_t bucket)
 void t3dsLog(T3DS_Thread* thread, uint8_t bucket)
 {
     uint64_t system_tick = svcGetSystemTick();
-    uint64_t elapsed = system_tick - thread->tickReference;
+    uint32_t elapsed = system_tick - thread->tickReference; // Will overflow at ~16 seconds
 	thread->tickReference = system_tick;
 
     T3DS_Clock* c = &thread->clocks[bucket];
-    c->times[thread->curFrame] += elapsed / (uint64_t) (CPU_TICKS_PER_USEC);
+    c->times[thread->curFrame] += elapsed * (float) (1 / CPU_TICKS_PER_USEC);
     c->counts[thread->curFrame]++;
     c->clockType = T3DS_CLOCK;
     thread->maxClock = MAX(thread->maxClock, bucket);

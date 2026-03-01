@@ -2253,6 +2253,8 @@ void emulatorLoop()
             break;
 
     	input3dsScanInputForEmulation();
+        t3dsLog(&t3dsMain, Snx_EmulatorTasks);
+        
         impl3dsRunOneFrame(firstFrame, skipDrawingFrame);
 
         // End timing bucket 1 (aptMainLoop)
