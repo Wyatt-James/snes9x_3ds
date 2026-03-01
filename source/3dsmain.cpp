@@ -2263,8 +2263,6 @@ void emulatorLoop()
         
         impl3dsRunOneFrame(firstFrame, skipDrawingFrame);
 
-        // End timing bucket 1 (aptMainLoop)
-
         firstFrame = false; 
 
         // This either waits for the next frame, or decides to skip
