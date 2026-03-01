@@ -2229,7 +2229,13 @@ void emulatorLoop()
 	while (true)
 	{
         t3dsLog(&t3dsMain, Snx_Misc);
-        t3dsAdvanceFrame(&t3dsMain); // Takes about 30-50 microseconds for 100 IDs
+
+        // TickCounter tc;
+        // osTickCounterStart(&tc);
+        t3dsAdvanceFrame(&t3dsMain); // Takes about 35 microseconds for 100 IDs
+        // osTickCounterUpdate(&tc);
+        // printf("t3dsAdvanceFrame: %f\n", 1000.0 * osTickCounterRead(&tc));
+
         startFrameTick = svcGetSystemTick();
         aptMainLoop();
         t3dsLog(&t3dsMain, Snx_APT);

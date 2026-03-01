@@ -63,21 +63,27 @@
 
 typedef struct
 {
+    uint32_t time; // Total time this clock has logged, in microseconds
+    uint16_t count; // Number of times this clock has been logged
+    uint16_t pad;
+} T3DS_ClockFrame;
+
+typedef struct
+{
     uint8_t clockType;            // T3DS_ClockType
     char *name;                   // Printed name
     uint32_t count;               // Sum of counts.
     uint32_t sum;                 // Sum of times, in microseconds
-    uint16_t counts[T3DS_WINDOW]; // Number of times this clock has been logged
-    uint32_t times[T3DS_WINDOW];  // Total time this clock has logged, in microseconds
+    T3DS_ClockFrame frames[T3DS_WINDOW];
 } T3DS_Clock;
 
 typedef struct
 {
-    uint8_t curFrame, nextFrame, numFrames; // Internal use
-    uint8_t maxClock;                       // Internal use
-    char* name;                             // Thread name
-    uint64_t tickReference;                 // The currently logged time
-    T3DS_Clock clocks[T3DS_NUM_CLOCKS];     // Clocks
+    uint8_t curFrame, nextFrame;        // Internal use
+    uint8_t maxClock;                   // Internal use
+    char* name;                         // Thread name
+    uint64_t tickReference;             // The currently logged time
+    T3DS_Clock clocks[T3DS_NUM_CLOCKS]; // Clocks
 } T3DS_Thread;
 
 typedef struct

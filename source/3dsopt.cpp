@@ -7,6 +7,7 @@
 
 #ifndef RELEASE
 
+#define WRAP_INCREMENT(v_, max_) (((((v_)+ 1) >= max_) ? 0 : ((v_) + 1))) // v_ % max_, but only once.
 #define MIN(a_, b_) ((a_) < (b_) ? (a_) : (b_))
 #define MAX(a_, b_) ((a_) > (b_) ? (a_) : (b_))
 #define ARRAY_COUNT(arr_) (sizeof(arr_) / sizeof(arr_[0]))
@@ -36,18 +37,20 @@ void t3dsAdvanceFrame(T3DS_Thread* thread)
 {
     for (uint8_t id = 0; id <= thread->maxClock; id++) {
         T3DS_Clock* c = &thread->clocks[id];
-        c->sum -= c->times[thread->nextFrame];
-        c->sum += c->times[thread->curFrame];
-        c->times[thread->nextFrame] = 0;
+        T3DS_ClockFrame* curFrame = &c->frames[thread->curFrame];
+        T3DS_ClockFrame* nextFrame = &c->frames[thread->nextFrame];
 
-        c->count -= c->counts[thread->nextFrame];
-        c->count += c->counts[thread->curFrame];
-        c->counts[thread->nextFrame] = 0;
+        c->sum -= nextFrame->time;
+        c->sum += curFrame->time;
+
+        c->count -= nextFrame->count;
+        c->count += curFrame->count;
+    
+        *nextFrame = (T3DS_ClockFrame) {0};
     }
 
     thread->curFrame = thread->nextFrame;
-    thread->nextFrame = (thread->nextFrame + 1) % T3DS_WINDOW;
-    thread->numFrames = MIN(thread->numFrames + 1, T3DS_WINDOW - 1);
+    thread->nextFrame = WRAP_INCREMENT(thread->nextFrame, T3DS_WINDOW);
 }
 
 static int t3dsCalculatePercentage(uint32_t sum, uint32_t totalTime)
@@ -104,7 +107,7 @@ void t3dsPrint(T3DS_Thread* thread, T3DS_ClockType printFlags)
 void t3dsCount(T3DS_Thread* thread, uint8_t bucket)
 {
     T3DS_Clock* c = &thread->clocks[bucket];
-    c->counts[thread->curFrame]++;
+    c->frames[thread->curFrame].count++;
     c->clockType = T3DS_COUNTER;
     thread->maxClock = MAX(thread->maxClock, bucket);
 }
@@ -116,8 +119,8 @@ void t3dsLog(T3DS_Thread* thread, uint8_t bucket)
 	thread->tickReference = system_tick;
 
     T3DS_Clock* c = &thread->clocks[bucket];
-    c->times[thread->curFrame] += elapsed * (float) (1 / CPU_TICKS_PER_USEC);
-    c->counts[thread->curFrame]++;
+    c->frames[thread->curFrame].time += elapsed * (float) (1 / CPU_TICKS_PER_USEC);
+    c->frames[thread->curFrame].count++;
     c->clockType = T3DS_CLOCK;
     thread->maxClock = MAX(thread->maxClock, bucket);
 }
