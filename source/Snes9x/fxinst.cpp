@@ -79,16 +79,28 @@ register uint16* pvDregLocal asm("r10");
 // Necessary redefs if DREG and SREG are pointers
 #undef TESTR14
 #undef CLRFLAGS
-#define CLRFLAGS SFR &= ~(FLG_ALT1|FLG_ALT2|FLG_B); DREG_VAL = SREG_VAL = GETR(0);
-#define TESTR14 if((pvDregLocal) == GETR(14)) READR14
+#define CLRFLAGS SFR &= ~(FLG_ALT1|FLG_ALT2|FLG_B); DREG_VAL = SREG_VAL = (uint16*) GETR(0);
+#define TESTR14 if((pvDregLocal) == (uint16*) GETR(14)) READR14
 
 // The compiler doesn't realize it can do this, so it loads from memory
 //!!! This relies on the fact that GSU.avReg is at the start of GSU!
-static inline uint16* GETR(size_t reg)
+static inline uint32* GETR(size_t reg)
 {
-    uint16* ptr;
-    asm ("add %0, %1, %2" : "=r" (ptr) : "r" (&GSU), "i" (reg * sizeof(uint16)));
+    uint32* ptr;
+    asm ("add %0, %1, %2" : "=r" (ptr) : "r" (&GSU), "i" (reg * sizeof(GSU.avReg[0])));
     return ptr;
+}
+
+// If we have a 16-bit value and a constant address, we can store
+// it in one instruction. GCC isn't smart enough to do this.
+//!!! This is probably some form of UB. Oops!
+static inline void STORE_HALF(uint32* ptr, uint32 val)
+{
+    asm (
+        "strh %1, %0"
+        : "=m" (ptr)
+        : "r" (val)
+    );
 }
 
 // Saves the reserved registers back to GSU
@@ -97,8 +109,8 @@ static inline void fx_save_reserved(void)
     GSU.vStatusReg = SFR;
     GSU.armFlags = ARMFLAGS;
     GSU.vPipe = PIPE;
-    GSU.pvSreg = SREG_VAL - GSU.avReg;
-    GSU.pvDreg = DREG_VAL - GSU.avReg;
+    GSU.pvSreg = SREG_VAL - (uint16*) GSU.avReg;
+    GSU.pvDreg = DREG_VAL - (uint16*) GSU.avReg;
 }
 
 // Loads the reserved registers from GSU
@@ -107,8 +119,8 @@ static inline void fx_load_reserved(void)
     SFR = GSU.vStatusReg;
     ARMFLAGS = GSU.armFlags;
     PIPE = GSU.vPipe;
-    pvSregLocal = &GSU.avReg[GSU.pvSreg];
-    pvDregLocal = &GSU.avReg[GSU.pvDreg];
+    pvSregLocal = (uint16*) &GSU.avReg[GSU.pvSreg];
+    pvDregLocal = (uint16*) &GSU.avReg[GSU.pvDreg];
 }
 
 // register reservations are disabled
@@ -297,7 +309,7 @@ static inline void fx_to_r(uint8 reg) {
         CLRFLAGS;
     }
     else
-        DREG_VAL = &GSU.avReg[reg];
+        DREG_VAL = (uint16*) &GSU.avReg[reg];
 
     R15++;
 }
@@ -309,7 +321,7 @@ static inline void fx_to_r14() {
         READR14;
     }
     else
-        DREG_VAL = GETR(14);
+        DREG_VAL = (uint16*) GETR(14);
     R15++;
 }
 
@@ -319,7 +331,7 @@ static inline void fx_to_r15() {
         CLRFLAGS;
     }
     else {
-        DREG_VAL = GETR(15);
+        DREG_VAL = (uint16*) GETR(15);
         R15++;
     }
 }
@@ -328,7 +340,7 @@ static inline void fx_to_r15() {
 static inline void fx_with(uint8 reg) {
     ASSUME_REG(0, 15);
     SF(B);
-    SREG_VAL = DREG_VAL = &GSU.avReg[reg];
+    SREG_VAL = DREG_VAL = (uint16*) &GSU.avReg[reg];
     R15++;
 }
 
@@ -365,7 +377,7 @@ static inline void fx_loop()
         : "cc"
     );
 
-    R12 = r12;
+    R12 = USEX16(r12);
     if(LIKELY( r12 != 0 ))
 	    R15 = R13;
     else
@@ -1249,7 +1261,7 @@ static inline void fx_lmult()
         : "r" (full)
         : "cc"
     );
-    R4 = resultLow;
+    R4 = USEX16(resultLow);
 
     R15++;
     DREG = resultHigh;
@@ -1280,8 +1292,8 @@ static inline void fx_lms_r(uint8 reg) {
     uint32 r15 = R15 + 1;
     FETCHPIPE2(r15);
     R15 = r15 + 1;
-    GSU.avReg[reg] =   (uint16) RAM(GSU.vLastRamAdr)
-                   | (((uint16) RAM(GSU.vLastRamAdr + 1)) << 8);
+    GSU.avReg[reg] =   (uint32) RAM(GSU.vLastRamAdr)
+                   | (((uint32) RAM(GSU.vLastRamAdr + 1)) << 8);
     CLRFLAGS;
 }
 
@@ -1294,7 +1306,7 @@ static inline void fx_lms_r14() {
 /* If rn == r15, is the value of r15 before or after the extra byte is read? */
 static inline void fx_sms_r(uint8 reg) {
     ASSUME_REG(0, 15);
-    uint16 v = GSU.avReg[reg];
+    uint32 v = GSU.avReg[reg];
     GSU.vLastRamAdr = PIPE << 1;
     R15++;
     FETCHPIPE;
@@ -1332,7 +1344,7 @@ static inline void fx_from_r(uint8 reg) {
         CLRFLAGS;
     }
     else {
-        SREG_VAL = &GSU.avReg[reg];
+        SREG_VAL = (uint16*) &GSU.avReg[reg];
         R15++;
     }
 }
@@ -1458,7 +1470,7 @@ static inline void fx_inc_r(uint8 reg) {
         : "r" (v)
         : "cc"
     );
-    GSU.avReg[reg] = v;
+    GSU.avReg[reg] = USEX16(v);
 
     CLRFLAGS;
     R15++;
@@ -1524,7 +1536,7 @@ static inline void fx_dec_r(uint8 reg) {
         : "r" (resultNew)
         : "cc"
     );
-    GSU.avReg[reg] = resultNew;
+    GSU.avReg[reg] = USEX16(resultNew); // WYATT_TODO fix this name
 
     CLRFLAGS;
     R15++;
@@ -1601,7 +1613,7 @@ static inline void fx_getbs()
 /* f0-ff - iwt rn,#xx - immediate word transfer to register */
 static inline void fx_iwt_r(uint8 reg) {
     ASSUME_REG(0, 15);
-    uint16 v = PIPE;
+    uint32 v = PIPE;
     uint32 r15 = R15 + 1;
     FETCHPIPE2(r15);
     r15++;
@@ -1641,7 +1653,7 @@ static inline void fx_lm_r14() {
 /* If rn == r15, is the value of r15 before or after the extra bytes are read? */
 static inline void fx_sm_r(uint8 reg) {
     ASSUME_REG(0, 15);
-    uint16 v = GSU.avReg[reg];
+    uint32 v = GSU.avReg[reg];
     GSU.vLastRamAdr = PIPE;
     R15++;
     FETCHPIPE;
