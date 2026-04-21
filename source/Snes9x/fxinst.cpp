@@ -1666,11 +1666,11 @@ static uint32 fx_run(uint32 nInstructions)
 
     ASSUME(GSU.vMode <= 4);
     switch (GSU.vMode) {
-        case 0: pfPlot = fx_plot_2bit; pfRpix = fx_rpix_2bit; break;
-        case 1: pfPlot = fx_plot_4bit; pfRpix = fx_rpix_4bit; break;
-        case 2: pfPlot = fx_plot_4bit; pfRpix = fx_rpix_4bit; break;
-        case 3: pfPlot = fx_plot_8bit; pfRpix = fx_rpix_8bit; break;
-        case 4: pfPlot = fx_plot_obj;  pfRpix = fx_rpix_obj;  break;
+        case 0:  pfPlot = fx_plot_2bit; pfRpix = fx_rpix_2bit; break;
+        case 1:  pfPlot = fx_plot_4bit; pfRpix = fx_rpix_4bit; break;
+        case 2:  pfPlot = fx_plot_4bit; pfRpix = fx_rpix_4bit; break;
+        case 3:  pfPlot = fx_plot_8bit; pfRpix = fx_rpix_8bit; break;
+        default: pfPlot = fx_plot_obj;  pfRpix = fx_rpix_obj;  break;
     }
 
     // WYATT_TODO we could reintroduce the while(1) loop in another
