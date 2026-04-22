@@ -87,7 +87,7 @@ register uint16* pvDregLocal asm("r10");
 static inline uint16* GETR(size_t reg)
 {
     uint16* ptr;
-    asm ("add %0, %1, %2" : "=r" (ptr) : "r" (&GSU), "i" (reg * sizeof(uint16)));
+    asm ("add %0, %1, %2" : "=r" (ptr) : "r" (&GSU), "iIr" (reg * sizeof(uint16)));
     return ptr;
 }
 
