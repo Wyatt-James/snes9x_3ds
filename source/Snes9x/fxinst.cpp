@@ -336,8 +336,9 @@ static inline void fx_with(uint8 reg) {
 static inline void fx_stw_r(uint8 reg) {
     ASSUME_REG(0, 11);
     uint16 r = GSU.vLastRamAdr = GSU.avReg[reg];
-    RAM(r) = (uint8)SREG;
-    RAM(r^1) = (uint8)(SREG>>8);
+    uint16 sReg = SREG;
+    RAM(r) = (uint8)sReg;
+    RAM(r^1) = (uint8)(sReg>>8);
     CLRFLAGS;
     R15++;
 }
