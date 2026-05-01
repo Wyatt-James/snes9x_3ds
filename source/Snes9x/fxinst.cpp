@@ -337,8 +337,9 @@ static inline void fx_stw_r(uint8 reg) {
     ASSUME_REG(0, 11);
     uint16 r = GSU.vLastRamAdr = GSU.avReg[reg];
     uint16 sReg = SREG;
-    RAM(r) = (uint8)sReg;
-    RAM(r^1) = (uint8)(sReg>>8);
+    uint8* ram = &RAM(0);
+    ram[r] = (uint8)sReg;
+    ram[r^1] = (uint8)(sReg>>8);
     CLRFLAGS;
     R15++;
 }
@@ -653,6 +654,7 @@ COLD static inline void fx_rpix_obj(void)
 static inline void fx_swap()
 {
     uint32 v;
+    uint16 r15 = R15 + 1;
     asm ("rev16 %0, %1":"=r"(v):"r"(SREG));
     asm (
         "msr cpsr_f, %0\n\t"
@@ -663,7 +665,7 @@ static inline void fx_swap()
         : "cc"
     );
 
-    R15++;
+    R15 = r15;
     DREG = v;
     TESTR14;
     CLRFLAGS;
