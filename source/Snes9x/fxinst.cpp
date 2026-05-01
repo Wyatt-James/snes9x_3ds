@@ -1150,7 +1150,7 @@ static inline void fx_div2()
         "mrs %0, cpsr\n\t"
         : "+r" (ARMFLAGS),
           "=r" (v)
-        : "r" (SREG == UINT16_MAX ? 1 : SEX16(SREG))
+        : "r" (SREG == GSU.const_u16Max ? 1 : SEX16(SREG))
         : "cc"
     );
 
