@@ -5,8 +5,6 @@
 
 #include "fxemu.h"
 #include "fxinst.h"
-#include "3dssnes9x.h"
-#include "3dsopt.h"
 #include "fxinst_arm.h"
 #include <string.h>
 #include <stdio.h>
@@ -40,30 +38,43 @@ extern struct FxRegs_s GSU;
 //    Best to just let the compiler use them.
 #define REGISTER_RESERVATIONS 1
 
+// If 1, some nonsense C code will ATTEMPT to circumvent
+// tail merging of the instruction handlers. This is not
+// guaranteed to work perfectly on all compilers, so you
+// must double-check the ASM that the compiler produces!
+#define ATTEMPT_TO_DISABLE_TAIL_MERGE 1
+
+#if ATTEMPT_TO_DISABLE_TAIL_MERGE == 1
+#define DEFEAT_TAIL_MERGE asm volatile ("" : : "i" (__LINE__))
+// #define DEFEAT_TAIL_MERGE asm volatile ("eor r0, r0, #0" : : "i" (__LINE__)) // For searching ASM
+#else
+#define DEFEAT_TAIL_MERGE do {} while(0)
+#endif
+
 #if REGISTER_RESERVATIONS == 1
 
-// Reserve status register
+// GSU status register, sans the NZCV flags
 #undef SFR
 register uint32 statusRegLocal asm("r6");
 #define SFR statusRegLocal
 
-// Reserve ARM flags
+// ARM NZCV flags. Always synchronized with GSU flags.
 register uint32 armFlagsLocal asm("r7");
 #define ARMFLAGS armFlagsLocal
 
-// Reserve PIPE
+// GSU PIPE
 #undef PIPE
 register uint8 pipeLocal asm("r8");
 #define PIPE pipeLocal
 
-// Reserve SREG
+// GSU SREG
 #undef SREG
 #undef SREG_PTR
 register uint16* pvSregLocal asm("r9");
 #define SREG_PTR pvSregLocal
 #define SREG *SREG_PTR
 
-// Reserve DREG
+// GSU DREG
 #undef DREG
 #undef DREG_PTR
 register uint16* pvDregLocal asm("r10");
@@ -148,12 +159,16 @@ static inline void fx_stop()
     PIPE = 1;
     CLRFLAGS;
     R15++;
+
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 01 - nop - no operation */
 static inline void fx_nop() {
     CLRFLAGS;
     R15++;
+
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 02 - cache - reintialize GSU cache */
@@ -185,6 +200,8 @@ static inline void fx_cache()
     }
     R15++;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 03 - lsr - logic shift right */
@@ -205,6 +222,8 @@ static inline void fx_lsr()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 04 - rol - rotate left */
@@ -229,6 +248,8 @@ static inline void fx_rol()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* Branch on condition */
@@ -246,6 +267,8 @@ static inline void fx_rol()
         : "cc"                          \
     );                                  \
     R15 = r15;                          \
+                                        \
+    DEFEAT_TAIL_MERGE;                  \
 }
 
 /* 05 - bra - branch always */
@@ -254,6 +277,8 @@ static inline void fx_bra() {
     uint32 r15 = R15 + 1;
     FETCHPIPE2(r15);
     R15 = r15 + SEX8(v);
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 06 - blt - branch on less than */
@@ -300,6 +325,8 @@ static inline void fx_to_r(uint8 reg) {
         DREG_PTR = &GSU.avReg[reg];
 
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 static inline void fx_to_r14() {
@@ -311,6 +338,8 @@ static inline void fx_to_r14() {
     else
         DREG_PTR = GETR(14);
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 static inline void fx_to_r15() {
@@ -322,6 +351,8 @@ static inline void fx_to_r15() {
         DREG_PTR = GETR(15);
         R15++;
     }
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 20-2f - to rn - set register n as source and destination register */
@@ -330,6 +361,8 @@ static inline void fx_with(uint8 reg) {
     SF(B);
     SREG_PTR = DREG_PTR = &GSU.avReg[reg];
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 30-3b - stw (rn) - store word */
@@ -342,6 +375,8 @@ static inline void fx_stw_r(uint8 reg) {
     ram[r^1] = (uint8)(sReg>>8);
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 30-3b(ALT1) - stb (rn) - store byte */
@@ -351,6 +386,8 @@ static inline void fx_stb_r(uint8 reg) {
     RAM(GSU.avReg[reg]) = (uint8)SREG;
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 3c - loop - decrement loop counter, and branch on not zero */
@@ -374,6 +411,8 @@ static inline void fx_loop()
 	    R15++;
 
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 3d - alt1 - set alt1 mode */
@@ -382,6 +421,8 @@ static inline void fx_alt1() {
     SF(ALT1);
     CF(B);
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 3e - alt2 - set alt2 mode */
@@ -389,6 +430,8 @@ static inline void fx_alt2() {
     SF(ALT2);
     CF(B);
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 3f - alt3 - set alt3 mode */
@@ -397,6 +440,8 @@ static inline void fx_alt3() {
     SF(ALT2);
     CF(B);
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
     
 /* 40-4b - ldw (rn) - load word from RAM */
@@ -410,6 +455,8 @@ static inline void fx_ldw_r(uint8 reg)  {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 40-4b(ALT1) - ldb (rn) - load byte */
@@ -422,6 +469,8 @@ static inline void fx_ldb_r(uint8 reg) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 4c - plot - plot pixel with R1,R2 as x,y and the color register as the color */
@@ -669,6 +718,8 @@ static inline void fx_swap()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 4e - color - copy source register to color register */
@@ -688,6 +739,8 @@ static inline void fx_color()
 
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 4e(ALT1) - cmode - set plot option register */
@@ -703,6 +756,8 @@ static inline void fx_cmode()
     fx_computeScreenPointers(); // Moving this here increases register pressure too much. Leave it in the other file.
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 4f - not - perform exclusive exor with 1 on all bits */
@@ -723,6 +778,8 @@ static inline void fx_not()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 50-5f - add rn - add, register + register */
@@ -743,6 +800,8 @@ static inline void fx_add_r(uint8 reg) {
     DREG = s;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 50-5f(ALT1) - adc rn - add with carry, register + register */
@@ -770,6 +829,8 @@ static inline void fx_adc_r(uint8 reg) {
     DREG = s;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 50-5f(ALT2) - add #n - add, register + immediate */
@@ -790,6 +851,8 @@ static inline void fx_add_i(uint8 imm) {
     DREG = s;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 50-5f(ALT3) - adc #n - add with carry, register + immediate */
@@ -817,6 +880,8 @@ static inline void fx_adc_i(uint8 imm) {
     DREG = s;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 60-6f - sub rn - subtract, register - register */
@@ -837,6 +902,8 @@ static inline void fx_sub_r(uint8 reg) {
     DREG = s;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 60-6f(ALT1) - sbc rn - subtract with carry, register - register */
@@ -861,6 +928,8 @@ static inline void fx_sbc_r(uint8 reg) {
     DREG = s;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 60-6f(ALT2) - sub #n - subtract, register - immediate */
@@ -881,6 +950,8 @@ static inline void fx_sub_i(uint8 imm) {
     DREG = s;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 60-6f(ALT3) - cmp rn - compare, register, register */
@@ -897,6 +968,8 @@ static inline void fx_cmp_r(uint8 reg) {
 
     R15++;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 70 - merge - R7 as upper byte, R8 as lower byte (used for texture-mapping) */
@@ -910,6 +983,8 @@ static inline void fx_merge()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 71-7f - and rn - reister & register */
@@ -932,6 +1007,8 @@ static inline void fx_and_r(uint8 reg) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 71-7f(ALT1) - bic rn - reister & ~register */
@@ -954,6 +1031,8 @@ static inline void fx_bic_r(uint8 reg) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 71-7f(ALT2) - and #n - reister & immediate */
@@ -976,6 +1055,8 @@ static inline void fx_and_i(uint8 imm) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 71-7f(ALT3) - bic #n - reister & ~immediate */
@@ -998,6 +1079,8 @@ static inline void fx_bic_i(uint8 imm) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 80-8f - mult rn - 8 bit to 16 bit signed multiply, register * register */
@@ -1018,6 +1101,8 @@ static inline void fx_mult_r(uint8 reg) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 80-8f(ALT1) - umult rn - 8 bit to 16 bit unsigned multiply, register * register */
@@ -1039,6 +1124,8 @@ static inline void fx_umult_r(uint8 reg) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
   
 /* 80-8f(ALT2) - mult #n - 8 bit to 16 bit signed multiply, register * immediate */
@@ -1059,6 +1146,8 @@ static inline void fx_mult_i(uint8 imm) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
   
 /* 80-8f(ALT3) - umult #n - 8 bit to 16 bit unsigned multiply, register * immediate */
@@ -1079,6 +1168,8 @@ static inline void fx_umult_i(uint8 imm) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
   
 /* 90 - sbk - store word to last accessed RAM address */
@@ -1089,6 +1180,8 @@ static inline void fx_sbk()
     RAM(GSU.vLastRamAdr^1) = (uint8)(sReg>>8); // WYATT_TODO this RAM alignment can probably be optimized to a 16-bit store
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 91-94 - link #n - R11 = R15 + immediate */
@@ -1097,6 +1190,8 @@ static inline void fx_link_i(uint8 lkn) {
     R11 = R15 + lkn;
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 95 - sex - sign extend 8 bit to 16 bit */
@@ -1118,6 +1213,8 @@ static inline void fx_sex()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 96 - asr - aritmetric shift right by one */
@@ -1138,6 +1235,8 @@ static inline void fx_asr()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 96(ALT1) - div2 - aritmetric shift right by one */
@@ -1158,6 +1257,8 @@ static inline void fx_div2()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 97 - ror - rotate right by one */
@@ -1179,6 +1280,8 @@ static inline void fx_ror()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 98-9d - jmp rn - jump to address of register */
@@ -1186,6 +1289,8 @@ static inline void fx_jmp_r(uint8 reg) {
     ASSUME_REG(8, 13);
     R15 = GSU.avReg[reg];
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 98-9d(ALT1) - ljmp rn - set program bank to source register and jump to address of register */
@@ -1197,6 +1302,8 @@ static inline void fx_ljmp_r(uint8 reg) {
     GSU.bCacheActive = FALSE;
     fx_cache();
     R15--;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 9e - lob - set upper byte to zero (keep low byte) */
@@ -1217,6 +1324,8 @@ static inline void fx_lob()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 9f - fmult - 16 bit to 32 bit signed multiplication, upper 16 bits only */
@@ -1236,6 +1345,8 @@ static inline void fx_fmult()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* 9f(ALT1) - lmult - 16 bit to 32 bit signed multiplication */
@@ -1258,6 +1369,8 @@ static inline void fx_lmult()
     DREG = resultHigh;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* a0-af - ibt rn,#pp - immediate byte transfer */
@@ -1269,11 +1382,15 @@ static inline void fx_ibt_r(uint8 reg) {
     R15++;
     GSU.avReg[reg] = SEX8(v);
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 static inline void fx_ibt_r14() {
     fx_ibt_r(14);
     READR14;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* a0-af(ALT1) - lms rn,(yy) - load word from RAM (short address) */
@@ -1286,11 +1403,15 @@ static inline void fx_lms_r(uint8 reg) {
     GSU.avReg[reg] =   (uint16) RAM(GSU.vLastRamAdr)
                    | (((uint16) RAM(GSU.vLastRamAdr + 1)) << 8);
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 static inline void fx_lms_r14() {
     fx_lms_r(14);
     READR14;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* a0-af(ALT2) - sms (yy),rn - store word in RAM (short address) */
@@ -1305,6 +1426,8 @@ static inline void fx_sms_r(uint8 reg) {
     RAM(GSU.vLastRamAdr+1) = (uint8)(v>>8);
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* b0-bf - from rn - set source register */
@@ -1338,6 +1461,8 @@ static inline void fx_from_r(uint8 reg) {
         SREG_PTR = &GSU.avReg[reg];
         R15++;
     }
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* c0 - hib - move high-byte to low-byte */
@@ -1357,6 +1482,8 @@ static inline void fx_hib()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* c1-cf - or rn */
@@ -1379,6 +1506,8 @@ static inline void fx_or_r(uint8 reg) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* c1-cf(ALT1) - xor rn */
@@ -1401,6 +1530,8 @@ static inline void fx_xor_r(uint8 reg) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* c1-cf(ALT2) - or #n */
@@ -1423,6 +1554,8 @@ static inline void fx_or_i(uint8 imm) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* c1-cf(ALT3) - xor #n */
@@ -1445,6 +1578,8 @@ static inline void fx_xor_i(uint8 imm) {
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* d0-de - inc rn - increase by one */
@@ -1465,11 +1600,15 @@ static inline void fx_inc_r(uint8 reg) {
 
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 static inline void fx_inc_r14() {
     fx_inc_r(14);
     READR14;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* df - getc - transfer ROM buffer to color register */
@@ -1493,6 +1632,8 @@ static inline void fx_getc()
 
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* df(ALT2) - ramb - set current RAM bank */
@@ -1502,6 +1643,8 @@ static inline void fx_ramb()
     GSU.pvRamBank = GSU.apvRamBank[GSU.vRamBankReg & (FX_RAM_BANKS-1)];
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* df(ALT3) - romb - set current ROM bank */
@@ -1511,6 +1654,8 @@ static inline void fx_romb()
     GSU.pvRomBank = GSU.apvRomBank[GSU.vRomBankReg];
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* e0-ee - dec rn - decrement by one */
@@ -1531,11 +1676,15 @@ static inline void fx_dec_r(uint8 reg) {
 
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 static inline void fx_dec_r14() {
     fx_dec_r(14);
     READR14;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* ef - getb - get byte from ROM at address R14 */
@@ -1551,6 +1700,8 @@ static inline void fx_getb()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* ef(ALT1) - getbh - get high-byte from ROM at address R14 */
@@ -1567,6 +1718,8 @@ static inline void fx_getbh()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* ef(ALT2) - getbl - get low-byte from ROM at address R14 */
@@ -1583,6 +1736,8 @@ static inline void fx_getbl()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* ef(ALT3) - getbs - get sign extended byte from ROM at address R14 */
@@ -1599,6 +1754,8 @@ static inline void fx_getbs()
     DREG = v;
     TESTR14;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* f0-ff - iwt rn,#xx - immediate word transfer to register */
@@ -1613,11 +1770,15 @@ static inline void fx_iwt_r(uint8 reg) {
     R15 = r15 + 1;
     GSU.avReg[reg] = v;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 static inline void fx_iwt_r14() {
     fx_iwt_r(14);
     READR14;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* f0-ff(ALT1) - lm rn,(xx) - load word from RAM */
@@ -1633,11 +1794,15 @@ static inline void fx_lm_r(uint8 reg) {
     GSU.avReg[reg] = RAM(GSU.vLastRamAdr)
                    | USEX8(RAM(GSU.vLastRamAdr^1)) << 8;
     CLRFLAGS;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 static inline void fx_lm_r14() {
     fx_lm_r(14);
     READR14;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /* f0-ff(ALT2) - sm (xx),rn - store word in RAM */
@@ -1655,6 +1820,8 @@ static inline void fx_sm_r(uint8 reg) {
     RAM(GSU.vLastRamAdr^1) = (uint8)(v>>8);
     CLRFLAGS;
     R15++;
+    
+    DEFEAT_TAIL_MERGE;
 }
 
 /*** GSU executions functions ***/
