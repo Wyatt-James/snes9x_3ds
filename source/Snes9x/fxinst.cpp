@@ -1860,7 +1860,7 @@ static uint32 fx_run(uint32 nInstructions)
     // Update the goto table with the correct plot/rpix handlers
     void *plotHandler, *rpixHandler;
     switch (GSU.vMode) {
-        default:
+        default: // Obj should never be called
         case 0:  plotHandler = HANDLER_PTR(fx_plot_2bit); rpixHandler = HANDLER_PTR(fx_rpix_2bit); break;
         case 1:
         case 2:  plotHandler = HANDLER_PTR(fx_plot_4bit); rpixHandler = HANDLER_PTR(fx_rpix_4bit); break;
@@ -1908,53 +1908,6 @@ static uint32 fx_run(uint32 nInstructions)
     return nInstructions;
 }
 
-COLD static uint32 fx_run_to_breakpoint(uint32 nInstructions)
-{
-    printf ("run_to_bp\n");
-    uint32 vCounter = 0;
-    while(TF(G) && vCounter < nInstructions)
-    {
-		vCounter++;
-        // FX_STEP; // WYATT_TODO fix this.
-        if(USEX16(R15) == GSU.vBreakPoint)
-        {
-            GSU.vErrorCode = FX_BREAKPOINT;
-            break;
-        }
-    }
-    /*
-#ifndef FX_ADDRESS_CHECK
-    GSU.vPipeAdr = USEX16(R15-1) | (USEX8(GSU.vPrgBankReg)<<16);
-#endif
-*/
-    return vCounter;
-}
-
-COLD static uint32 fx_step_over(uint32 nInstructions)
-{
-    printf ("run_step_over\n");
-    
-    uint32 vCounter = 0;
-    while(TF(G) && vCounter < nInstructions)
-    {
-		vCounter++;
-        // FX_STEP; // WYATT_TODO fix this.
-        if(USEX16(R15) == GSU.vBreakPoint)
-        {
-            GSU.vErrorCode = FX_BREAKPOINT;
-            break;
-        }
-        if(USEX16(R15) == GSU.vStepPoint)
-            break;
-        }
-    /*
-#ifndef FX_ADDRESS_CHECK
-    GSU.vPipeAdr = USEX16(R15-1) | (USEX8(GSU.vPrgBankReg)<<16);
-#endif
-*/
-    return vCounter;
-}
-
 #ifdef FX_FUNCTION_TABLE
 uint32 (*FX_FUNCTION_TABLE[])(uint32) =
 #else
@@ -1962,6 +1915,6 @@ uint32 (*fx_apfFunctionTable[])(uint32) =
 #endif
 {
     &fx_run,
-    &fx_run_to_breakpoint,
-    &fx_step_over,
+    NULL, // &fx_run_to_breakpoint
+    NULL, // &fx_step_over
 };
