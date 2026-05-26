@@ -12,8 +12,6 @@
 /* Aligned to 3DS L1 cacheline boundary */
 struct FxRegs_s GSU __attribute__((aligned(32)));
 
-uint32 (**fx_ppfFunctionTable)(uint32) = 0;
-
 #define FXEMU_ENABLE_CALL_COUNTING 0
 
 enum
@@ -302,17 +300,6 @@ void FxReset(struct FxInit_s *psFxInfo)
 {
 	logFunctionCall(F_FxReset);
     int i;
-	
-	// These seem to be for a potential debug feature where different
-	// opcode sets could be loaded based on config flags, but the array
-	// only has one set, as you can see.
-    static uint32 (**appfFunction[])(uint32) = { &fx_apfFunctionTable[0] };
-
-	uint32 opcodeTableId = psFxInfo->vFlags & 0x3;
-
-    /* Get function pointers for the current emulation mode */
-    fx_ppfFunctionTable = appfFunction[opcodeTableId];
-    // fx_ppfOpcodeTable = appfOpcode[psFxInfo->vFlags & 0x3];
     
     /* Clear all internal variables */
 	GSU = (struct FxRegs_s) {
@@ -413,7 +400,6 @@ static uint8 fx_checkStartAddress()
 int FxEmulate(uint32 nInstructions)
 {
 	logFunctionCall(F_FxEmulate);
-    uint32 vCount;
 
     /* Read registers and initialize GSU session */
     fx_readRegisterSpace();
@@ -429,7 +415,7 @@ int FxEmulate(uint32 nInstructions)
     /* Execute GSU session */
     CF(IRQ);
 
-	vCount = fx_ppfFunctionTable[FX_FUNCTION_RUN](nInstructions);
+	fx_run(nInstructions);
 
     /* Store GSU registers */
     fx_writeRegisterSpace();
@@ -438,7 +424,7 @@ int FxEmulate(uint32 nInstructions)
     if(GSU.vErrorCode)
 			return GSU.vErrorCode;
     else
-			return vCount;
+			return nInstructions;
 }
 
 /* Breakpoints */
@@ -458,7 +444,6 @@ void FxBreakPointClear()
 int FxStepOver(uint32 nInstructions)
 {
 	logFunctionCall(F_FxStepOver);
-    uint32 vCount;
     fx_readRegisterSpace();
 
     /* Check if the start address is valid */
@@ -475,12 +460,12 @@ int FxStepOver(uint32 nInstructions)
     else
 			GSU.vStepPoint = USEX16(R15+1);
 
-    vCount = fx_ppfFunctionTable[FX_FUNCTION_STEP_OVER](nInstructions);
+    fx_run(nInstructions);
     fx_writeRegisterSpace();
     if(GSU.vErrorCode)
 			return GSU.vErrorCode;
     else
-			return vCount;
+			return nInstructions;
 }
 
 /* Errors */

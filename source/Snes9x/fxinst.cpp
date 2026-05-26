@@ -1848,7 +1848,7 @@ static inline void fx_sm_r(uint8 reg) {
 
 #define HANDLER_PTR(func_) &&handle_ ## func_
 
-static uint32 fx_run(uint32 nInstructions)
+void fx_run(uint32 nInstructions)
 {
     PUSH_RESERVED;
     fx_load_reserved();
@@ -1905,16 +1905,4 @@ static uint32 fx_run(uint32 nInstructions)
 
     fx_save_reserved();
     POP_RESERVED;
-    return nInstructions;
 }
-
-#ifdef FX_FUNCTION_TABLE
-uint32 (*FX_FUNCTION_TABLE[])(uint32) =
-#else
-uint32 (*fx_apfFunctionTable[])(uint32) =
-#endif
-{
-    &fx_run,
-    NULL, // &fx_run_to_breakpoint
-    NULL, // &fx_step_over
-};
