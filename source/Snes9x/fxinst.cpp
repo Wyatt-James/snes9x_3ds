@@ -417,7 +417,6 @@ static inline void fx_loop(uint8 unused)
 }
 
 /* 3d - alt1 - set alt1 mode */
-// WYATT_TODO see if this can be collapsed
 static inline void fx_alt1(uint8 unused) {
     SF(ALT1);
     CF(B);
@@ -491,7 +490,7 @@ static inline void fx_plot_2bit(uint8 unused)
 #endif
 
     if(GSU.vPlotOptionReg & 0x02)
-	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg; // WYATT_TODO check this ASM
+	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg;
     else
 	    c = GSU.vColorReg;
     
@@ -718,7 +717,7 @@ COLD static inline void fx_rpix_obj(uint8 unused)
 static inline void fx_swap(uint8 unused)
 {
     uint32 v;
-    uint16 r15 = R15 + 1; // WYATT_TODO this may be a bug? Check it. Swap R15 may break things.
+    uint16 r15 = R15 + 1;
     asm ("rev16 %0, %1":"=r"(v):"r"(SREG));
     asm (
         "msr cpsr_f, %0\n\t"
@@ -1147,7 +1146,7 @@ static inline void fx_umult_r(uint8 reg) {
 static inline void fx_mult_i(uint8 imm) {
     ASSUME_IMM(0, 15);
 
-    uint32 v = SEX8(SREG) * imm; // WYATT_TODO check that this promotion is correct, and change imm to a u8 globally
+    uint32 v = SEX8(SREG) * imm;
     asm (
         "msr cpsr_f, %0\n\t"
         "movs %0, %1\n\t"
@@ -1192,7 +1191,7 @@ static inline void fx_sbk(uint8 unused)
 {
     uint16 sReg = SREG;
     RAM(GSU.vLastRamAdr) = (uint8)sReg;
-    RAM(GSU.vLastRamAdr^1) = (uint8)(sReg>>8); // WYATT_TODO this RAM alignment can probably be optimized to a 16-bit store
+    RAM(GSU.vLastRamAdr^1) = (uint8)(sReg>>8);
     CLRFLAGS;
     R15++;
     
@@ -1212,7 +1211,6 @@ static inline void fx_link_i(uint8 lkn) {
 /* 95 - sex - sign extend 8 bit to 16 bit */
 static inline void fx_sex(uint8 unused)
 {
-    // WYATT_TODO It may be faster to set v to SEX(SREG) and use %0 as a scratch, due to memory reordering
     uint32 v;
     asm (
         "msr cpsr_f, %0\n\t"
@@ -1513,7 +1511,7 @@ static inline void fx_or_r(uint8 reg) {
         : "+r" (ARMFLAGS),
           "=r" (v)
         : "r" (SREG | (SREG << 16)),
-          "r" (GSU.avReg[reg] | (GSU.avReg[reg] << 16)) // WYATT_TODO check this ASM
+          "r" (GSU.avReg[reg] | (GSU.avReg[reg] << 16))
         : "cc"
     );
 
