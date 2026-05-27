@@ -84,8 +84,9 @@ register uint16* pvDregLocal asm("r10");
 // If any of these registers are used by your function or its
 // statically-linked subroutines, these must be placed at the
 // start and end of said function if it is externally linked.
-#define PUSH_RESERVED asm volatile ("push {r6, r7, r8, r9, r10}")
-#define POP_RESERVED  asm volatile ("pop  {r6, r7, r8, r9, r10}")
+// Both must always be an even number of registers per AAPCS!
+#define PUSH_RESERVED asm volatile ("push {r6, r7, r8, r9, r10, r11}")
+#define POP_RESERVED  asm volatile ("pop  {r6, r7, r8, r9, r10, r11}")
 
 // Necessary redefs if DREG and SREG are pointers
 #undef TESTR14
