@@ -357,7 +357,17 @@ struct FxRegs_s
 #define CFGR USEX8(GSU.pvRegisters[GSU_CFGR])
 #define CLSR USEX8(GSU.pvRegisters[GSU_CLSR])
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 void fx_run(uint32 nInstructions);
+void fx_run_asm(uint32 nInstructions);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 /* Set this define if branches are relative to the instruction in the delay slot */
 /* (I think they are) */
