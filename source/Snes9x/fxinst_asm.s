@@ -9,6 +9,9 @@
 #define rDREG  r10
 #define rGOTO  fp
 
+@ R2 contains pipe after interpreter
+@ R3 contains GSU R15 after interpreter
+
     .section .text.fx_run_asm,"ax",%progbits
     .align    2
     .global fx_run_asm
@@ -492,10 +495,10 @@ handle_fx_rpix_8bit:
 @ NOP: Clears flags and advances R15 
 handle_fx_nop:
         add     rR15, rR15, #1                           @ R15++
-        add     rSREG, rGSU, #0                          @ CLRFLAGS SREG = 0
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #30]                        @ Store R15
-        mov     rDREG, rSREG                             @ CLRFLAGS DREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS STAT
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
 
 @ CACHE: reintialize GSU cache
@@ -513,161 +516,187 @@ handle_fx_cache:
         strb    r2, [rGSU, #1456]                        @ GSU.bCacheActive = TRUE
 .skip_cache_reload:
         add     rR15, rR15, #1                           @ R15++
-        add     rSREG, rGSU, #0                          @ CLRFLAGS SREG = 0
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #30]                        @ Store R15
-        mov     rDREG, rSREG                             @ CLRFLAGS DREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS STAT
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
 
+@ LSR: logical shift right
 handle_fx_lsr:
-        ldrh    r2, [rGSU, #30]                          @ 
-        ldrh    rR15, [rSREG]                            @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        msr     cpsr_f, rARM                             @ 
-        lsrs    rR15, rR15, #1                           @ 
-        mrs     rARM, cpsr                               @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        add     rSREG, rGSU, #0                          @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        mov     rDREG, rSREG                             @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        ldrh    r2, [rGSU, #30]                          @ Load R15 into R2 WYATT_TODO this is inefficient! Does inline ASM break regalloc?
+        ldrh    rR15, [rSREG]                            @ Load SREG
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsrs    rR15, rR15, #1                           @ Do the rightshift
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        strh    rR15, [rDREG]                            @ Store result into DREG
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14:  If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strbeq  rR15, [rGSU, #38]                        @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
+
+@ ROL: rotate left
 handle_fx_rol:
-        ldrh    r2, [rGSU, #30]                          @ 
-        ldrh    rR15, [rSREG]                            @ 
-        add     r2, r2, #1                               @ 
-        msr     cpsr_f, rARM                             @ 
-        lsl     rR15, rR15, #16                          @ 
-        orrcs   rR15, rR15, #32768                       @ 
-        lsls    rR15, rR15, #1                           @ 
-        mrs     rARM, cpsr                               @ 
-        lsr     rR15, rR15, #16                          @ 
-        strh    r2, [rGSU, #30]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        add     rSREG, rGSU, #0                          @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        mov     rDREG, rSREG                             @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        ldrh    r2, [rGSU, #30]                          @ Load R15 into R2 WYATT_TODO this is inefficient! Does inline ASM break regalloc?
+        ldrh    rR15, [rSREG]                            @ Load SREG
+        add     r2, r2, #1                               @ R15++
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsl     rR15, rR15, #16                          @ Shift value into upper half of reg
+        orrcs   rR15, rR15, #32768                       @ If carry is set, set bit 15
+        lsls    rR15, rR15, #1                           @ Shift left 1 to set carry
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        lsr     rR15, rR15, #16                          @ Shift down from top half of register
+        strh    r2, [rGSU, #30]                          @ Store R15
+        strh    rR15, [rDREG]                            @ Store result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14:  If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strbeq  rR15, [rGSU, #38]                        @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
+
+@ BRA: unconditional branch
 handle_fx_bra:
-        add     rR15, rR15, #1                           @ 
-        uxth    rR15, rR15                               @ 
-        sxtb    r2, ip                                   @ 
-        add     r2, rR15, r2                             @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
-        strh    r2, [rGSU, #30]                          @ 
+        add     rR15, rR15, #1                           @ R15++
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, ip                                   @ Sign-extend saved PIPE
+        add     r2, rR15, r2                             @ Add PIPE to R15
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        strh    r2, [rGSU, #30]                          @ Store destination to R15
         b       loop_head                                @ 
+
+@ BGE: branch if greater or equal
 handle_fx_bge:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addge   rR15, rR15, ip                           @ 
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        sxtb    ip, ip                                   @ Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addge   rR15, rR15, ip                           @ Handle branch
         addlt   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
+
+@ BLT: branch if less than
 handle_fx_blt:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addlt   rR15, rR15, ip                           @ 
-        addge   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addlt   rR15, rR15, ip                           @  Handle branch
+        addge   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
+@ BNE: branch if not equal
 handle_fx_bne:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addne   rR15, rR15, ip                           @ 
-        addeq   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addne   rR15, rR15, ip                           @  Handle branch
+        addeq   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
+@ BEQ: branch if equal
 handle_fx_beq:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addeq   rR15, rR15, ip                           @ 
-        addne   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addeq   rR15, rR15, ip                           @  Handle branch
+        addne   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
+@ BPL: branch if positive or zero
 handle_fx_bpl:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addpl   rR15, rR15, ip                           @ 
-        addmi   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addpl   rR15, rR15, ip                           @  Handle branch
+        addmi   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
+@ BMI: branch if negative
 handle_fx_bmi:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addmi   rR15, rR15, ip                           @ 
-        addpl   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addmi   rR15, rR15, ip                           @  Handle branch
+        addpl   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
+@ BCC: branch if lower (unsigned <)
 handle_fx_bcc:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addcc   rR15, rR15, ip                           @ 
-        addcs   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addcc   rR15, rR15, ip                           @  Handle branch
+        addcs   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
+@ BCS: branch if higher or same (unsigned >=)
 handle_fx_bcs:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addcs   rR15, rR15, ip                           @ 
-        addcc   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addcs   rR15, rR15, ip                           @  Handle branch
+        addcc   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
+@ BVC: branch if no overflow
 handle_fx_bvc:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addvc   rR15, rR15, ip                           @ 
-        addvs   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addvc   rR15, rR15, ip                           @  Handle branch
+        addvs   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
+@ BVS: branch if overflow
 handle_fx_bvs:
-        add     rR15, rR15, #1                           @ 
-        uxth    r2, rR15                                 @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        sxtb    ip, ip                                   @ 
-        msr     cpsr_f, rARM                             @ 
-        addvs   rR15, rR15, ip                           @ 
-        addvc   rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @  R15++
+        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
+        sxtb    ip, ip                                   @  Sign-extend saved PIPE
+        msr     cpsr_f, rARM                             @  Load flags into CPSR
+        addvs   rR15, rR15, ip                           @  Handle branch
+        addvc   rR15, rR15, #1                           @  
+        strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
+
 handle_fx_to_r:
         tst     rSTAT, #4096                             @ 
         addeq   vLow, rGSU, vLow, lsl #1                 @ 
