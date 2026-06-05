@@ -70,7 +70,7 @@ handle_fx_getbs:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: clear STAT
         ldrbeq  rR15, [r2, rR15]                         @  |
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = R0
-        strbeq  rR15, [rGSU, #38]                        @  |
+        strbeq  rR15, [rGSU, #38]                        @  V
         @ Fallthrough to loop head. WYATT_TODO the most common handler should go here.
 
 loop_head:
@@ -92,19 +92,19 @@ loop_end:
 
 @ STOP: stop GSU execution
 handle_fx_stop:
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        mov     rR15, #0                                 @ 
-        add     rSREG, rGSU, rR15                        @ 
-        ldr     r2, [rGSU, #100]                         @ 
-        bic     rSTAT, rSTAT, #32                        @ 
-        ldrsb   r2, [r2, #55]                            @ 
-        mov     rPIPE, #1                                @ 
-        cmp     r2, #0                                   @ 
-        orrge   rSTAT, rSTAT, #32768                     @ 
-        mov     rDREG, rSREG                             @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strb    rR15, [rGSU, #36]                        @ 
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        mov     rR15, #0                                 @ GSU.vPlotOptionReg = 0
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldr     r2, [rGSU, #100]                         @ R2 = GSU.pvRegisters[GSU_CFGR]
+        bic     rSTAT, rSTAT, #32                        @ CF(G)
+        ldrsb   r2, [r2, #55]                            @ R2 = GSU_CFGR
+        mov     rPIPE, #1                                @ PIPE = 1
+        cmp     r2, #0                                   @ If GSU_CFGR == 0, Raise IRQ
+        orrge   rSTAT, rSTAT, #32768                     @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        bic     rSTAT, rSTAT, #4864                      @  |
+        strb    rR15, [rGSU, #36]                        @ GSU.vPlotOptionReg = 0
         b       loop_end                                 @ 
 handle_fx_plot_2bit:
         add     rR15, rR15, #1                           @ 
@@ -488,32 +488,37 @@ handle_fx_rpix_8bit:
         ldrbeq  rR15, [r2, rR15]                         @ 
         strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
+
+@ NOP: Clears flags and advances R15 
 handle_fx_nop:
-        add     rR15, rR15, #1                           @ 
-        add     rSREG, rGSU, #0                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        mov     rDREG, rSREG                             @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        add     rR15, rR15, #1                           @ R15++
+        add     rSREG, rGSU, #0                          @ CLRFLAGS SREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        mov     rDREG, rSREG                             @ CLRFLAGS DREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS STAT
         b       loop_head                                @ 
+
+@ CACHE: reintialize GSU cache
 handle_fx_cache:
-        ldrh    r1, [rGSU, #32]                          @ 
-        bic     r2, rR15, #15                            @ 
-        cmp     r1, r2                                   @ 
-        uxth    r2, r2                                   @ 
-        beq     .L240                                    @ 
-.L62:
-        strh    r2, [rGSU, #32]                          @ 
+        ldrh    r1, [rGSU, #32]                          @ r1 = GSU.vCacheBaseReg
+        bic     r2, rR15, #15                            @ r2 = R15 & 0xfff0
+        cmp     r1, r2                                   @ If address range is not equal, cache needs a reload
+        beq     .cache_test_active                       @ If address range is equal, check if cache is active
+@ Reload cache
+.reload_cache:
+        strh    r2, [rGSU, #32]                          @ GSU.vCacheBaseReg = R15 & 0xfff0
         mov     r2, #0                                   @ 
-        str     r2, [rGSU, #72]                          @ 
+        str     r2, [rGSU, #72]                          @ GSU.vCacheFlags = 0
         mov     r2, #1                                   @ 
-        strb    r2, [rGSU, #1456]                        @ 
-.L63:
-        add     rR15, rR15, #1                           @ 
-        add     rSREG, rGSU, #0                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        mov     rDREG, rSREG                             @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        strb    r2, [rGSU, #1456]                        @ GSU.bCacheActive = TRUE
+.skip_cache_reload:
+        add     rR15, rR15, #1                           @ R15++
+        add     rSREG, rGSU, #0                          @ CLRFLAGS SREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        mov     rDREG, rSREG                             @ CLRFLAGS DREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS STAT
         b       loop_head                                @ 
+
 handle_fx_lsr:
         ldrh    r2, [rGSU, #30]                          @ 
         ldrh    rR15, [rSREG]                            @ 
@@ -1984,11 +1989,14 @@ handle_fx_romb:
         movne   ip, r2                                   @ 
         bne     .L27                                     @ 
         b       .L25                                     @ 
-.L240:
-        ldrb    r1, [rGSU, #1456]                        @ 
+
+@ fx_cache: second half of the conditional, down here since it's UNLIKELY.
+@ Only reached if GSU.vCacheBaseReg says we need a reload
+.cache_test_active:
+        ldrb    r1, [rGSU, #1456]                        @ Load GSU.bCacheActive
         cmp     r1, #0                                   @ 
-        bne     .L63                                     @ 
-        b       .L62                                     @ 
+        bne     .skip_cache_reload                       @ If active, skip reloading since it's already correct
+        b       .reload_cache                            @ Else, we need to reload cache
     .cfi_endproc
 
     .section	.rodata
