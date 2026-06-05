@@ -17,45 +17,44 @@
     .type fx_run_asm, %function
     .cfi_startproc
 fx_run_asm:
-        push    {rGSU, rVCNT, rGOTO, rSTAT, rARM, rPIPE, rSREG, rDREG, r11, lr}
-        sub     sp, sp, #8                               @ 
-        ldr     rGSU, .L242                              @ 
-        sub     rVCNT, vLow, #1                          @ 
-        ldr     rR15, [rGSU, #120]                       @ 
-        ldr     rGOTO, .L242+4                           @ 
-        cmp     rR15, #3                                 @ 
-        ldrls   r2, .L242+8                              @ 
-        ldrhi   rR15, .L242+12                           @ 
-        addls   r1, r2, rR15, lsl #3                     @ 
-        ldrhi   r2, .L242+16                             @ 
-        ldrls   r2, [r2, rR15, lsl #3]                   @ 
-        ldrls   rR15, [r1, #4]                           @ 
-        ldrh    r1, [rGSU, #28]                          @ 
-        cmp     vLow, #0                                 @ 
-        ldr     vLow, [rGSU, #408]                       @ 
-        ldrb    rSREG, [rGSU, #61]                       @ 
-        ldrb    rDREG, [rGSU, #60]                       @ 
-        ldrb    r1, [vLow, r1]                           @ 
-        ldrh    rSTAT, [rGSU, #64]                       @ 
-        ldr     rARM, [rGSU, #68]                        @ 
-        ldrb    rPIPE, [rGSU, #62]                       @ 
-        add     rSREG, rGSU, rSREG, lsl #1               @ 
-        add     rDREG, rGSU, rDREG, lsl #1               @ 
-        strb    r1, [rGSU, #38]                          @ 
-        str     r2, [rGOTO, #2352]                       @ 
-        str     r2, [rGOTO, #304]                        @ 
-        str     rR15, [rGOTO, #3376]                     @ 
-        str     rR15, [rGOTO, #1328]                     @ 
-        beq     loop_end                                 @ 
+        push    {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, lr}
+        sub     sp, sp, #12                              @ Allocate 8 bytes on stack, plus 4 padding
+        ldr     rGSU, .L242                              @ Load GSU pointer
+        sub     rVCNT, vLow, #1                          @ Decrement vCounter by 1, move to correct variable
+        ldr     rR15, [rGSU, #120]                       @ Load GSU.vMode
+        ldr     rGOTO, .L242+4                           @ Load GOTO table
+        cmp     rR15, #3                                 @ If vMode > 3, vMode = 0
+        movhi   r3, #0                                   @ WYATT_TODO
+        ldr     r2, .L242+8                              @ Load plot/rpix table
+        add     r1, r2, rR15, lsl #3                     @ Compute target address
+        ldr     r2, [r2, rR15, lsl #3]                   @ Load plot from the table 
+        ldr     rR15, [r1, #4]                           @ Load rpix from the table
+        ldrh    r1, [rGSU, #28]                          @ READR14: Load GSU R14
+        cmp     vLow, #0                                 @ If nInstructions == 0, end
+        ldr     vLow, [rGSU, #408]                       @ READR14: Load GSU.pvRomBank
+        ldrb    r1, [vLow, r1]                           @ READR14: Load GSU.pvRomBank[R14]
+        ldrb    rSREG, [rGSU, #61]                       @ Load reserved regs
+        ldrb    rDREG, [rGSU, #60]                       @  |
+        ldrh    rSTAT, [rGSU, #64]                       @  |
+        ldr     rARM, [rGSU, #68]                        @  |
+        ldrb    rPIPE, [rGSU, #62]                       @  |
+        add     rSREG, rGSU, rSREG, lsl #1               @  |
+        add     rDREG, rGSU, rDREG, lsl #1               @  V
+        strb    r1, [rGSU, #38]                          @ READR14: Store loaded value to GSU.vRomBuffer
+        str     r2, [rGOTO, #2352]                       @ Populate GOTO table
+        str     r2, [rGOTO, #304]                        @  |
+        str     rR15, [rGOTO, #3376]                     @  |
+        str     rR15, [rGOTO, #1328]                     @  V
+        beq     loop_end                                 @ End if nInstructions == 0
 loop_dispatch:
-        ldr     r1, [rGSU, #412]                         @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrb    ip, [r1, rR15]                           @ 
-        and     r2, rSTAT, #768                          @ 
-        orr     r2, rPIPE, r2                            @ 
-        and     vLow, rPIPE, #15                         @ 
-        mov     rPIPE, ip                                @ 
-        ldr     pc, [rGOTO, r2, lsl #2]                  @ 
+        ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank
+        ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15
+        ldrb    ip, [r1, rR15]                           @ FETCHPIPE: Load from memory
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        mov     rPIPE, ip                                @ FETCHPIPE: redundant move? WYATT_TODO IP is used but rPIPE might be better.
+        ldr     pc, [rGOTO, r2, lsl #2]                  @ Branch to handler
 handle_fx_getbs:
         add     rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ 
@@ -71,20 +70,20 @@ handle_fx_getbs:
         mov     rDREG, rSREG                             @ 
         strbeq  rR15, [rGSU, #38]                        @ 
 loop_head:
-        subs    rVCNT, rVCNT, #1                         @ 
+        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if it underflows
         bcs     loop_dispatch                            @ 
 loop_end:
-        sub     rR15, rSREG, rGSU                        @ 
-        asr     rR15, rR15, #1                           @ 
-        strb    rR15, [rGSU, #61]                        @ 
-        sub     rR15, rDREG, rGSU                        @ 
-        asr     rR15, rR15, #1                           @ 
-        strh    rSTAT, [rGSU, #64]                       @ 
-        str     rARM, [rGSU, #68]                        @ 
-        strb    rPIPE, [rGSU, #62]                       @ 
-        strb    rR15, [rGSU, #60]                        @ 
-        add     sp, sp, #8                               @ 
-        pop     {rGSU, rVCNT, rGOTO, rSTAT, rARM, rPIPE, rSREG, rDREG, r11, pc}
+        sub     rR15, rSREG, rGSU                        @ Save reserved registers
+        asr     rR15, rR15, #1                           @  |
+        strb    rR15, [rGSU, #61]                        @  |
+        sub     rR15, rDREG, rGSU                        @  |
+        asr     rR15, rR15, #1                           @  |
+        strh    rSTAT, [rGSU, #64]                       @  |
+        str     rARM, [rGSU, #68]                        @  |
+        strb    rPIPE, [rGSU, #62]                       @  |
+        strb    rR15, [rGSU, #60]                        @  V
+        add     sp, sp, #12                              @ Free space on stack
+        pop     {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, pc} @ Return
 handle_fx_stop:
         add     rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ 
@@ -1058,8 +1057,6 @@ handle_fx_lob:
         .word   GSU
         .word   opcode_goto_table
         .word   plot_rpix_handler_table
-        .word   handle_fx_rpix_2bit
-        .word   handle_fx_plot_2bit
 handle_fx_fmult:
         ldrh    rR15, [rSREG]                            @ 
         ldrh    r2, [rGSU, #12]                          @ 
