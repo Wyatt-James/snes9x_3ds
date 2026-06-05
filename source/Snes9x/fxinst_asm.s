@@ -1361,7 +1361,7 @@ handle_fx_cmode:
         movne   r3, #256                                 @ 
         ldreq   r3, [rGSU, #392]                         @ 
         str     r3, [rGSU, #388]                         @ 
-        bl      _Z24fx_computeScreenPointersv            @ 
+        bl      fx_computeScreenPointers                 @ 
         add     rSREG, rGSU, #0                          @ 
         ldrh    r3, [rGSU, #30]                          @ 
         mov     rDREG, rSREG                             @ 
