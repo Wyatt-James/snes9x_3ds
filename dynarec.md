@@ -65,3 +65,45 @@
    about cross-core icache coherency, which might not be a problem at all.
    - This would make performance less consistent, so it would be a good idea to support both methods for
      testing.
+
+## Program Flow
+- Entry function: the global entrypoint that accepts nInstructions
+ - Sets up plot and rpix handlers
+ - Prepares vCounter and registers
+ - Executes READR14
+ - Checks if IMEM has been allocated for the current PC
+    - If not allocated, allocates it
+  - Jumps to IMEM dispatch. No return.
+- IMEM contains a series of unconditional branches to instruction handlers, but is filled by default with BL to the dynarec
+  - The dynarec dynamically recompiles one single instruction and writes it to the current location in IMEM, using LR, before decrementing LR to 4 less than its initial position. This will cause a branch mispredict.
+  - The dynarec handles icache invalidation and the like
+  - Then, the dynarec returns to the same instruction
+- IMEM runs some boilerplate
+- IMEM calls the instruction handler for whichever GSU function we're running
+  - The instruction handler runs whatever code is necessary
+  - The instruction handler returns
+
+IMEM pages should be \<recompiled instruction size\> times the size of a GSU bank, plus some extra at the END:
+ - 1 extra instruction to handle wraparound. Branch to IMEM dispatch, or maybe a dynarec special-case.
+ - A couple extra instructions for the vCounter EXIT handler. This needs to be present in RAM **AFTER** the branch instructions that could branch here to satisfy the static branch predictor. This is not required if vCounter EXITs are diasbled.
+  - This just branches to a fixed-location cleanup handler
+
+Some handlers may branch to external code (fx_cmode branches to fx_computeScreenPointers). These handlers are responsible for saving the necessary registers. It is important to avoid clobbering the CPU's hardware return stack (3 deep).
+
+Registers will be handled in a static manner. Various registers have special uses.
+ - r0 is scratch, but contains vLow at the start of each instruction *WYATT_TODO Specialized handlers might be ideal*
+ - r1 is scratch
+ - r2 is scratch, but contains the value of GSU R15 at the start of each instruction
+ - r3 is scratch
+ - r4 is reserved for the GSU pointer.
+ - r5 is reserved for vCounter.
+ - r6 is reserved for GSU STAT, minus NZCV flags
+ - r7 is reserved for ARM CPSR. Of these, the NZCV flags mirror those of GSU.
+ - r8 is reserved for GSU PIPE
+ - r9 is reserved for GSU SREG
+ - r10 is reserved for GSU DREG
+ - r11 (fp) is reserved for the interpreter dispatch table *WYATT_TODO not required for dynarec*
+ - r12 (ip) is scratch
+ - r13 (sp) is reserved for the stack pointer
+ - r14 (lr) is reserved for program flow control
+ - r15 is the program counter
