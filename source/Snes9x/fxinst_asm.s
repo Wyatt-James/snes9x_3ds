@@ -18,8 +18,8 @@
     .cfi_startproc
 fx_run_asm:
         push    {rGSU, rVCNT, rGOTO, lr}                 @ 
-        sub     sp, sp, #8                               @ 
         push    {rSTAT, rARM, rPIPE, rSREG, rDREG, r11}  @ 
+        sub     sp, sp, #8                               @ 
         ldr     rGSU, .L242                              @ 
         sub     rVCNT, vLow, #1                          @ 
         ldr     r3, [rGSU, #120]                         @ 
@@ -85,8 +85,8 @@ loop_end:
         str     rARM, [rGSU, #68]                        @ 
         strb    rPIPE, [rGSU, #62]                       @ 
         strb    r3, [rGSU, #60]                          @ 
-        pop     {rSTAT, rARM, rPIPE, rSREG, rDREG, r11}  @ 
         add     sp, sp, #8                               @ 
+        pop     {rSTAT, rARM, rPIPE, rSREG, rDREG, r11}  @ 
         pop     {rGSU, rVCNT, rGOTO, pc}                 @ 
 handle_fx_stop:
         add     r3, r3, #1                               @ 
