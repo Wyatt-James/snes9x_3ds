@@ -23,14 +23,14 @@ fx_run_asm:
         sub     rVCNT, vLow, #1                          @ Decrement vCounter by 1, move to correct variable
         ldr     rR15, [rGSU, #120]                       @ Load GSU.vMode
         ldr     rGOTO, .L242+4                           @ Load GOTO table
-        cmp     rR15, #3                                 @ If vMode > 3, vMode = 0
-        movhi   r3, #0                                   @ WYATT_TODO
+      @ cmp     rR15, #3                                 @ If vMode > 3, vMode = 0.  Unreachable.
+      @ movhi   r3, #0                                   @  |
         ldr     r2, .L242+8                              @ Load plot/rpix table
         add     r1, r2, rR15, lsl #3                     @ Compute target address
         ldr     r2, [r2, rR15, lsl #3]                   @ Load plot from the table 
         ldr     rR15, [r1, #4]                           @ Load rpix from the table
         ldrh    r1, [rGSU, #28]                          @ READR14: Load GSU R14
-        cmp     vLow, #0                                 @ If nInstructions == 0, end
+      @ cmp     vLow, #0                                 @ If nInstructions == 0, end. Unreachable.
         ldr     vLow, [rGSU, #408]                       @ READR14: Load GSU.pvRomBank
         ldrb    r1, [vLow, r1]                           @ READR14: Load GSU.pvRomBank[R14]
         ldrb    rSREG, [rGSU, #61]                       @ Load reserved regs
@@ -45,9 +45,9 @@ fx_run_asm:
         str     r2, [rGOTO, #304]                        @  |
         str     rR15, [rGOTO, #3376]                     @  |
         str     rR15, [rGOTO, #1328]                     @  V
-        beq     loop_end                                 @ End if nInstructions == 0
+      @ beq     loop_end                                 @ End if nInstructions == 0. Unreachable.
+        ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
 loop_dispatch:
-        ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank
         ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15
         ldrb    ip, [r1, rR15]                           @ FETCHPIPE: Load from memory
         and     r2, rSTAT, #768                          @ Get opcode mode bits
@@ -55,22 +55,27 @@ loop_dispatch:
         and     vLow, rPIPE, #15                         @ Compute vLow
         mov     rPIPE, ip                                @ FETCHPIPE: redundant move? WYATT_TODO IP is used but rPIPE might be better.
         ldr     pc, [rGOTO, r2, lsl #2]                  @ Branch to handler
+
+@ GETBS: get sign extended byte from ROM at address R14
 handle_fx_getbs:
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldrsb   rR15, [rGSU, #38]                        @ 
-        add     rSREG, rGSU, #0                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        mov     rDREG, rSREG                             @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        ldrsb   rR15, [rGSU, #38]                        @ R15 = SEX8(GSU.vRomBuffer)
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = R0
+        strh    rR15, [rDREG]                            @ Store value to DREG
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: clear STAT
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = R0
+        strbeq  rR15, [rGSU, #38]                        @  |
+        @ Fallthrough to loop head. WYATT_TODO the most common handler should go here.
+
 loop_head:
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if it underflows
+        ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
         bcs     loop_dispatch                            @ 
 loop_end:
         sub     rR15, rSREG, rGSU                        @ Save reserved registers
@@ -84,6 +89,8 @@ loop_end:
         strb    rR15, [rGSU, #60]                        @  V
         add     sp, sp, #12                              @ Free space on stack
         pop     {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, pc} @ Return
+
+@ STOP: stop GSU execution
 handle_fx_stop:
         add     rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ 
