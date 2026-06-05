@@ -17,8 +17,7 @@
     .type fx_run_asm, %function
     .cfi_startproc
 fx_run_asm:
-        push    {rGSU, rVCNT, rGOTO, lr}                 @ 
-        push    {rSTAT, rARM, rPIPE, rSREG, rDREG, r11}  @ 
+        push    {rGSU, rVCNT, rGOTO, rSTAT, rARM, rPIPE, rSREG, rDREG, r11, lr}
         sub     sp, sp, #8                               @ 
         ldr     rGSU, .L242                              @ 
         sub     rVCNT, vLow, #1                          @ 
@@ -51,7 +50,6 @@ fx_run_asm:
 loop_dispatch:
         ldr     r1, [rGSU, #412]                         @ 
         ldrh    r3, [rGSU, #30]                          @ 
-        uxtb    rPIPE, rPIPE                             @ 
         ldrb    ip, [r1, r3]                             @ 
         and     rR15, rSTAT, #768                        @ 
         orr     rR15, rPIPE, rR15                        @ 
@@ -86,8 +84,7 @@ loop_end:
         strb    rPIPE, [rGSU, #62]                       @ 
         strb    r3, [rGSU, #60]                          @ 
         add     sp, sp, #8                               @ 
-        pop     {rSTAT, rARM, rPIPE, rSREG, rDREG, r11}  @ 
-        pop     {rGSU, rVCNT, rGOTO, pc}                 @ 
+        pop     {rGSU, rVCNT, rGOTO, rSTAT, rARM, rPIPE, rSREG, rDREG, r11, pc}
 handle_fx_stop:
         add     r3, r3, #1                               @ 
         strh    r3, [rGSU, #30]                          @ 
