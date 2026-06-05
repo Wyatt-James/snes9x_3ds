@@ -81,12 +81,13 @@ register uint16* pvSregLocal asm("r9");
 register uint16* pvDregLocal asm("r10");
 #define DREG_PTR pvDregLocal
 #define DREG *DREG_PTR
+// register void* unusedReg asm("lr");
 
 // If any of these registers are used by your function or its
 // statically-linked subroutines, these must be placed at the
 // start and end of said function if it is externally linked.
 // Both must always be an even number of registers per AAPCS!
-#define PUSH_RESERVED asm volatile ("push {r6, r7, r8, r9, r10, r11}")
+#define PUSH_RESERVED asm volatile ("push {r6, r7, r8, r9, r10, r11}") // WYATT_TODO Modifying the stackptr is UB
 #define POP_RESERVED  asm volatile ("pop  {r6, r7, r8, r9, r10, r11}")
 
 // Necessary redefs if DREG and SREG are pointers

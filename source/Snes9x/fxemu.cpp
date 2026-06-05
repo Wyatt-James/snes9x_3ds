@@ -415,7 +415,7 @@ int FxEmulate(uint32 nInstructions)
     /* Execute GSU session */
     CF(IRQ);
 
-	fx_run(nInstructions);
+	fx_run_asm(nInstructions);
 
     /* Store GSU registers */
     fx_writeRegisterSpace();

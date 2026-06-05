@@ -87,7 +87,7 @@ CXX_WARNINGS    := $(COMMON_WARNINGS) -Wno-register -Wno-narrowing
 COMMON          := $(OPT_FLAGS) $(LIBFLAGS) -mword-relocations -fomit-frame-pointer -ffunction-sections -DVERSION_MAJOR=$(APP_VERSION_MAJOR) -DVERSION_MINOR=$(APP_VERSION_MINOR) -DVERSION_MICRO=$(APP_VERSION_MICRO) $(ARCH) $(INCLUDE) -D__3DS__
 CFLAGS          := $(COMMON) $(C_WARNINGS) -std=gnu99
 CXXFLAGS        := $(COMMON) $(CXX_WARNINGS) -fno-rtti -fno-exceptions -std=gnu++20
-ASFLAGS         := $(ARCH)
+ASFLAGS         := -g -ggdb -masm-syntax-unified $(ARCH)
 LDFLAGS         = -specs=3dsx.specs $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 #---------------------------------------------------------------------------------
@@ -133,7 +133,7 @@ CPPFILES	:= stb_image_wrapper.cpp 3dsmain.cpp 3dsmenu.cpp 3dsopt.cpp \
 			Snes9x/ppu.cpp Snes9x/ppuvsect.cpp Snes9x/dma.cpp Snes9x/data.cpp Snes9x/globals.cpp \
 			Snes9x/fxinst_tests.cpp Snes9x/fxinst_test_framework.cpp \
 			
-SFILES             := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+SFILES             := Snes9x/fxinst_asm.s
 PICAFILES          := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.v.pica)))
 SHLISTFILES        := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.shlist)))
 GFXFILES           := $(foreach dir,$(GRAPHICS),$(notdir $(wildcard $(dir)/*.t3s)))
