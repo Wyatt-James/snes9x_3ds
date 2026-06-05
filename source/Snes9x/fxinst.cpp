@@ -16,6 +16,7 @@
 #define FETCHPIPE2(r15_) { PIPE = PRGBANK(r15_); } // For optimization
 #define REV16(v_) asm ("rev16 %0, %1":"=r"(v_):"r"(v_));
 #define ALIGNED16 __attribute__((aligned(16)))
+#define ARRAY_COUNT(arr_) (sizeof(arr_) / sizeof(arr_[0]))
 
 // Our ASSUME_ macros generate these with u8 vLow
 #define ENW_ _Pragma("GCC diagnostic push"); _Pragma("GCC diagnostic ignored \"-Wtype-limits\"")
@@ -1856,18 +1857,19 @@ void fx_run(uint32 nInstructions)
         #include "fxinst_opcode_handler_mappings.inc.c"
     };
 
-    // Update the goto table with the correct plot/rpix handlers
-    void *plotHandler, *rpixHandler;
-    switch (GSU.vMode) {
-        default: // Obj should never be called
-        case 0:  plotHandler = HANDLER_PTR(fx_plot_2bit); rpixHandler = HANDLER_PTR(fx_rpix_2bit); break;
-        case 1:
-        case 2:  plotHandler = HANDLER_PTR(fx_plot_4bit); rpixHandler = HANDLER_PTR(fx_rpix_4bit); break;
-        case 3:  plotHandler = HANDLER_PTR(fx_plot_8bit); rpixHandler = HANDLER_PTR(fx_rpix_8bit); break;
-    }
+    // Obj should never be called
+    static void* const plot_rpix_handler_table[][2] = {
+        {HANDLER_PTR(fx_plot_2bit), HANDLER_PTR(fx_rpix_2bit)}, // 0
+        {HANDLER_PTR(fx_plot_4bit), HANDLER_PTR(fx_rpix_4bit)}, // 1
+        {HANDLER_PTR(fx_plot_4bit), HANDLER_PTR(fx_rpix_4bit)}, // 2
+        {HANDLER_PTR(fx_plot_8bit), HANDLER_PTR(fx_rpix_8bit)}, // 3
+    };
 
-    opcode_goto_table[0x04c] = opcode_goto_table[0x24c] = plotHandler;
-    opcode_goto_table[0x14c] = opcode_goto_table[0x34c] = rpixHandler;
+    // Update the goto table with the correct plot/rpix handlers
+    uint32 vMode = GSU.vMode;
+    if (vMode >= ARRAY_COUNT(plot_rpix_handler_table)) vMode = 0;
+    opcode_goto_table[0x04c] = opcode_goto_table[0x24c] = plot_rpix_handler_table[vMode][0],
+    opcode_goto_table[0x14c] = opcode_goto_table[0x34c] = plot_rpix_handler_table[vMode][1];
 
     // WYATT_TODO we could reintroduce the while(1) loop in another
     // translation unit to speed up star fox. In d3c1796, I found
