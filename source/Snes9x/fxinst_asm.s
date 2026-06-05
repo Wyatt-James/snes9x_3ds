@@ -1059,8 +1059,8 @@ handle_fx_lob:
         b       loop_head                                @ 
 .L242:
         .word   GSU
-        .word   _ZZ6fx_runE17opcode_goto_table
-        .word   _ZZ6fx_runE23plot_rpix_handler_table
+        .word   opcode_goto_table
+        .word   plot_rpix_handler_table
         .word   handle_fx_rpix_2bit
         .word   handle_fx_plot_2bit
 handle_fx_fmult:
@@ -1609,7 +1609,7 @@ handle_fx_getbh:
         strbeq  r3, [rGSU, #38]                          @ 
         b       loop_head                                @ 
 
-_ZL7fx_lm_rh:
+handle_fx_lm_r_common:
         ldr     rSREG, .L3                               @ 
         uxtb    r3, rPIPE                                @ 
         ldrh    rR15, [rSREG, #30]                       @ 
@@ -1640,11 +1640,11 @@ _ZL7fx_lm_rh:
         .word   GSU
 
 handle_fx_lm_r:
-        bl      _ZL7fx_lm_rh                             @ 
+        bl      handle_fx_lm_r_common                             @ 
         b       loop_head                                @ 
 handle_fx_lm_r14:
         mov     vLow, #14                                @ 
-        bl      _ZL7fx_lm_rh                             @ 
+        bl      handle_fx_lm_r_common                             @ 
         ldrh    r3, [rGSU, #28]                          @ 
         ldr     rR15, [rGSU, #408]                       @ 
         ldrb    r3, [rR15, r3]                           @ 
@@ -1992,8 +1992,8 @@ handle_fx_romb:
 
     .section	.rodata
     .align	2
-    .type	_ZZ6fx_runE23plot_rpix_handler_table, %object
-_ZZ6fx_runE23plot_rpix_handler_table:
+    .type	plot_rpix_handler_table, %object
+plot_rpix_handler_table:
         .word   handle_fx_plot_2bit
         .word   handle_fx_rpix_2bit
         .word   handle_fx_plot_4bit
@@ -2005,8 +2005,8 @@ _ZZ6fx_runE23plot_rpix_handler_table:
 
     .data
     .align	2
-    .type	_ZZ6fx_runE17opcode_goto_table, %object
-_ZZ6fx_runE17opcode_goto_table:
+    .type	opcode_goto_table, %object
+opcode_goto_table:
         .word   handle_fx_stop
         .word   handle_fx_nop
         .word   handle_fx_cache
