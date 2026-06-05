@@ -1,5 +1,5 @@
 #define vLow   r0
-#define rR15   r2
+#define rR15   r3
 #define rGSU   r4
 #define rVCNT  r5
 #define rSTAT  r6
@@ -21,15 +21,15 @@ fx_run_asm:
         sub     sp, sp, #8                               @ 
         ldr     rGSU, .L242                              @ 
         sub     rVCNT, vLow, #1                          @ 
-        ldr     r3, [rGSU, #120]                         @ 
+        ldr     rR15, [rGSU, #120]                       @ 
         ldr     rGOTO, .L242+4                           @ 
-        cmp     r3, #3                                   @ 
-        ldrls   rR15, .L242+8                            @ 
-        ldrhi   r3, .L242+12                             @ 
-        addls   r1, rR15, r3, lsl #3                     @ 
-        ldrhi   rR15, .L242+16                           @ 
-        ldrls   rR15, [rR15, r3, lsl #3]                 @ 
-        ldrls   r3, [r1, #4]                             @ 
+        cmp     rR15, #3                                 @ 
+        ldrls   r2, .L242+8                              @ 
+        ldrhi   rR15, .L242+12                           @ 
+        addls   r1, r2, rR15, lsl #3                     @ 
+        ldrhi   r2, .L242+16                             @ 
+        ldrls   r2, [r2, rR15, lsl #3]                   @ 
+        ldrls   rR15, [r1, #4]                           @ 
         ldrh    r1, [rGSU, #28]                          @ 
         cmp     vLow, #0                                 @ 
         ldr     vLow, [rGSU, #408]                       @ 
@@ -42,84 +42,84 @@ fx_run_asm:
         add     rSREG, rGSU, rSREG, lsl #1               @ 
         add     rDREG, rGSU, rDREG, lsl #1               @ 
         strb    r1, [rGSU, #38]                          @ 
-        str     rR15, [rGOTO, #2352]                     @ 
-        str     rR15, [rGOTO, #304]                      @ 
-        str     r3, [rGOTO, #3376]                       @ 
-        str     r3, [rGOTO, #1328]                       @ 
+        str     r2, [rGOTO, #2352]                       @ 
+        str     r2, [rGOTO, #304]                        @ 
+        str     rR15, [rGOTO, #3376]                     @ 
+        str     rR15, [rGOTO, #1328]                     @ 
         beq     loop_end                                 @ 
 loop_dispatch:
         ldr     r1, [rGSU, #412]                         @ 
-        ldrh    r3, [rGSU, #30]                          @ 
-        ldrb    ip, [r1, r3]                             @ 
-        and     rR15, rSTAT, #768                        @ 
-        orr     rR15, rPIPE, rR15                        @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrb    ip, [r1, rR15]                           @ 
+        and     r2, rSTAT, #768                          @ 
+        orr     r2, rPIPE, r2                            @ 
         and     vLow, rPIPE, #15                         @ 
         mov     rPIPE, ip                                @ 
-        ldr     pc, [rGOTO, rR15, lsl #2]                @ 
+        ldr     pc, [rGOTO, r2, lsl #2]                  @ 
 handle_fx_getbs:
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldrsb   r3, [rGSU, #38]                          @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldrsb   rR15, [rGSU, #38]                        @ 
         add     rSREG, rGSU, #0                          @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
 loop_head:
         subs    rVCNT, rVCNT, #1                         @ 
         bcs     loop_dispatch                            @ 
 loop_end:
-        sub     r3, rSREG, rGSU                          @ 
-        asr     r3, r3, #1                               @ 
-        strb    r3, [rGSU, #61]                          @ 
-        sub     r3, rDREG, rGSU                          @ 
-        asr     r3, r3, #1                               @ 
+        sub     rR15, rSREG, rGSU                        @ 
+        asr     rR15, rR15, #1                           @ 
+        strb    rR15, [rGSU, #61]                        @ 
+        sub     rR15, rDREG, rGSU                        @ 
+        asr     rR15, rR15, #1                           @ 
         strh    rSTAT, [rGSU, #64]                       @ 
         str     rARM, [rGSU, #68]                        @ 
         strb    rPIPE, [rGSU, #62]                       @ 
-        strb    r3, [rGSU, #60]                          @ 
+        strb    rR15, [rGSU, #60]                        @ 
         add     sp, sp, #8                               @ 
         pop     {rGSU, rVCNT, rGOTO, rSTAT, rARM, rPIPE, rSREG, rDREG, r11, pc}
 handle_fx_stop:
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
-        mov     r3, #0                                   @ 
-        add     rSREG, rGSU, r3                          @ 
-        ldr     rR15, [rGSU, #100]                       @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        mov     rR15, #0                                 @ 
+        add     rSREG, rGSU, rR15                        @ 
+        ldr     r2, [rGSU, #100]                         @ 
         bic     rSTAT, rSTAT, #32                        @ 
-        ldrsb   rR15, [rR15, #55]                        @ 
+        ldrsb   r2, [r2, #55]                            @ 
         mov     rPIPE, #1                                @ 
-        cmp     rR15, #0                                 @ 
+        cmp     r2, #0                                   @ 
         orrge   rSTAT, rSTAT, #32768                     @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strb    r3, [rGSU, #36]                          @ 
+        strb    rR15, [rGSU, #36]                        @ 
         b       loop_end                                 @ 
 handle_fx_plot_2bit:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         ldrh    r1, [rGSU, #2]                           @ 
-        ldr     rR15, [rGSU, #388]                       @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldrb    r3, [rGSU, #4]                           @ 
+        ldr     r2, [rGSU, #388]                         @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldrb    rR15, [rGSU, #4]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        cmp     r3, rR15                                 @ 
-        add     rR15, r1, #1                             @ 
+        cmp     rR15, r2                                 @ 
+        add     r2, r1, #1                               @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    rR15, [rGSU, #2]                         @ 
+        strh    r2, [rGSU, #2]                           @ 
         bcs     loop_head                                @ 
         ldrb    vLow, [rGSU, #36]                        @ 
-        ldrb    rR15, [rGSU, #37]                        @ 
+        ldrb    r2, [rGSU, #37]                          @ 
         tst     vLow, #2                                 @ 
         uxtb    r1, r1                                   @ 
         bne     .L237                                    @ 
 .L15:
-        and     ip, rR15, #15                            @ 
+        and     ip, r2, #15                              @ 
 .L17:
         and     vLow, vLow, #1                           @ 
         orrs    vLow, ip, vLow                           @ 
@@ -131,106 +131,106 @@ handle_fx_plot_2bit:
         uxtb    r1, ip                                   @ 
         mov     ip, r1                                   @ 
         add     vLow, rGSU, vLow, lsl #2                 @ 
-        lsr     r1, r3, #3                               @ 
+        lsr     r1, rR15, #3                             @ 
         ldr     vLow, [vLow, #260]                       @ 
         add     r1, rGSU, r1, lsl #2                     @ 
-        lsl     r3, r3, #1                               @ 
+        lsl     rR15, rR15, #1                           @ 
         ldr     r1, [r1, #132]                           @ 
-        and     r3, r3, #14                              @ 
-        add     r3, r3, vLow                             @ 
-        ldrb    vLow, [r1, r3]                           @ 
-        tst     rR15, #1                                 @ 
+        and     rR15, rR15, #14                          @ 
+        add     rR15, rR15, vLow                         @ 
+        ldrb    vLow, [r1, rR15]                         @ 
+        tst     r2, #1                                   @ 
         str     vLow, [sp, #4]                           @ 
-        add     vLow, r1, r3                             @ 
+        add     vLow, r1, rR15                           @ 
         str     vLow, [sp]                               @ 
         ldr     vLow, [sp, #4]                           @ 
         orrne   vLow, vLow, ip                           @ 
         biceq   vLow, vLow, ip                           @ 
-        strb    vLow, [r1, r3]                           @ 
-        ldr     r3, [sp]                                 @ 
-        tst     rR15, #2                                 @ 
-        ldrb    r3, [r3, #1]                             @ 
+        strb    vLow, [r1, rR15]                         @ 
         ldr     rR15, [sp]                               @ 
-        orrne   r3, ip, r3                               @ 
-        biceq   r3, r3, ip                               @ 
-        strb    r3, [rR15, #1]                           @ 
+        tst     r2, #2                                   @ 
+        ldrb    rR15, [rR15, #1]                         @ 
+        ldr     r2, [sp]                                 @ 
+        orrne   rR15, ip, rR15                           @ 
+        biceq   rR15, rR15, ip                           @ 
+        strb    rR15, [r2, #1]                           @ 
         b       loop_head                                @ 
 handle_fx_rpix_2bit:
-        add     r3, r3, #1                               @ 
-        ldr     rR15, [rGSU, #388]                       @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldrb    r3, [rGSU, #4]                           @ 
+        add     rR15, rR15, #1                           @ 
+        ldr     r2, [rGSU, #388]                         @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldrb    rR15, [rGSU, #4]                         @ 
         add     r1, rGSU, #0                             @ 
-        cmp     r3, rR15                                 @ 
+        cmp     rR15, r2                                 @ 
         mov     rSREG, r1                                @ 
         mov     rDREG, r1                                @ 
-        ldrh    rR15, [rGSU, #2]                         @ 
+        ldrh    r2, [rGSU, #2]                           @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         bcs     loop_head                                @ 
         mov     vLow, #128                               @ 
-        uxtb    rR15, rR15                               @ 
-        lsr     ip, rR15, #3                             @ 
-        and     rR15, rR15, #7                           @ 
-        asr     vLow, vLow, rR15                         @ 
-        uxtb    rR15, vLow                               @ 
+        uxtb    r2, r2                                   @ 
+        lsr     ip, r2, #3                               @ 
+        and     r2, r2, #7                               @ 
+        asr     vLow, vLow, r2                           @ 
+        uxtb    r2, vLow                                 @ 
         add     ip, rGSU, ip, lsl #2                     @ 
-        lsr     vLow, r3, #3                             @ 
+        lsr     vLow, rR15, #3                           @ 
         ldr     ip, [ip, #260]                           @ 
         add     vLow, rGSU, vLow, lsl #2                 @ 
-        lsl     r3, r3, #1                               @ 
+        lsl     rR15, rR15, #1                           @ 
         ldr     vLow, [vLow, #132]                       @ 
-        and     r3, r3, #14                              @ 
-        add     r3, r3, ip                               @ 
-        add     ip, vLow, r3                             @ 
-        ldrb    vLow, [vLow, r3]                         @ 
-        ldrb    r3, [ip, #1]                             @ 
-        str     rR15, [sp]                               @ 
-        str     r3, [sp, #4]                             @ 
+        and     rR15, rR15, #14                          @ 
+        add     rR15, rR15, ip                           @ 
+        add     ip, vLow, rR15                           @ 
+        ldrb    vLow, [vLow, rR15]                       @ 
+        ldrb    rR15, [ip, #1]                           @ 
+        str     r2, [sp]                                 @ 
+        str     rR15, [sp, #4]                           @ 
         ldr     ip, [sp]                                 @ 
-        mov     r3, #1                                   @ 
-        mov     rR15, #0                                 @ 
+        mov     rR15, #1                                 @ 
+        mov     r2, #0                                   @ 
         tst     ip, vLow                                 @ 
-        orrne   rR15, rR15, r3, lsl #0                   @ 
+        orrne   r2, r2, rR15, lsl #0                     @ 
         ldr     vLow, [sp, #4]                           @ 
         tst     ip, vLow                                 @ 
-        orrne   rR15, rR15, r3, lsl #1                   @ 
-        add     r3, rGSU, #28                            @ 
-        strh    rR15, [r1]                               @ 
-        cmp     r1, r3                                   @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        orrne   r2, r2, rR15, lsl #1                     @ 
+        add     rR15, rGSU, #28                          @ 
+        strh    r2, [r1]                                 @ 
+        cmp     r1, rR15                                 @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_plot_4bit:
-        add     r3, r3, #1                               @ 
-        ldr     rR15, [rGSU, #388]                       @ 
+        add     rR15, rR15, #1                           @ 
+        ldr     r2, [rGSU, #388]                         @ 
         ldrb    r1, [rGSU, #4]                           @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldrh    r3, [rGSU, #2]                           @ 
-        cmp     r1, rR15                                 @ 
-        add     rR15, r3, #1                             @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    rR15, [rGSU, #2]                         @ 
+        cmp     r1, r2                                   @ 
+        add     r2, rR15, #1                             @ 
         add     rSREG, rGSU, #0                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #2]                         @ 
+        strh    r2, [rGSU, #2]                           @ 
         bcs     loop_head                                @ 
         ldrb    vLow, [rGSU, #36]                        @ 
-        ldrb    rR15, [rGSU, #37]                        @ 
+        ldrb    r2, [rGSU, #37]                          @ 
         tst     vLow, #2                                 @ 
-        uxtb    r3, r3                                   @ 
+        uxtb    rR15, rR15                               @ 
         bne     .L238                                    @ 
 .L25:
-        and     ip, rR15, #15                            @ 
+        and     ip, r2, #15                              @ 
 .L27:
         and     vLow, vLow, #1                           @ 
         orrs    vLow, ip, vLow                           @ 
         beq     loop_head                                @ 
         mov     vLow, #128                               @ 
-        lsr     ip, r3, #3                               @ 
-        and     r3, r3, #7                               @ 
+        lsr     ip, rR15, #3                             @ 
+        and     rR15, rR15, #7                           @ 
         add     ip, rGSU, ip, lsl #2                     @ 
-        asr     r3, vLow, r3                             @ 
+        asr     rR15, vLow, rR15                         @ 
         lsr     vLow, r1, #3                             @ 
         ldr     ip, [ip, #260]                           @ 
         add     vLow, rGSU, vLow, lsl #2                 @ 
@@ -238,101 +238,101 @@ handle_fx_plot_4bit:
         ldr     vLow, [vLow, #132]                       @ 
         and     r1, r1, #14                              @ 
         add     ip, r1, ip                               @ 
-        uxtb    r3, r3                                   @ 
+        uxtb    rR15, rR15                               @ 
         ldrb    r1, [vLow, ip]                           @ 
-        str     r3, [sp]                                 @ 
-        mov     r3, vLow                                 @ 
+        str     rR15, [sp]                               @ 
+        mov     rR15, vLow                               @ 
         str     vLow, [sp, #4]                           @ 
         mov     vLow, r1                                 @ 
-        add     r1, r3, ip                               @ 
-        ldr     r3, [sp]                                 @ 
-        tst     rR15, #1                                 @ 
-        orrne   vLow, vLow, r3                           @ 
-        biceq   vLow, vLow, r3                           @ 
-        ldr     r3, [sp, #4]                             @ 
-        tst     rR15, #2                                 @ 
-        strb    vLow, [r3, ip]                           @ 
+        add     r1, rR15, ip                             @ 
+        ldr     rR15, [sp]                               @ 
+        tst     r2, #1                                   @ 
+        orrne   vLow, vLow, rR15                         @ 
+        biceq   vLow, vLow, rR15                         @ 
+        ldr     rR15, [sp, #4]                           @ 
+        tst     r2, #2                                   @ 
+        strb    vLow, [rR15, ip]                         @ 
         ldrb    vLow, [r1, #1]                           @ 
-        ldr     r3, [sp]                                 @ 
-        orrne   vLow, r3, vLow                           @ 
-        biceq   vLow, vLow, r3                           @ 
+        ldr     rR15, [sp]                               @ 
+        orrne   vLow, rR15, vLow                         @ 
+        biceq   vLow, vLow, rR15                         @ 
         strb    vLow, [r1, #1]                           @ 
-        ldr     r3, [sp]                                 @ 
+        ldr     rR15, [sp]                               @ 
         ldrb    vLow, [r1, #16]                          @ 
-        tst     rR15, #4                                 @ 
-        orrne   vLow, r3, vLow                           @ 
-        biceq   vLow, vLow, r3                           @ 
-        ldr     r3, [sp]                                 @ 
-        tst     rR15, #8                                 @ 
-        ldrb    rR15, [r1, #17]                          @ 
+        tst     r2, #4                                   @ 
+        orrne   vLow, rR15, vLow                         @ 
+        biceq   vLow, vLow, rR15                         @ 
+        ldr     rR15, [sp]                               @ 
+        tst     r2, #8                                   @ 
+        ldrb    r2, [r1, #17]                            @ 
         strb    vLow, [r1, #16]                          @ 
-        orrne   r3, r3, rR15                             @ 
-        biceq   r3, rR15, r3                             @ 
-        strb    r3, [r1, #17]                            @ 
+        orrne   rR15, rR15, r2                           @ 
+        biceq   rR15, r2, rR15                           @ 
+        strb    rR15, [r1, #17]                          @ 
         b       loop_head                                @ 
 handle_fx_rpix_4bit:
-        add     rR15, rGSU, #0                           @ 
-        mov     rSREG, rR15                              @ 
-        add     r3, r3, #1                               @ 
+        add     r2, rGSU, #0                             @ 
+        mov     rSREG, r2                                @ 
+        add     rR15, rR15, #1                           @ 
         ldrb    r1, [rGSU, #4]                           @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldr     r3, [rGSU, #388]                         @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldr     rR15, [rGSU, #388]                       @ 
         mov     rDREG, rSREG                             @ 
-        cmp     r1, r3                                   @ 
+        cmp     r1, rR15                                 @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        ldrh    r3, [rGSU, #2]                           @ 
+        ldrh    rR15, [rGSU, #2]                         @ 
         str     rSREG, [sp]                              @ 
         bcs     loop_head                                @ 
         mov     ip, #0                                   @ 
-        mov     rR15, #128                               @ 
-        uxtb    r3, r3                                   @ 
-        lsr     vLow, r3, #3                             @ 
+        mov     r2, #128                                 @ 
+        uxtb    rR15, rR15                               @ 
+        lsr     vLow, rR15, #3                           @ 
         add     vLow, rGSU, vLow, lsl #2                 @ 
         ldr     vLow, [vLow, #260]                       @ 
-        and     r3, r3, #7                               @ 
+        and     rR15, rR15, #7                           @ 
         str     vLow, [sp, #4]                           @ 
         lsr     vLow, r1, #3                             @ 
         add     vLow, rGSU, vLow, lsl #2                 @ 
-        asr     rR15, rR15, r3                           @ 
+        asr     r2, r2, rR15                             @ 
         lsl     r1, r1, #1                               @ 
-        mov     r3, ip                                   @ 
+        mov     rR15, ip                                 @ 
         ldr     ip, [vLow, #132]                         @ 
         ldr     vLow, [sp, #4]                           @ 
         and     r1, r1, #14                              @ 
         add     r1, r1, vLow                             @ 
         add     vLow, ip, r1                             @ 
-        uxtb    rR15, rR15                               @ 
+        uxtb    r2, r2                                   @ 
         ldrb    ip, [ip, r1]                             @ 
         mov     r1, #1                                   @ 
-        tst     rR15, ip                                 @ 
-        orrne   r3, r3, r1, lsl #0                       @ 
+        tst     r2, ip                                   @ 
+        orrne   rR15, rR15, r1, lsl #0                   @ 
         ldrb    ip, [vLow, #1]                           @ 
-        tst     rR15, ip                                 @ 
-        orrne   r3, r3, r1, lsl #1                       @ 
+        tst     r2, ip                                   @ 
+        orrne   rR15, rR15, r1, lsl #1                   @ 
         ldrb    ip, [vLow, #16]                          @ 
         ldrb    vLow, [vLow, #17]                        @ 
-        tst     rR15, ip                                 @ 
-        orrne   r3, r3, r1, lsl #2                       @ 
-        tst     rR15, vLow                               @ 
-        orrne   r3, r3, r1, lsl #3                       @ 
-        mov     rR15, rDREG                              @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        tst     r2, ip                                   @ 
+        orrne   rR15, rR15, r1, lsl #2                   @ 
+        tst     r2, vLow                                 @ 
+        orrne   rR15, rR15, r1, lsl #3                   @ 
+        mov     r2, rDREG                                @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_plot_8bit:
-        add     r3, r3, #1                               @ 
-        ldrh    rR15, [rGSU, #2]                         @ 
+        add     rR15, rR15, #1                           @ 
+        ldrh    r2, [rGSU, #2]                           @ 
         ldr     r1, [rGSU, #388]                         @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldrb    r3, [rGSU, #4]                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldrb    rR15, [rGSU, #4]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        cmp     r3, r1                                   @ 
-        add     r1, rR15, #1                             @ 
+        cmp     rR15, r1                                 @ 
+        add     r1, r2, #1                               @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         strh    r1, [rGSU, #2]                           @ 
@@ -346,93 +346,93 @@ handle_fx_plot_8bit:
         beq     loop_head                                @ 
 .L40:
         mov     vLow, #128                               @ 
-        uxtb    rR15, rR15                               @ 
-        lsr     ip, rR15, #3                             @ 
-        and     rR15, rR15, #7                           @ 
+        uxtb    r2, r2                                   @ 
+        lsr     ip, r2, #3                               @ 
+        and     r2, r2, #7                               @ 
         add     ip, rGSU, ip, lsl #2                     @ 
-        asr     rR15, vLow, rR15                         @ 
-        lsr     vLow, r3, #3                             @ 
+        asr     r2, vLow, r2                             @ 
+        lsr     vLow, rR15, #3                           @ 
         ldr     ip, [ip, #260]                           @ 
         add     vLow, rGSU, vLow, lsl #2                 @ 
-        lsl     r3, r3, #1                               @ 
+        lsl     rR15, rR15, #1                           @ 
         ldr     vLow, [vLow, #132]                       @ 
-        and     r3, r3, #14                              @ 
-        add     ip, r3, ip                               @ 
-        uxtb    rR15, rR15                               @ 
-        ldrb    r3, [vLow, ip]                           @ 
-        str     rR15, [sp]                               @ 
-        mov     rR15, vLow                               @ 
+        and     rR15, rR15, #14                          @ 
+        add     ip, rR15, ip                             @ 
+        uxtb    r2, r2                                   @ 
+        ldrb    rR15, [vLow, ip]                         @ 
+        str     r2, [sp]                                 @ 
+        mov     r2, vLow                                 @ 
         str     vLow, [sp, #4]                           @ 
-        mov     vLow, r3                                 @ 
-        add     r3, rR15, ip                             @ 
-        ldr     rR15, [sp]                               @ 
+        mov     vLow, rR15                               @ 
+        add     rR15, r2, ip                             @ 
+        ldr     r2, [sp]                                 @ 
         tst     r1, #1                                   @ 
-        orrne   vLow, vLow, rR15                         @ 
-        biceq   vLow, vLow, rR15                         @ 
-        ldr     rR15, [sp, #4]                           @ 
+        orrne   vLow, vLow, r2                           @ 
+        biceq   vLow, vLow, r2                           @ 
+        ldr     r2, [sp, #4]                             @ 
         tst     r1, #2                                   @ 
-        strb    vLow, [rR15, ip]                         @ 
-        ldrb    vLow, [r3, #1]                           @ 
-        ldr     rR15, [sp]                               @ 
-        orrne   vLow, rR15, vLow                         @ 
-        biceq   vLow, vLow, rR15                         @ 
-        strb    vLow, [r3, #1]                           @ 
-        ldr     rR15, [sp]                               @ 
-        ldrb    vLow, [r3, #16]                          @ 
+        strb    vLow, [r2, ip]                           @ 
+        ldrb    vLow, [rR15, #1]                         @ 
+        ldr     r2, [sp]                                 @ 
+        orrne   vLow, r2, vLow                           @ 
+        biceq   vLow, vLow, r2                           @ 
+        strb    vLow, [rR15, #1]                         @ 
+        ldr     r2, [sp]                                 @ 
+        ldrb    vLow, [rR15, #16]                        @ 
         tst     r1, #4                                   @ 
-        orrne   vLow, rR15, vLow                         @ 
-        biceq   vLow, vLow, rR15                         @ 
-        strb    vLow, [r3, #16]                          @ 
-        ldr     rR15, [sp]                               @ 
-        ldrb    vLow, [r3, #17]                          @ 
+        orrne   vLow, r2, vLow                           @ 
+        biceq   vLow, vLow, r2                           @ 
+        strb    vLow, [rR15, #16]                        @ 
+        ldr     r2, [sp]                                 @ 
+        ldrb    vLow, [rR15, #17]                        @ 
         tst     r1, #8                                   @ 
-        orrne   vLow, rR15, vLow                         @ 
-        biceq   vLow, vLow, rR15                         @ 
-        strb    vLow, [r3, #17]                          @ 
-        ldr     rR15, [sp]                               @ 
-        ldrb    vLow, [r3, #32]                          @ 
+        orrne   vLow, r2, vLow                           @ 
+        biceq   vLow, vLow, r2                           @ 
+        strb    vLow, [rR15, #17]                        @ 
+        ldr     r2, [sp]                                 @ 
+        ldrb    vLow, [rR15, #32]                        @ 
         tst     r1, #16                                  @ 
-        orrne   vLow, rR15, vLow                         @ 
-        biceq   vLow, vLow, rR15                         @ 
-        strb    vLow, [r3, #32]                          @ 
-        ldr     rR15, [sp]                               @ 
-        ldrb    vLow, [r3, #33]                          @ 
+        orrne   vLow, r2, vLow                           @ 
+        biceq   vLow, vLow, r2                           @ 
+        strb    vLow, [rR15, #32]                        @ 
+        ldr     r2, [sp]                                 @ 
+        ldrb    vLow, [rR15, #33]                        @ 
         tst     r1, #32                                  @ 
-        orrne   vLow, rR15, vLow                         @ 
-        biceq   vLow, vLow, rR15                         @ 
-        strb    vLow, [r3, #33]                          @ 
-        ldr     rR15, [sp]                               @ 
-        ldrb    vLow, [r3, #48]                          @ 
+        orrne   vLow, r2, vLow                           @ 
+        biceq   vLow, vLow, r2                           @ 
+        strb    vLow, [rR15, #33]                        @ 
+        ldr     r2, [sp]                                 @ 
+        ldrb    vLow, [rR15, #48]                        @ 
         tst     r1, #64                                  @ 
-        orrne   vLow, rR15, vLow                         @ 
-        biceq   vLow, vLow, rR15                         @ 
-        ldr     rR15, [sp]                               @ 
+        orrne   vLow, r2, vLow                           @ 
+        biceq   vLow, vLow, r2                           @ 
+        ldr     r2, [sp]                                 @ 
         tst     r1, #128                                 @ 
-        ldrb    r1, [r3, #49]                            @ 
-        strb    vLow, [r3, #48]                          @ 
-        orrne   rR15, rR15, r1                           @ 
-        biceq   rR15, r1, rR15                           @ 
-        strb    rR15, [r3, #49]                          @ 
+        ldrb    r1, [rR15, #49]                          @ 
+        strb    vLow, [rR15, #48]                        @ 
+        orrne   r2, r2, r1                               @ 
+        biceq   r2, r1, r2                               @ 
+        strb    r2, [rR15, #49]                          @ 
         b       loop_head                                @ 
 handle_fx_rpix_8bit:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         ldrb    r1, [rGSU, #4]                           @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldr     r3, [rGSU, #388]                         @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldr     rR15, [rGSU, #388]                       @ 
         add     vLow, rGSU, #0                           @ 
-        cmp     r1, r3                                   @ 
+        cmp     r1, rR15                                 @ 
         mov     rSREG, vLow                              @ 
         mov     rDREG, vLow                              @ 
-        ldrh    rR15, [rGSU, #2]                         @ 
+        ldrh    r2, [rGSU, #2]                           @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         bcs     loop_head                                @ 
         mov     ip, #128                                 @ 
-        uxtb    rR15, rR15                               @ 
-        bic     r3, rARM, #1073741824                    @ 
-        lsr     rARM, rR15, #3                           @ 
-        and     rR15, rR15, #7                           @ 
+        uxtb    r2, r2                                   @ 
+        bic     rR15, rARM, #1073741824                  @ 
+        lsr     rARM, r2, #3                             @ 
+        and     r2, r2, #7                               @ 
         add     rARM, rGSU, rARM, lsl #2                 @ 
-        asr     rR15, ip, rR15                           @ 
+        asr     r2, ip, r2                               @ 
         lsr     ip, r1, #3                               @ 
         ldr     rARM, [rARM, #260]                       @ 
         add     ip, rGSU, ip, lsl #2                     @ 
@@ -441,617 +441,617 @@ handle_fx_rpix_8bit:
         and     r1, r1, #14                              @ 
         add     rARM, r1, rARM                           @ 
         add     r1, ip, rARM                             @ 
-        uxtb    rR15, rR15                               @ 
+        uxtb    r2, r2                                   @ 
         ldrb    rARM, [ip, rARM]                         @ 
-        str     r3, [sp]                                 @ 
+        str     rR15, [sp]                               @ 
         mov     ip, #1                                   @ 
-        mov     r3, #0                                   @ 
-        tst     rR15, rARM                               @ 
-        orrne   r3, r3, ip, lsl #0                       @ 
+        mov     rR15, #0                                 @ 
+        tst     r2, rARM                                 @ 
+        orrne   rR15, rR15, ip, lsl #0                   @ 
         ldrb    rARM, [r1, #1]                           @ 
-        tst     rR15, rARM                               @ 
-        orrne   r3, r3, ip, lsl #1                       @ 
+        tst     r2, rARM                                 @ 
+        orrne   rR15, rR15, ip, lsl #1                   @ 
         ldrb    rARM, [r1, #16]                          @ 
-        tst     rR15, rARM                               @ 
-        orrne   r3, r3, ip, lsl #2                       @ 
+        tst     r2, rARM                                 @ 
+        orrne   rR15, rR15, ip, lsl #2                   @ 
         ldrb    rARM, [r1, #17]                          @ 
-        tst     rR15, rARM                               @ 
-        orrne   r3, r3, ip, lsl #3                       @ 
+        tst     r2, rARM                                 @ 
+        orrne   rR15, rR15, ip, lsl #3                   @ 
         ldrb    rARM, [r1, #32]                          @ 
-        tst     rR15, rARM                               @ 
-        orrne   r3, r3, ip, lsl #4                       @ 
+        tst     r2, rARM                                 @ 
+        orrne   rR15, rR15, ip, lsl #4                   @ 
         ldrb    rARM, [r1, #33]                          @ 
-        tst     rR15, rARM                               @ 
-        orrne   r3, r3, ip, lsl #5                       @ 
+        tst     r2, rARM                                 @ 
+        orrne   rR15, rR15, ip, lsl #5                   @ 
         ldrb    rARM, [r1, #48]                          @ 
         ldrb    r1, [r1, #49]                            @ 
-        tst     rR15, rARM                               @ 
-        orrne   r3, r3, ip, lsl #6                       @ 
-        tst     rR15, r1                                 @ 
-        orrne   r3, r3, ip, lsl #7                       @ 
-        strh    r3, [vLow]                               @ 
-        uxth    r3, r3                                   @ 
-        cmp     r3, #0                                   @ 
-        ldr     r3, [sp]                                 @ 
-        mov     rARM, r3                                 @ 
-        orreq   rARM, r3, #1073741824                    @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     r3, vLow                                 @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        tst     r2, rARM                                 @ 
+        orrne   rR15, rR15, ip, lsl #6                   @ 
+        tst     r2, r1                                   @ 
+        orrne   rR15, rR15, ip, lsl #7                   @ 
+        strh    rR15, [vLow]                             @ 
+        uxth    rR15, rR15                               @ 
+        cmp     rR15, #0                                 @ 
+        ldr     rR15, [sp]                               @ 
+        mov     rARM, rR15                               @ 
+        orreq   rARM, rR15, #1073741824                  @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rR15, vLow                               @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_nop:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         add     rSREG, rGSU, #0                          @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_cache:
         ldrh    r1, [rGSU, #32]                          @ 
-        bic     rR15, r3, #15                            @ 
-        cmp     r1, rR15                                 @ 
-        uxth    rR15, rR15                               @ 
+        bic     r2, rR15, #15                            @ 
+        cmp     r1, r2                                   @ 
+        uxth    r2, r2                                   @ 
         beq     .L240                                    @ 
 .L62:
-        strh    rR15, [rGSU, #32]                        @ 
-        mov     rR15, #0                                 @ 
-        str     rR15, [rGSU, #72]                        @ 
-        mov     rR15, #1                                 @ 
-        strb    rR15, [rGSU, #1456]                      @ 
+        strh    r2, [rGSU, #32]                          @ 
+        mov     r2, #0                                   @ 
+        str     r2, [rGSU, #72]                          @ 
+        mov     r2, #1                                   @ 
+        strb    r2, [rGSU, #1456]                        @ 
 .L63:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         add     rSREG, rGSU, #0                          @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_lsr:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrh    r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrh    rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         msr     cpsr_f, rARM                             @ 
-        lsrs    r3, r3, #1                               @ 
+        lsrs    rR15, rR15, #1                           @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_rol:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrh    r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrh    rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     r3, r3, #16                              @ 
-        orrcs   r3, r3, #32768                           @ 
-        lsls    r3, r3, #1                               @ 
+        lsl     rR15, rR15, #16                          @ 
+        orrcs   rR15, rR15, #32768                       @ 
+        lsls    rR15, rR15, #1                           @ 
         mrs     rARM, cpsr                               @ 
-        lsr     r3, r3, #16                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        lsr     rR15, rR15, #16                          @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_bra:
-        add     r3, r3, #1                               @ 
-        uxth    r3, r3                                   @ 
-        sxtb    rR15, ip                                 @ 
-        add     rR15, r3, rR15                           @ 
-        ldrb    rPIPE, [r1, r3]                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    rR15, rR15                               @ 
+        sxtb    r2, ip                                   @ 
+        add     r2, rR15, r2                             @ 
+        ldrb    rPIPE, [r1, rR15]                        @ 
+        strh    r2, [rGSU, #30]                          @ 
         b       loop_head                                @ 
 handle_fx_bge:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addge   r3, r3, ip                               @ 
-        addlt   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addge   rR15, rR15, ip                           @ 
+        addlt   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_blt:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addlt   r3, r3, ip                               @ 
-        addge   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addlt   rR15, rR15, ip                           @ 
+        addge   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_bne:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addne   r3, r3, ip                               @ 
-        addeq   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addne   rR15, rR15, ip                           @ 
+        addeq   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_beq:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addeq   r3, r3, ip                               @ 
-        addne   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addeq   rR15, rR15, ip                           @ 
+        addne   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_bpl:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addpl   r3, r3, ip                               @ 
-        addmi   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addpl   rR15, rR15, ip                           @ 
+        addmi   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_bmi:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addmi   r3, r3, ip                               @ 
-        addpl   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addmi   rR15, rR15, ip                           @ 
+        addpl   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_bcc:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addcc   r3, r3, ip                               @ 
-        addcs   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addcc   rR15, rR15, ip                           @ 
+        addcs   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_bcs:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addcs   r3, r3, ip                               @ 
-        addcc   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addcs   rR15, rR15, ip                           @ 
+        addcc   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_bvc:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addvc   r3, r3, ip                               @ 
-        addvs   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addvc   rR15, rR15, ip                           @ 
+        addvs   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_bvs:
-        add     r3, r3, #1                               @ 
-        uxth    rR15, r3                                 @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #1                           @ 
+        uxth    r2, rR15                                 @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         sxtb    ip, ip                                   @ 
         msr     cpsr_f, rARM                             @ 
-        addvs   r3, r3, ip                               @ 
-        addvc   r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        addvs   rR15, rR15, ip                           @ 
+        addvc   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_to_r:
         tst     rSTAT, #4096                             @ 
         addeq   vLow, rGSU, vLow, lsl #1                 @ 
         beq     .L81                                     @ 
-        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rSREG]                              @ 
         lsl     vLow, vLow, #1                           @ 
-        strh    rR15, [rGSU, vLow]                       @ 
+        strh    r2, [rGSU, vLow]                         @ 
         add     vLow, rGSU, #0                           @ 
         mov     rSREG, vLow                              @ 
         bic     rSTAT, rSTAT, #4864                      @ 
 .L81:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         mov     rDREG, vLow                              @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_to_r14:
         tst     rSTAT, #4096                             @ 
         bne     .L241                                    @ 
         add     rDREG, rGSU, #28                         @ 
 .L84:
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_to_r15:
         tst     rSTAT, #4096                             @ 
         beq     .L86                                     @ 
-        ldrh    r3, [rSREG]                              @ 
+        ldrh    rR15, [rSREG]                            @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         add     rSREG, rGSU, #0                          @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
         b       loop_head                                @ 
 handle_fx_with:
         add     rDREG, rGSU, vLow, lsl #1                @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         mov     rSREG, rDREG                             @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         orr     rSTAT, rSTAT, #4096                      @ 
         b       loop_head                                @ 
 handle_fx_stw_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rGSU, vLow]                         @ 
+        ldrh    rR15, [rGSU, vLow]                       @ 
         ldr     r1, [rGSU, #404]                         @ 
-        strh    r3, [rGSU, #34]                          @ 
-        ldrh    rR15, [rSREG]                            @ 
+        strh    rR15, [rGSU, #34]                        @ 
+        ldrh    r2, [rSREG]                              @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strb    rR15, [r1, r3]                           @ 
-        eor     r3, r3, #1                               @ 
-        lsr     rR15, rR15, #8                           @ 
-        strb    rR15, [r1, r3]                           @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        strb    r2, [r1, rR15]                           @ 
+        eor     rR15, rR15, #1                           @ 
+        lsr     r2, r2, #8                               @ 
+        strb    r2, [r1, rR15]                           @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         add     rSREG, rGSU, #0                          @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_loop:
-        ldrh    r3, [rGSU, #24]                          @ 
+        ldrh    rR15, [rGSU, #24]                        @ 
         add     rSREG, rGSU, #0                          @ 
-        sub     r3, r3, #1                               @ 
+        sub     rR15, rR15, #1                           @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     rARM, r3, #16                            @ 
+        lsl     rARM, rR15, #16                          @ 
         movs    rARM, rARM                               @ 
         mrs     rARM, cpsr                               @ 
-        cmp     r3, #0                                   @ 
-        strh    r3, [rGSU, #24]                          @ 
-        ldrheq  r3, [rGSU, #30]                          @ 
-        ldrhne  r3, [rGSU, #26]                          @ 
-        addeq   r3, r3, #1                               @ 
-        uxtheq  r3, r3                                   @ 
+        cmp     rR15, #0                                 @ 
+        strh    rR15, [rGSU, #24]                        @ 
+        ldrheq  rR15, [rGSU, #30]                        @ 
+        ldrhne  rR15, [rGSU, #26]                        @ 
+        addeq   rR15, rR15, #1                           @ 
+        uxtheq  rR15, rR15                               @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_alt1:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4096                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         orr     rSTAT, rSTAT, #256                       @ 
         b       loop_head                                @ 
 handle_fx_alt2:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4096                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         orr     rSTAT, rSTAT, #512                       @ 
         b       loop_head                                @ 
 handle_fx_alt3:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4096                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         orr     rSTAT, rSTAT, #768                       @ 
         b       loop_head                                @ 
 handle_fx_ldw_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
         ldr     r1, [rGSU, #404]                         @ 
-        strh    rR15, [rGSU, #34]                        @ 
-        eor     ip, rR15, #1                             @ 
-        add     vLow, r3, #1                             @ 
-        ldrb    r3, [r1, rR15]                           @ 
-        ldrb    rR15, [r1, ip]                           @ 
+        strh    r2, [rGSU, #34]                          @ 
+        eor     ip, r2, #1                               @ 
+        add     vLow, rR15, #1                           @ 
+        ldrb    rR15, [r1, r2]                           @ 
+        ldrb    r2, [r1, ip]                             @ 
         strh    vLow, [rGSU, #30]                        @ 
-        orr     r3, r3, rR15, lsl #8                     @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        orr     rR15, rR15, r2, lsl #8                   @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_swap:
-        add     rR15, r3, #1                             @ 
-        ldrh    r3, [rSREG]                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        rev16   r3, r3                                   @ 
-        add     rR15, rGSU, #28                          @ 
-        strh    r3, [rDREG]                              @ 
-        orr     r1, r3, r3, lsl #16                      @ 
+        add     r2, rR15, #1                             @ 
+        ldrh    rR15, [rSREG]                            @ 
+        strh    r2, [rGSU, #30]                          @ 
+        rev16   rR15, rR15                               @ 
+        add     r2, rGSU, #28                            @ 
+        strh    rR15, [rDREG]                            @ 
+        orr     r1, rR15, rR15, lsl #16                  @ 
         msr     cpsr_f, rARM                             @ 
         movs    rARM, r1                                 @ 
         mrs     rARM, cpsr                               @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        cmp     rDREG, r2                                @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_color:
         ldrb    r1, [rGSU, #36]                          @ 
-        ldrb    rR15, [rSREG]                            @ 
+        ldrb    r2, [rSREG]                              @ 
         tst     r1, #4                                   @ 
-        andne   vLow, rR15, #240                         @ 
-        orrne   rR15, vLow, rR15, lsr #4                 @ 
+        andne   vLow, r2, #240                           @ 
+        orrne   r2, vLow, r2, lsr #4                     @ 
         tst     r1, #8                                   @ 
         ldrbne  r1, [rGSU, #37]                          @ 
-        andne   rR15, rR15, #15                          @ 
+        andne   r2, r2, #15                              @ 
         bicne   r1, r1, #15                              @ 
-        orrne   rR15, r1, rR15                           @ 
-        add     r3, r3, #1                               @ 
+        orrne   r2, r1, r2                               @ 
+        add     rR15, rR15, #1                           @ 
         add     rSREG, rGSU, #0                          @ 
-        strb    rR15, [rGSU, #37]                        @ 
+        strb    r2, [rGSU, #37]                          @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_not:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrh    r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        add     r3, r3, r3, lsl #16                      @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrh    rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        add     rR15, rR15, rR15, lsl #16                @ 
         msr     cpsr_f, rARM                             @ 
-        mvns    r3, r3                                   @ 
+        mvns    rR15, rR15                               @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_add_r:
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         lsl     vLow, vLow, #1                           @ 
         ldrh    rARM, [rGSU, vLow]                       @ 
-        add     rR15, rR15, #1                           @ 
-        lsl     r3, r3, #16                              @ 
-        adds    r3, r3, rARM, lsl #16                    @ 
+        add     r2, r2, #1                               @ 
+        lsl     rR15, rR15, #16                          @ 
+        adds    rR15, rR15, rARM, lsl #16                @ 
         mrs     rARM, cpsr                               @ 
-        lsr     r3, r3, #16                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        lsr     rR15, rR15, #16                          @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_sub_r:
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         lsl     vLow, vLow, #1                           @ 
         ldrh    rARM, [rGSU, vLow]                       @ 
-        add     rR15, rR15, #1                           @ 
-        lsl     r3, r3, #16                              @ 
-        subs    r3, r3, rARM, lsl #16                    @ 
+        add     r2, r2, #1                               @ 
+        lsl     rR15, rR15, #16                          @ 
+        subs    rR15, rR15, rARM, lsl #16                @ 
         mrs     rARM, cpsr                               @ 
-        lsr     r3, r3, #16                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        lsr     rR15, rR15, #16                          @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_merge:
         ldrh    r1, [rGSU, #14]                          @ 
-        ldrh    rR15, [rGSU, #16]                        @ 
+        ldrh    r2, [rGSU, #16]                          @ 
         bic     r1, r1, #255                             @ 
-        orr     rR15, r1, rR15, lsr #8                   @ 
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
-        lsr     r3, rR15, #4                             @ 
-        orr     r3, r3, r1, lsr #12                      @ 
-        and     r3, r3, #15                              @ 
-        add     r3, rGSU, r3                             @ 
-        ldrb    rARM, [r3, #42]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        orr     r2, r1, r2, lsr #8                       @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        lsr     rR15, r2, #4                             @ 
+        orr     rR15, rR15, r1, lsr #12                  @ 
+        and     rR15, rR15, #15                          @ 
+        add     rR15, rGSU, rR15                         @ 
+        ldrb    rARM, [rR15, #42]                        @ 
+        strh    r2, [rDREG]                              @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
         lsl     rARM, rARM, #28                          @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_and_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        add     r3, r3, r3, lsl #16                      @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
         add     rR15, rR15, rR15, lsl #16                @ 
+        add     r2, r2, r2, lsl #16                      @ 
         msr     cpsr_f, rARM                             @ 
-        ands    r3, r3, rR15                             @ 
+        ands    rR15, rR15, r2                           @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_mult_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrsb   r3, [rSREG]                              @ 
-        ldrsb   rR15, [rGSU, vLow]                       @ 
+        ldrsb   rR15, [rSREG]                            @ 
+        ldrsb   r2, [rGSU, vLow]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        smulbb  r3, r3, rR15                             @ 
+        smulbb  rR15, rR15, r2                           @ 
         msr     cpsr_f, rARM                             @ 
-        movs    rARM, r3                                 @ 
+        movs    rARM, rR15                               @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_sbk:
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #34]                        @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #34]                          @ 
         ldr     r1, [rGSU, #404]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        strb    r3, [r1, rR15]                           @ 
-        ldrh    rR15, [rGSU, #34]                        @ 
+        strb    rR15, [r1, r2]                           @ 
+        ldrh    r2, [rGSU, #34]                          @ 
         ldr     r1, [rGSU, #404]                         @ 
-        lsr     r3, r3, #8                               @ 
-        eor     rR15, rR15, #1                           @ 
-        strb    r3, [r1, rR15]                           @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        lsr     rR15, rR15, #8                           @ 
+        eor     r2, r2, #1                               @ 
+        strb    rR15, [r1, r2]                           @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_link_i:
-        add     vLow, vLow, r3                           @ 
-        add     r3, r3, #1                               @ 
+        add     vLow, vLow, rR15                         @ 
+        add     rR15, rR15, #1                           @ 
         add     rSREG, rGSU, #0                          @ 
         strh    vLow, [rGSU, #22]                        @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_sex:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrsb   r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrsb   rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         msr     cpsr_f, rARM                             @ 
-        movs    r3, r3                                   @ 
+        movs    rR15, rR15                               @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_asr:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrsh   r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrsh   rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         msr     cpsr_f, rARM                             @ 
-        asrs    r3, r3, #1                               @ 
+        asrs    rR15, rR15, #1                           @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_ror:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrh    r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrh    rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         msr     cpsr_f, rARM                             @ 
-        orrcs   r3, r3, #65536                           @ 
-        rrxs    r3, r3                                   @ 
+        orrcs   rR15, rR15, #65536                       @ 
+        rrxs    rR15, rR15                               @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_jmp_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rGSU, vLow]                         @ 
+        ldrh    rR15, [rGSU, vLow]                       @ 
         add     rSREG, rGSU, #0                          @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_lob:
-        ldrh    r3, [rGSU, #30]                          @ 
-        ldrb    rR15, [rSREG]                            @ 
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrb    r2, [rSREG]                              @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     rARM, rR15, #24                          @ 
+        lsl     rARM, r2, #24                            @ 
         movs    rARM, rARM                               @ 
         mrs     rARM, cpsr                               @ 
-        strh    rR15, [rDREG]                            @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    r2, [rDREG]                              @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 .L242:
@@ -1061,574 +1061,574 @@ handle_fx_lob:
         .word   handle_fx_rpix_2bit
         .word   handle_fx_plot_2bit
 handle_fx_fmult:
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #12]                        @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #12]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        smulbb  r3, r3, rR15                             @ 
+        smulbb  rR15, rR15, r2                           @ 
         msr     cpsr_f, rARM                             @ 
-        asrs    r3, r3, #16                              @ 
+        asrs    rR15, rR15, #16                          @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_ibt_r:
-        add     rR15, r3, #1                             @ 
-        uxth    rR15, rR15                               @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     r2, rR15, #1                             @ 
+        uxth    r2, r2                                   @ 
+        strh    r2, [rGSU, #30]                          @ 
         lsl     vLow, vLow, #1                           @ 
         sxtb    ip, ip                                   @ 
-        add     r3, r3, #2                               @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #2                           @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         strh    ip, [rGSU, vLow]                         @ 
         b       loop_head                                @ 
 handle_fx_ibt_r14:
-        add     rR15, r3, #1                             @ 
-        uxth    rR15, rR15                               @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     r2, rR15, #1                             @ 
+        uxth    r2, r2                                   @ 
+        strh    r2, [rGSU, #30]                          @ 
         sxtb    ip, ip                                   @ 
-        add     r3, r3, #2                               @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        add     rR15, rR15, #2                           @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         add     rSREG, rGSU, #0                          @ 
         strh    ip, [rGSU, #28]                          @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         uxth    ip, ip                                   @ 
-        ldr     r3, [rGSU, #408]                         @ 
-        ldrb    r3, [r3, ip]                             @ 
-        strb    r3, [rGSU, #38]                          @ 
+        ldr     rR15, [rGSU, #408]                       @ 
+        ldrb    rR15, [rR15, ip]                         @ 
+        strb    rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_from_r:
         tst     rSTAT, #4096                             @ 
         beq     .L131                                    @ 
         add     rSREG, rGSU, #0                          @ 
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rGSU, vLow]                         @ 
+        ldrh    rR15, [rGSU, vLow]                       @ 
         bic     rARM, rARM, #-805306368                  @ 
-        lsls    rR15, r3, #24                            @ 
+        lsls    r2, rR15, #24                            @ 
         orrmi   rARM, rARM, #268435456                   @ 
-        lsls    rR15, r3, #16                            @ 
+        lsls    r2, rR15, #16                            @ 
         orrmi   rARM, rARM, #-2147483648                 @ 
         orreq   rARM, rARM, #1073741824                  @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_hib:
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        lsr     r3, r3, #8                               @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        sxtb    rR15, r3                                 @ 
-        add     r3, rGSU, #28                            @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        lsr     rR15, rR15, #8                           @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        sxtb    r2, rR15                                 @ 
+        add     rR15, rGSU, #28                          @ 
         msr     cpsr_f, rARM                             @ 
-        movs    rARM, rR15                               @ 
+        movs    rARM, r2                                 @ 
         mrs     rARM, cpsr                               @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_or_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        add     r3, r3, r3, lsl #16                      @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
         add     rR15, rR15, rR15, lsl #16                @ 
+        add     r2, r2, r2, lsl #16                      @ 
         msr     cpsr_f, rARM                             @ 
-        orrs    r3, r3, rR15                             @ 
+        orrs    rR15, rR15, r2                           @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_inc_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rGSU, vLow]                         @ 
+        ldrh    rR15, [rGSU, vLow]                       @ 
         add     rSREG, rGSU, #0                          @ 
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, vLow]                         @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, vLow]                       @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     rARM, r3, #16                            @ 
+        lsl     rARM, rR15, #16                          @ 
         movs    rARM, rARM                               @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_inc_r14:
-        ldrh    r3, [rGSU, #28]                          @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        add     r3, r3, #1                               @ 
+        ldrh    rR15, [rGSU, #28]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         add     rR15, rR15, #1                           @ 
+        add     r2, r2, #1                               @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     rARM, r3, #16                            @ 
+        lsl     rARM, rR15, #16                          @ 
         movs    rARM, rARM                               @ 
         mrs     rARM, cpsr                               @ 
-        uxth    r3, r3                                   @ 
+        uxth    rR15, rR15                               @ 
         add     rSREG, rGSU, #0                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #28]                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldr     rR15, [rGSU, #408]                       @ 
-        ldrb    r3, [rR15, r3]                           @ 
-        strb    r3, [rGSU, #38]                          @ 
+        strh    rR15, [rGSU, #28]                        @ 
+        strh    r2, [rGSU, #30]                          @ 
+        ldr     r2, [rGSU, #408]                         @ 
+        ldrb    rR15, [r2, rR15]                         @ 
+        strb    rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_getc:
         ldrb    r1, [rGSU, #36]                          @ 
-        ldrb    rR15, [rGSU, #38]                        @ 
+        ldrb    r2, [rGSU, #38]                          @ 
         tst     r1, #4                                   @ 
-        andne   vLow, rR15, #240                         @ 
-        orrne   rR15, vLow, rR15, lsr #4                 @ 
+        andne   vLow, r2, #240                           @ 
+        orrne   r2, vLow, r2, lsr #4                     @ 
         tst     r1, #8                                   @ 
         ldrbne  r1, [rGSU, #37]                          @ 
-        andne   rR15, rR15, #15                          @ 
+        andne   r2, r2, #15                              @ 
         bicne   r1, r1, #15                              @ 
-        orrne   rR15, r1, rR15                           @ 
-        add     r3, r3, #1                               @ 
+        orrne   r2, r1, r2                               @ 
+        add     rR15, rR15, #1                           @ 
         add     rSREG, rGSU, #0                          @ 
-        strb    rR15, [rGSU, #37]                        @ 
+        strb    r2, [rGSU, #37]                          @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_dec_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rGSU, vLow]                         @ 
+        ldrh    rR15, [rGSU, vLow]                       @ 
         add     rSREG, rGSU, #0                          @ 
-        sub     r3, r3, #1                               @ 
-        strh    r3, [rGSU, vLow]                         @ 
+        sub     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, vLow]                       @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     rARM, r3, #16                            @ 
+        lsl     rARM, rR15, #16                          @ 
         movs    rARM, rARM                               @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_dec_r14:
-        ldrh    r3, [rGSU, #28]                          @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        sub     r3, r3, #1                               @ 
-        add     rR15, rR15, #1                           @ 
+        ldrh    rR15, [rGSU, #28]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        sub     rR15, rR15, #1                           @ 
+        add     r2, r2, #1                               @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     rARM, r3, #16                            @ 
+        lsl     rARM, rR15, #16                          @ 
         movs    rARM, rARM                               @ 
         mrs     rARM, cpsr                               @ 
-        uxth    r3, r3                                   @ 
+        uxth    rR15, rR15                               @ 
         add     rSREG, rGSU, #0                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #28]                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldr     rR15, [rGSU, #408]                       @ 
-        ldrb    r3, [rR15, r3]                           @ 
-        strb    r3, [rGSU, #38]                          @ 
+        strh    rR15, [rGSU, #28]                        @ 
+        strh    r2, [rGSU, #30]                          @ 
+        ldr     r2, [rGSU, #408]                         @ 
+        ldrb    rR15, [r2, rR15]                         @ 
+        strb    rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_getb:
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldrb    r3, [rGSU, #38]                          @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldrb    rR15, [rGSU, #38]                        @ 
         add     rSREG, rGSU, #0                          @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_iwt_r:
-        add     rR15, r3, #1                             @ 
-        uxth    rR15, rR15                               @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
-        add     rR15, r3, #2                             @ 
+        add     r2, rR15, #1                             @ 
+        uxth    r2, r2                                   @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
+        add     r2, rR15, #2                             @ 
         orr     ip, ip, rPIPE, lsl #8                    @ 
         lsl     vLow, vLow, #1                           @ 
-        uxth    rR15, rR15                               @ 
-        add     r3, r3, #3                               @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        uxth    r2, r2                                   @ 
+        add     rR15, rR15, #3                           @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         strh    ip, [rGSU, vLow]                         @ 
         b       loop_head                                @ 
 handle_fx_iwt_r14:
-        add     rR15, r3, #1                             @ 
-        uxth    rR15, rR15                               @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
-        add     rR15, r3, #2                             @ 
+        add     r2, rR15, #1                             @ 
+        uxth    r2, r2                                   @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
+        add     r2, rR15, #2                             @ 
         orr     ip, ip, rPIPE, lsl #8                    @ 
-        uxth    rR15, rR15                               @ 
-        add     r3, r3, #3                               @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
+        uxth    r2, r2                                   @ 
+        add     rR15, rR15, #3                           @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
         add     rSREG, rGSU, #0                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         strh    ip, [rGSU, #28]                          @ 
-        ldr     r3, [rGSU, #408]                         @ 
-        ldrb    r3, [r3, ip]                             @ 
-        strb    r3, [rGSU, #38]                          @ 
+        ldr     rR15, [rGSU, #408]                       @ 
+        ldrb    rR15, [rR15, ip]                         @ 
+        strb    rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_stb_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rGSU, vLow]                         @ 
-        ldr     rR15, [rGSU, #404]                       @ 
-        strh    r3, [rGSU, #34]                          @ 
+        ldrh    rR15, [rGSU, vLow]                       @ 
+        ldr     r2, [rGSU, #404]                         @ 
+        strh    rR15, [rGSU, #34]                        @ 
         ldrh    r1, [rSREG]                              @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strb    r1, [rR15, r3]                           @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        strb    r1, [r2, rR15]                           @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         add     rSREG, rGSU, #0                          @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_ldb_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
         ldr     r1, [rGSU, #404]                         @ 
-        strh    rR15, [rGSU, #34]                        @ 
-        ldrb    rR15, [r1, rR15]                         @ 
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    r2, [rGSU, #34]                          @ 
+        ldrb    r2, [r1, r2]                             @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        strh    r2, [rDREG]                              @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_cmode:
-        ldrb    r3, [rSREG]                              @ 
-        tst     r3, #16                                  @ 
-        strb    r3, [rGSU, #36]                          @ 
-        movne   r3, #256                                 @ 
-        ldreq   r3, [rGSU, #392]                         @ 
-        str     r3, [rGSU, #388]                         @ 
+        ldrb    rR15, [rSREG]                            @ 
+        tst     rR15, #16                                @ 
+        strb    rR15, [rGSU, #36]                        @ 
+        movne   rR15, #256                               @ 
+        ldreq   rR15, [rGSU, #392]                       @ 
+        str     rR15, [rGSU, #388]                       @ 
         bl      fx_computeScreenPointers                 @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_adc_r:
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         lsl     vLow, vLow, #1                           @ 
         ldrh    r1, [rSREG]                              @ 
-        ldrh    r3, [rGSU, vLow]                         @ 
-        add     rR15, rR15, #1                           @ 
+        ldrh    rR15, [rGSU, vLow]                       @ 
+        add     r2, r2, #1                               @ 
         msr     cpsr_f, rARM                             @ 
         lsl     rARM, r1, #16                            @ 
         orrcs   rARM, rARM, #32768                       @ 
-        orrcs   r3, r3, #-2147483648                     @ 
-        adds    r3, rARM, r3, ror #16                    @ 
+        orrcs   rR15, rR15, #-2147483648                 @ 
+        adds    rR15, rARM, rR15, ror #16                @ 
         mrs     rARM, cpsr                               @ 
-        lsr     r3, r3, #16                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        lsr     rR15, rR15, #16                          @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_sbc_r:
-        ldrh    r3, [rSREG]                              @ 
+        ldrh    rR15, [rSREG]                            @ 
         lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        lsl     r3, r3, #16                              @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
+        lsl     rR15, rR15, #16                          @ 
         msr     cpsr_f, rARM                             @ 
-        sbcs    r3, r3, rR15, lsl #16                    @ 
+        sbcs    rR15, rR15, r2, lsl #16                  @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        lsrs    r3, r3, #16                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        lsrs    rR15, rR15, #16                          @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         orreq   rARM, rARM, #1073741824                  @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_bic_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        add     r3, r3, r3, lsl #16                      @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
         add     rR15, rR15, rR15, lsl #16                @ 
+        add     r2, r2, r2, lsl #16                      @ 
         msr     cpsr_f, rARM                             @ 
-        bics    r3, r3, rR15                             @ 
+        bics    rR15, rR15, r2                           @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_umult_r:
-        ldrb    r3, [rSREG]                              @ 
-        ldrb    rR15, [rGSU, vLow, lsl #1]               @ 
+        ldrb    rR15, [rSREG]                            @ 
+        ldrb    r2, [rGSU, vLow, lsl #1]                 @ 
         add     rSREG, rGSU, #0                          @ 
-        smulbb  r3, r3, rR15                             @ 
+        smulbb  rR15, rR15, r2                           @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     rARM, r3, #16                            @ 
+        lsl     rARM, rR15, #16                          @ 
         movs    rARM, rARM                               @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_div2:
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #58]                        @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #58]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        cmp     rR15, r3                                 @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        moveq   r3, #1                                   @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        sxthne  r3, r3                                   @ 
+        cmp     r2, rR15                                 @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        moveq   rR15, #1                                 @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        sxthne  rR15, rR15                               @ 
         msr     cpsr_f, rARM                             @ 
-        asrs    r3, r3, #1                               @ 
+        asrs    rR15, rR15, #1                           @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_ljmp_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rGSU, vLow]                         @ 
+        ldrh    rR15, [rGSU, vLow]                       @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        and     r3, r3, #127                             @ 
-        strb    r3, [rGSU, #39]                          @ 
-        add     r3, r3, #108                             @ 
-        ldr     r3, [rGSU, r3, lsl #2]                   @ 
-        ldrh    rR15, [rSREG]                            @ 
-        str     r3, [rGSU, #412]                         @ 
-        mov     r3, #0                                   @ 
+        and     rR15, rR15, #127                         @ 
+        strb    rR15, [rGSU, #39]                        @ 
+        add     rR15, rR15, #108                         @ 
+        ldr     rR15, [rGSU, rR15, lsl #2]               @ 
+        ldrh    r2, [rSREG]                              @ 
+        str     rR15, [rGSU, #412]                       @ 
+        mov     rR15, #0                                 @ 
         add     rSREG, rGSU, #0                          @ 
-        str     r3, [rGSU, #72]                          @ 
-        mov     r3, #1                                   @ 
-        strb    r3, [rGSU, #1456]                        @ 
-        bic     r3, rR15, #15                            @ 
+        str     rR15, [rGSU, #72]                        @ 
+        mov     rR15, #1                                 @ 
+        strb    rR15, [rGSU, #1456]                      @ 
+        bic     rR15, r2, #15                            @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, #32]                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        strh    rR15, [rGSU, #32]                        @ 
+        strh    r2, [rGSU, #30]                          @ 
         b       loop_head                                @ 
 handle_fx_lmult:
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #12]                        @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #12]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        smulbb  r3, r3, rR15                             @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rGSU, #8]                           @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        smulbb  rR15, rR15, r2                           @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #8]                         @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         msr     cpsr_f, rARM                             @ 
-        asrs    r3, r3, #16                              @ 
+        asrs    rR15, rR15, #16                          @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_lms_r:
         lsl     ip, ip, #1                               @ 
-        add     rR15, r3, #1                             @ 
+        add     r2, rR15, #1                             @ 
         strh    ip, [rGSU, #34]                          @ 
-        uxth    rR15, rR15                               @ 
-        add     r3, r3, #2                               @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldr     r3, [rGSU, #404]                         @ 
-        add     rR15, ip, #1                             @ 
-        ldrb    rR15, [r3, rR15]                         @ 
-        ldrb    r3, [r3, ip]                             @ 
+        uxth    r2, r2                                   @ 
+        add     rR15, rR15, #2                           @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldr     rR15, [rGSU, #404]                       @ 
+        add     r2, ip, #1                               @ 
+        ldrb    r2, [rR15, r2]                           @ 
+        ldrb    rR15, [rR15, ip]                         @ 
         lsl     vLow, vLow, #1                           @ 
-        orr     r3, r3, rR15, lsl #8                     @ 
+        orr     rR15, rR15, r2, lsl #8                   @ 
         add     rSREG, rGSU, #0                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         mov     rDREG, rSREG                             @ 
-        strh    r3, [rGSU, vLow]                         @ 
+        strh    rR15, [rGSU, vLow]                       @ 
         b       loop_head                                @ 
 handle_fx_lms_r14:
         lsl     ip, ip, #1                               @ 
-        add     rR15, r3, #1                             @ 
+        add     r2, rR15, #1                             @ 
         strh    ip, [rGSU, #34]                          @ 
-        uxth    rR15, rR15                               @ 
-        add     r3, r3, #2                               @ 
-        ldrb    rPIPE, [r1, rR15]                        @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldr     r3, [rGSU, #404]                         @ 
-        add     rR15, ip, #1                             @ 
-        ldrb    rR15, [r3, rR15]                         @ 
-        ldrb    r3, [r3, ip]                             @ 
+        uxth    r2, r2                                   @ 
+        add     rR15, rR15, #2                           @ 
+        ldrb    rPIPE, [r1, r2]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldr     rR15, [rGSU, #404]                       @ 
+        add     r2, ip, #1                               @ 
+        ldrb    r2, [rR15, r2]                           @ 
+        ldrb    rR15, [rR15, ip]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        orr     r3, r3, rR15, lsl #8                     @ 
+        orr     rR15, rR15, r2, lsl #8                   @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #28]                          @ 
-        ldr     rR15, [rGSU, #408]                       @ 
-        ldrb    r3, [rR15, r3]                           @ 
-        strb    r3, [rGSU, #38]                          @ 
+        strh    rR15, [rGSU, #28]                        @ 
+        ldr     r2, [rGSU, #408]                         @ 
+        ldrb    rR15, [r2, rR15]                         @ 
+        strb    rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_xor_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        add     r3, r3, r3, lsl #16                      @ 
+        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
         add     rR15, rR15, rR15, lsl #16                @ 
+        add     r2, r2, r2, lsl #16                      @ 
         msr     cpsr_f, rARM                             @ 
-        eors    r3, r3, rR15                             @ 
+        eors    rR15, rR15, r2                           @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_getbh:
-        add     rR15, r3, #1                             @ 
-        ldrb    r3, [rSREG]                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldrb    rR15, [rGSU, #38]                        @ 
+        add     r2, rR15, #1                             @ 
+        ldrb    rR15, [rSREG]                            @ 
+        strh    r2, [rGSU, #30]                          @ 
+        ldrb    r2, [rGSU, #38]                          @ 
         add     rSREG, rGSU, #0                          @ 
-        orr     r3, r3, rR15, lsl #8                     @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        orr     rR15, rR15, r2, lsl #8                   @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 
 handle_fx_lm_r_common:
         ldr     rSREG, .L3                               @ 
-        uxtb    r3, rPIPE                                @ 
-        ldrh    rR15, [rSREG, #30]                       @ 
+        uxtb    rR15, rPIPE                              @ 
+        ldrh    r2, [rSREG, #30]                         @ 
         ldr     ip, [rSREG, #412]                        @ 
-        add     r1, rR15, #1                             @ 
-        strh    r3, [rSREG, #34]                         @ 
+        add     r1, r2, #1                               @ 
+        strh    rR15, [rSREG, #34]                       @ 
         uxth    r1, r1                                   @ 
         ldrb    rPIPE, [ip, r1]                          @ 
-        add     r1, rR15, #2                             @ 
-        orr     r3, r3, rPIPE, lsl #8                    @ 
-        strh    r3, [rSREG, #34]                         @ 
+        add     r1, r2, #2                               @ 
+        orr     rR15, rR15, rPIPE, lsl #8                @ 
+        strh    rR15, [rSREG, #34]                       @ 
         uxth    r1, r1                                   @ 
-        add     rR15, rR15, #3                           @ 
+        add     r2, r2, #3                               @ 
         ldrb    rPIPE, [ip, r1]                          @ 
-        strh    rR15, [rSREG, #30]                       @ 
-        ldr     rR15, [rSREG, #404]                      @ 
-        eor     r1, r3, #1                               @ 
-        ldrb    r1, [rR15, r1]                           @ 
-        ldrb    r3, [rR15, r3]                           @ 
+        strh    r2, [rSREG, #30]                         @ 
+        ldr     r2, [rSREG, #404]                        @ 
+        eor     r1, rR15, #1                             @ 
+        ldrb    r1, [r2, r1]                             @ 
+        ldrb    rR15, [r2, rR15]                         @ 
         lsl     vLow, vLow, #1                           @ 
-        orr     r3, r3, r1, lsl #8                       @ 
-        strh    r3, [rSREG, vLow]                        @ 
+        orr     rR15, rR15, r1, lsl #8                   @ 
+        strh    rR15, [rSREG, vLow]                      @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         add     rSREG, rSREG, #0                         @ 
         mov     rDREG, rSREG                             @ 
@@ -1637,335 +1637,335 @@ handle_fx_lm_r_common:
         .word   GSU
 
 handle_fx_lm_r:
-        bl      handle_fx_lm_r_common                             @ 
+        bl      handle_fx_lm_r_common                    @ 
         b       loop_head                                @ 
 handle_fx_lm_r14:
         mov     vLow, #14                                @ 
-        bl      handle_fx_lm_r_common                             @ 
-        ldrh    r3, [rGSU, #28]                          @ 
-        ldr     rR15, [rGSU, #408]                       @ 
-        ldrb    r3, [rR15, r3]                           @ 
-        strb    r3, [rGSU, #38]                          @ 
+        bl      handle_fx_lm_r_common                    @ 
+        ldrh    rR15, [rGSU, #28]                        @ 
+        ldr     r2, [rGSU, #408]                         @ 
+        ldrb    rR15, [r2, rR15]                         @ 
+        strb    rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_add_i:
         ldrh    rARM, [rSREG]                            @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         lsl     rARM, rARM, #16                          @ 
-        add     rR15, rR15, #1                           @ 
-        adds    r3, rARM, vLow, lsl #16                  @ 
+        add     r2, r2, #1                               @ 
+        adds    rR15, rARM, vLow, lsl #16                @ 
         mrs     rARM, cpsr                               @ 
-        lsr     r3, r3, #16                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        lsr     rR15, rR15, #16                          @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_sub_i:
         ldrh    rARM, [rSREG]                            @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
         lsl     rARM, rARM, #16                          @ 
-        add     rR15, rR15, #1                           @ 
-        subs    r3, rARM, vLow, lsl #16                  @ 
+        add     r2, r2, #1                               @ 
+        subs    rR15, rARM, vLow, lsl #16                @ 
         mrs     rARM, cpsr                               @ 
-        lsr     r3, r3, #16                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        lsr     rR15, rR15, #16                          @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_and_i:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrh    r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrh    rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         msr     cpsr_f, rARM                             @ 
-        ands    r3, r3, vLow                             @ 
+        ands    rR15, rR15, vLow                         @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_mult_i:
-        ldrsb   r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        smulbb  r3, r3, vLow                             @ 
+        ldrsb   rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        smulbb  rR15, rR15, vLow                         @ 
         msr     cpsr_f, rARM                             @ 
-        movs    rARM, r3                                 @ 
+        movs    rARM, rR15                               @ 
         mrs     rARM, cpsr                               @ 
         add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_sms_r:
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         lsl     ip, ip, #1                               @ 
-        uxth    r3, r3                                   @ 
+        uxth    rR15, rR15                               @ 
         lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
         strh    ip, [rGSU, #34]                          @ 
-        strh    r3, [rGSU, #30]                          @ 
-        ldrb    rPIPE, [r1, r3]                          @ 
-        ldr     r3, [rGSU, #404]                         @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        ldrb    rPIPE, [r1, rR15]                        @ 
+        ldr     rR15, [rGSU, #404]                       @ 
         add     rSREG, rGSU, #0                          @ 
-        strb    rR15, [r3, ip]                           @ 
-        ldrh    r3, [rGSU, #34]                          @ 
+        strb    r2, [rR15, ip]                           @ 
+        ldrh    rR15, [rGSU, #34]                        @ 
         ldr     r1, [rGSU, #404]                         @ 
-        add     r3, r3, #1                               @ 
-        lsr     rR15, rR15, #8                           @ 
-        uxth    r3, r3                                   @ 
-        strb    rR15, [r1, r3]                           @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        add     rR15, rR15, #1                           @ 
+        lsr     r2, r2, #8                               @ 
+        uxth    rR15, rR15                               @ 
+        strb    r2, [r1, rR15]                           @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_or_i:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrh    r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        add     r3, r3, r3, lsl #16                      @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrh    rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        add     rR15, rR15, rR15, lsl #16                @ 
         msr     cpsr_f, rARM                             @ 
-        orrs    r3, r3, vLow                             @ 
+        orrs    rR15, rR15, vLow                         @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_ramb:
-        ldrh    rR15, [rSREG]                            @ 
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
-        and     r3, rR15, #3                             @ 
-        strb    r3, [rGSU, #41]                          @ 
-        add     r3, r3, #104                             @ 
-        ldr     r3, [rGSU, r3, lsl #2]                   @ 
+        ldrh    r2, [rSREG]                              @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        and     rR15, r2, #3                             @ 
+        strb    rR15, [rGSU, #41]                        @ 
+        add     rR15, rR15, #104                         @ 
+        ldr     rR15, [rGSU, rR15, lsl #2]               @ 
         add     rSREG, rGSU, #0                          @ 
-        str     r3, [rGSU, #404]                         @ 
+        str     rR15, [rGSU, #404]                       @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_getbl:
-        add     rR15, r3, #1                             @ 
-        ldrh    r3, [rSREG]                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldrb    rR15, [rGSU, #38]                        @ 
-        and     r3, r3, #65280                           @ 
-        orr     r3, r3, rR15                             @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, rR15, #1                             @ 
+        ldrh    rR15, [rSREG]                            @ 
+        strh    r2, [rGSU, #30]                          @ 
+        ldrb    r2, [rGSU, #38]                          @ 
+        and     rR15, rR15, #65280                       @ 
+        orr     rR15, rR15, r2                           @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_sm_r:
         lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        add     vLow, r3, #1                             @ 
+        ldrh    r2, [rGSU, vLow]                         @ 
+        add     vLow, rR15, #1                           @ 
         uxth    vLow, vLow                               @ 
         strh    ip, [rGSU, #34]                          @ 
         strh    vLow, [rGSU, #30]                        @ 
         ldrb    rPIPE, [r1, vLow]                        @ 
-        add     r3, r3, #2                               @ 
+        add     rR15, rR15, #2                           @ 
         orr     ip, ip, rPIPE, lsl #8                    @ 
-        uxth    r3, r3                                   @ 
-        strh    r3, [rGSU, #30]                          @ 
+        uxth    rR15, rR15                               @ 
+        strh    rR15, [rGSU, #30]                        @ 
         strh    ip, [rGSU, #34]                          @ 
-        ldrb    rPIPE, [r1, r3]                          @ 
-        ldr     r3, [rGSU, #404]                         @ 
+        ldrb    rPIPE, [r1, rR15]                        @ 
+        ldr     rR15, [rGSU, #404]                       @ 
         add     rSREG, rGSU, #0                          @ 
-        strb    rR15, [r3, ip]                           @ 
-        ldrh    r3, [rGSU, #34]                          @ 
+        strb    r2, [rR15, ip]                           @ 
+        ldrh    rR15, [rGSU, #34]                        @ 
         ldr     r1, [rGSU, #404]                         @ 
-        lsr     rR15, rR15, #8                           @ 
-        eor     r3, r3, #1                               @ 
-        strb    rR15, [r1, r3]                           @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        lsr     r2, r2, #8                               @ 
+        eor     rR15, rR15, #1                           @ 
+        strb    r2, [r1, rR15]                           @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         mov     rDREG, rSREG                             @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_adc_i:
-        ldrh    r3, [rGSU, #30]                          @ 
-        ldrh    rR15, [rSREG]                            @ 
-        add     r3, r3, #1                               @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rSREG]                              @ 
+        add     rR15, rR15, #1                           @ 
         msr     cpsr_f, rARM                             @ 
-        lsl     rARM, rR15, #16                          @ 
+        lsl     rARM, r2, #16                            @ 
         orrcs   rARM, rARM, #32768                       @ 
         orrcs   vLow, vLow, #-2147483648                 @ 
         adds    vLow, rARM, vLow, ror #16                @ 
         mrs     rARM, cpsr                               @ 
         lsr     vLow, vLow, #16                          @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         strh    vLow, [rDREG]                            @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_cmp_r:
-        ldrh    r3, [rSREG]                              @ 
+        ldrh    rR15, [rSREG]                            @ 
         lsl     vLow, vLow, #1                           @ 
         ldrh    rARM, [rGSU, vLow]                       @ 
-        lsl     r3, r3, #16                              @ 
-        cmp     r3, rARM, lsl #16                        @ 
+        lsl     rR15, rR15, #16                          @ 
+        cmp     rR15, rARM, lsl #16                      @ 
         mrs     rARM, cpsr                               @ 
-        ldrh    r3, [rGSU, #30]                          @ 
+        ldrh    rR15, [rGSU, #30]                        @ 
         add     rSREG, rGSU, #0                          @ 
-        add     r3, r3, #1                               @ 
+        add     rR15, rR15, #1                           @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strh    r3, [rGSU, #30]                          @ 
+        strh    rR15, [rGSU, #30]                        @ 
         b       loop_head                                @ 
 handle_fx_bic_i:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrh    r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrh    rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         add     vLow, vLow, vLow, lsl #16                @ 
-        add     r3, r3, r3, lsl #16                      @ 
+        add     rR15, rR15, rR15, lsl #16                @ 
         msr     cpsr_f, rARM                             @ 
-        bics    r3, r3, vLow                             @ 
+        bics    rR15, rR15, vLow                         @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_umult_i:
-        ldrb    r3, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        smulbb  r3, r3, vLow                             @ 
+        ldrb    rR15, [rSREG]                            @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        smulbb  rR15, rR15, vLow                         @ 
         msr     cpsr_f, rARM                             @ 
-        movs    rARM, r3                                 @ 
+        movs    rARM, rR15                               @ 
         mrs     rARM, cpsr                               @ 
         add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         mov     rDREG, rSREG                             @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
 handle_fx_xor_i:
-        ldrh    rR15, [rGSU, #30]                        @ 
-        ldrh    r3, [rSREG]                              @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrh    r2, [rGSU, #30]                          @ 
+        ldrh    rR15, [rSREG]                            @ 
+        add     r2, r2, #1                               @ 
+        strh    r2, [rGSU, #30]                          @ 
         add     vLow, vLow, vLow, lsl #16                @ 
-        add     r3, r3, r3, lsl #16                      @ 
+        add     rR15, rR15, rR15, lsl #16                @ 
         msr     cpsr_f, rARM                             @ 
-        eors    r3, r3, vLow                             @ 
+        eors    rR15, rR15, vLow                         @ 
         mrs     rARM, cpsr                               @ 
-        strh    r3, [rDREG]                              @ 
-        add     r3, rGSU, #28                            @ 
-        cmp     rDREG, r3                                @ 
-        ldrheq  r3, [rGSU, #28]                          @ 
-        ldreq   rR15, [rGSU, #408]                       @ 
+        strh    rR15, [rDREG]                            @ 
+        add     rR15, rGSU, #28                          @ 
+        cmp     rDREG, rR15                              @ 
+        ldrheq  rR15, [rGSU, #28]                        @ 
+        ldreq   r2, [rGSU, #408]                         @ 
         add     rSREG, rGSU, #0                          @ 
-        ldrbeq  r3, [rR15, r3]                           @ 
+        ldrbeq  rR15, [r2, rR15]                         @ 
         mov     rDREG, rSREG                             @ 
-        strbeq  r3, [rGSU, #38]                          @ 
+        strbeq  rR15, [rGSU, #38]                        @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 handle_fx_romb:
-        ldrh    rR15, [rSREG]                            @ 
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
-        and     r3, rR15, #127                           @ 
-        strb    r3, [rGSU, #40]                          @ 
-        add     r3, r3, #108                             @ 
-        ldr     r3, [rGSU, r3, lsl #2]                   @ 
+        ldrh    r2, [rSREG]                              @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
+        and     rR15, r2, #127                           @ 
+        strb    rR15, [rGSU, #40]                        @ 
+        add     rR15, rR15, #108                         @ 
+        ldr     rR15, [rGSU, rR15, lsl #2]               @ 
         add     rSREG, rGSU, #0                          @ 
-        str     r3, [rGSU, #408]                         @ 
+        str     rR15, [rGSU, #408]                       @ 
         mov     rDREG, rSREG                             @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         b       loop_head                                @ 
 .L131:
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         add     rSREG, rGSU, vLow, lsl #1                @ 
         b       loop_head                                @ 
 .L86:
-        add     r3, r3, #1                               @ 
-        strh    r3, [rGSU, #30]                          @ 
+        add     rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ 
         add     rDREG, rGSU, #30                         @ 
         b       loop_head                                @ 
 .L241:
-        ldrh    rR15, [rSREG]                            @ 
+        ldrh    r2, [rSREG]                              @ 
         ldr     r1, [rGSU, #408]                         @ 
-        strh    rR15, [rGSU, #28]                        @ 
-        ldrb    rR15, [r1, rR15]                         @ 
+        strh    r2, [rGSU, #28]                          @ 
+        ldrb    r2, [r1, r2]                             @ 
         add     rSREG, rGSU, #0                          @ 
         bic     rSTAT, rSTAT, #4864                      @ 
         mov     rDREG, rSREG                             @ 
-        strb    rR15, [rGSU, #38]                        @ 
+        strb    r2, [rGSU, #38]                          @ 
         b       .L84                                     @ 
 .L237:
-        eor     ip, r1, r3                               @ 
+        eor     ip, r1, rR15                             @ 
         tst     ip, #1                                   @ 
-        lsrne   rR15, rR15, #4                           @ 
-        movne   ip, rR15                                 @ 
+        lsrne   r2, r2, #4                               @ 
+        movne   ip, r2                                   @ 
         bne     .L17                                     @ 
         b       .L15                                     @ 
 .L239:
@@ -1974,10 +1974,10 @@ handle_fx_romb:
         bne     .L40                                     @ 
         b       loop_head                                @ 
 .L238:
-        eor     ip, r3, r1                               @ 
+        eor     ip, rR15, r1                             @ 
         tst     ip, #1                                   @ 
-        lsrne   rR15, rR15, #4                           @ 
-        movne   ip, rR15                                 @ 
+        lsrne   r2, r2, #4                               @ 
+        movne   ip, r2                                   @ 
         bne     .L27                                     @ 
         b       .L25                                     @ 
 .L240:
