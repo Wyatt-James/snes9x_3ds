@@ -1197,7 +1197,7 @@ static inline void fx_umult_i(uint8 imm) {
 static inline void fx_sbk(uint8 unused)
 {
     uint16 sReg = SREG;
-    RAM(GSU.vLastRamAdr) = (uint8)sReg;
+    RAM(GSU.vLastRamAdr) = (uint8)sReg; // WYATT_TODO Aliasing issue causes double load for RAM base ptr and vLastRamAdr
     RAM(GSU.vLastRamAdr^1) = (uint8)(sReg>>8);
     CLRFLAGS;
     R15++;
@@ -1398,7 +1398,7 @@ static inline void fx_ibt_r(uint8 reg) {
     ASSUME_REG(0, 15);
     uint8 v = PIPE;
     R15++;
-    FETCHPIPE;
+    FETCHPIPE; // WYATT_TODO Double store
     R15++;
     GSU.avReg[reg] = SEX8(v);
     CLRFLAGS;
@@ -1454,7 +1454,7 @@ static inline void fx_sms_r(uint8 reg) {
 /* b0-bf(B) - moves rn - move register to register, and set flags, (if B flag is set) */
 static inline void fx_from_r(uint8 reg) {
     ASSUME_REG(0, 15);
-    if(TF(B)) {
+    if(TF(B)) { // WYATT_TODO mark as unlikely
         uint32 tmp, v = GSU.avReg[reg];
         ARMFLAGS &= ~(ARM_NEGATIVE | ARM_ZERO | ARM_OVERFLOW);
         asm (
