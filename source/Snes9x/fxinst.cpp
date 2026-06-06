@@ -318,7 +318,6 @@ static inline void fx_bvs(uint8 unused) { BRA_COND( "vs", "vc" ); }
 
 /* 10-1f - to rn - set register n as destination register */
 /* 10-1f(B) - move rn - move one register to another (if B flag is set) */
-
 static inline void fx_to_r(uint8 reg) {
     ASSUME_REG(0, 13);
     if(TF(B))
@@ -334,6 +333,8 @@ static inline void fx_to_r(uint8 reg) {
     DEFEAT_TAIL_MERGE;
 }
 
+/* TO_R14: set register 14 as destination register */
+/* If B flag is set, move SREG to R14 and READR14 instead */
 static inline void fx_to_r14(uint8 unused) {
     if(TF(B)) {
         R14 = SREG;
@@ -347,6 +348,8 @@ static inline void fx_to_r14(uint8 unused) {
     DEFEAT_TAIL_MERGE;
 }
 
+/* TO_R15: Set register 15 as destination register and increment */
+/* If B flag is set, move SREG to R15 instead */
 static inline void fx_to_r15(uint8 unused) {
     if(TF(B)) {
         R15 = SREG;
@@ -360,7 +363,7 @@ static inline void fx_to_r15(uint8 unused) {
     DEFEAT_TAIL_MERGE;
 }
 
-/* 20-2f - to rn - set register n as source and destination register */
+/* 20-2f - with rn - set register n as source and destination register */
 static inline void fx_with(uint8 reg) {
     ASSUME_REG(0, 15);
     SF(B);

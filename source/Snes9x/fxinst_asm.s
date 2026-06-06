@@ -738,65 +738,77 @@ handle_fx_to_r15:
         strh    rR15, [rGSU, #30]                        @ Store R15
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         b       loop_head                                @ 
+
+@ WITH: set register n as source and destination register
 handle_fx_with:
-        add     rDREG, rGSU, vLow, lsl #1                @ 
-        add     rR15, rR15, #1                           @ 
-        mov     rSREG, rDREG                             @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        orr     rSTAT, rSTAT, #4096                      @ 
+        add     rDREG, rGSU, vLow, lsl #1                @ Calculate register
+        add     rR15, rR15, #1                           @ R15++
+        mov     rSREG, rDREG                             @ Copy register to SREG
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        orr     rSTAT, rSTAT, #4096                      @ Set flag B
         b       loop_head                                @ 
+
+@ STW: store word (16 bits)
 handle_fx_stw_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        ldr     r1, [rGSU, #404]                         @ 
-        strh    rR15, [rGSU, #34]                        @ 
-        ldrh    r2, [rSREG]                              @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strb    r2, [r1, rR15]                           @ 
-        eor     rR15, rR15, #1                           @ 
-        lsr     r2, r2, #8                               @ 
-        strb    r2, [r1, rR15]                           @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        lsl     vLow, vLow, #1                           @ Double vLow for 16-bit offset
+        ldrh    rR15, [rGSU, vLow]                       @ Load value into rR15. WYATT_TODO can probably just load into vLow.
+        ldr     r1, [rGSU, #404]                         @ Load GSU RAM pointer
+        strh    rR15, [rGSU, #34]                        @ Store value to GSU.vLastRamAdr
+        ldrh    r2, [rSREG]                              @ Load source data
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strb    r2, [r1, rR15]                           @ Store bottom byte
+        eor     rR15, rR15, #1                           @ Flip bottom bit of storage address
+        lsr     r2, r2, #8                               @ Prep top byte
+        strb    r2, [r1, rR15]                           @ Store top byte
+        ldrh    rR15, [rGSU, #30]                        @ Load R15. WYATT_TODO not necessary.
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        add     rR15, rR15, #1                           @ R15++
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
+
+@ LOOP: decrement loop counter R12 and branch to R13 on not zero
 handle_fx_loop:
-        ldrh    rR15, [rGSU, #24]                        @ 
-        add     rSREG, rGSU, #0                          @ 
-        sub     rR15, rR15, #1                           @ 
-        msr     cpsr_f, rARM                             @ 
-        lsl     rARM, rR15, #16                          @ 
+        ldrh    rR15, [rGSU, #24]                        @ Load counter
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        sub     rR15, rR15, #1                           @ Decrement counter
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsl     rARM, rR15, #16                          @ Shift counter to top half of register and test flags
         movs    rARM, rARM                               @ 
-        mrs     rARM, cpsr                               @ 
-        cmp     rR15, #0                                 @ 
-        strh    rR15, [rGSU, #24]                        @ 
-        ldrheq  rR15, [rGSU, #30]                        @ 
-        ldrhne  rR15, [rGSU, #26]                        @ 
-        addeq   rR15, rR15, #1                           @ 
-        uxtheq  rR15, rR15                               @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        cmp     rR15, #0                                 @ Test counter
+        strh    rR15, [rGSU, #24]                        @ Store counter
+        ldrheq  rR15, [rGSU, #30]                        @ If counter is 0, load R15. WYATT_TODO can probably use move instead of load
+        ldrhne  rR15, [rGSU, #26]                        @ If counter is nonzero, load R13
+        addeq   rR15, rR15, #1                           @ If counter is 0, increment R15
+        uxtheq  rR15, rR15                               @ Wrap R15 at 16 bits. WYATT_TODO unnecessary
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
+
+@ ALT1: set ALT mode 1
 handle_fx_alt1:
-        add     rR15, rR15, #1                           @ 
-        bic     rSTAT, rSTAT, #4096                      @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        orr     rSTAT, rSTAT, #256                       @ 
+        add     rR15, rR15, #1                           @ R15++
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        orr     rSTAT, rSTAT, #256                       @ Set ALT1 flag
         b       loop_head                                @ 
+
+@ ALT2: set ALT mode 2
 handle_fx_alt2:
-        add     rR15, rR15, #1                           @ 
-        bic     rSTAT, rSTAT, #4096                      @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        orr     rSTAT, rSTAT, #512                       @ 
+        add     rR15, rR15, #1                           @ R15++
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        orr     rSTAT, rSTAT, #512                       @ Set ALT2 flag
         b       loop_head                                @ 
+        
+@ ALT3: set ALT mode 3
 handle_fx_alt3:
-        add     rR15, rR15, #1                           @ 
-        bic     rSTAT, rSTAT, #4096                      @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        orr     rSTAT, rSTAT, #768                       @ 
+        add     rR15, rR15, #1                           @ R15++
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        orr     rSTAT, rSTAT, #768                       @ Set ALT1 + ALT2 flags
         b       loop_head                                @ 
 handle_fx_ldw_r:
         lsl     vLow, vLow, #1                           @ 
