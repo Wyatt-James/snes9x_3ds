@@ -322,7 +322,8 @@ struct FxRegs_s
 #define READR14 GSU.vRomBuffer = ROM(R14)
 
 /* Test and/or read R14 */
-#define TESTR14 if(DREG_PTR == 14) READR14
+/* Usually an order of magnitude more likely to not be taken! */
+#define TESTR14 if(UNLIKELY(DREG_PTR == 14)) READR14
 
 #endif
 

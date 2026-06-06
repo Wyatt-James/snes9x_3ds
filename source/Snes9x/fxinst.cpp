@@ -94,7 +94,9 @@ register void* unusedReg asm("lr");
 #undef TESTR14
 #undef CLRFLAGS
 #define CLRFLAGS SFR &= ~(FLG_ALT1|FLG_ALT2|FLG_B); DREG_PTR = SREG_PTR = GETR(0);
-#define TESTR14 if((pvDregLocal) == GETR(14)) READR14
+
+// The else case is usually an order of magnitude more common in aggregate here
+#define TESTR14 if(UNLIKELY((pvDregLocal) == GETR(14))) { READR14; } else {}
 
 // The compiler doesn't realize it can do this, so it loads from memory
 //!!! This relies on the fact that GSU.avReg is at the start of GSU!
