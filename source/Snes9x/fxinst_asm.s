@@ -43,7 +43,7 @@ fx_run_asm:
         ldrb    rPIPE, [rGSU, #62]                       @  |
         add     rSREG, rGSU, rSREG, lsl #1               @  |
         add     rDREG, rGSU, rDREG, lsl #1               @  V
-        strb    r1, [rGSU, #38]                          @ READR14: Store loaded value to GSU.vRomBuffer
+        strb    r1, [rGSU, #38]                          @ READR14: Store ROMBUFFER
         str     r2, [rGOTO, #2352]                       @ Populate GOTO table
         str     r2, [rGOTO, #304]                        @  |
         str     rR15, [rGOTO, #3376]                     @  |
@@ -63,7 +63,7 @@ loop_dispatch:
 handle_fx_getbs:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #30]                        @ Store R15
-        ldrsb   rR15, [rGSU, #38]                        @ R15 = SEX8(GSU.vRomBuffer)
+        ldrsb   rR15, [rGSU, #38]                        @ R15 = SEX8(ROMBUFFER)
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = R0
         strh    rR15, [rDREG]                            @ Store value to DREG
         add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
@@ -697,37 +697,46 @@ handle_fx_bvs:
         strh    rR15, [rGSU, #30]                        @  Store destination to R15
         b       loop_head                                @ 
 
+@ TO: set register n as destination register
+@ move one register to another (if B flag is set)
 handle_fx_to_r:
-        tst     rSTAT, #4096                             @ 
-        addeq   vLow, rGSU, vLow, lsl #1                 @ 
-        beq     .L81                                     @ 
-        ldrh    r2, [rSREG]                              @ 
-        lsl     vLow, vLow, #1                           @ 
-        strh    r2, [rGSU, vLow]                         @ 
-        add     vLow, rGSU, #0                           @ 
-        mov     rSREG, vLow                              @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        tst     rSTAT, #4096                             @ Test B
+        addeq   vLow, rGSU, vLow, lsl #1                 @ Compute register pointer for DREG
+        beq     .L81                                     @ If B is set, only set DREG
+        ldrh    r2, [rSREG]                              @ Load SREG
+        lsl     vLow, vLow, #1                           @ Compute register offset
+        strh    r2, [rGSU, vLow]                         @ Store to vLow
+        add     vLow, rGSU, #0                           @ CLRFLAGS: vLow = 0
+        mov     rSREG, vLow                              @ CLRFLAGS: SREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
 .L81:
-        add     rR15, rR15, #1                           @ 
-        mov     rDREG, vLow                              @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @ R15++
+        mov     rDREG, vLow                              @ CLRFLAGS: DREG = vLow. May be 0 or a reg depending on branch.
+        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
+
+
+@ TO_R14: set register 14 as destination register
+@ If B flag is set, move SREG to R14 and READR14 instead
 handle_fx_to_r14:
-        tst     rSTAT, #4096                             @ 
-        bne     .L241                                    @ 
-        add     rDREG, rGSU, #28                         @ 
+        tst     rSTAT, #4096                             @ Test B
+        bne     .L241                                    @ If B is not set, branch
+        add     rDREG, rGSU, #28                         @ Scratch pointer to R14. WYATT_TODO useless?
 .L84:
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
+
+@ TO_R15: Set register 15 as destination register and increment
+@ If B flag is set, move SREG to R15 instead
 handle_fx_to_r15:
-        tst     rSTAT, #4096                             @ 
-        beq     .L86                                     @ 
-        ldrh    rR15, [rSREG]                            @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        add     rSREG, rGSU, #0                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        mov     rDREG, rSREG                             @ 
+        tst     rSTAT, #4096                             @ Test B
+        beq     .L86                                     @ If B is set, branch
+        ldrh    rR15, [rSREG]                            @ Load SREG into rR15
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         b       loop_head                                @ 
 handle_fx_with:
         add     rDREG, rGSU, vLow, lsl #1                @ 
@@ -1985,20 +1994,20 @@ handle_fx_romb:
         add     rSREG, rGSU, vLow, lsl #1                @ 
         b       loop_head                                @ 
 .L86:
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        add     rDREG, rGSU, #30                         @ 
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        add     rDREG, rGSU, #30                         @ DREG = R15
         b       loop_head                                @ 
 .L241:
-        ldrh    r2, [rSREG]                              @ 
-        ldr     r1, [rGSU, #408]                         @ 
-        strh    r2, [rGSU, #28]                          @ 
-        ldrb    r2, [r1, r2]                             @ 
-        add     rSREG, rGSU, #0                          @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        mov     rDREG, rSREG                             @ 
-        strb    r2, [rGSU, #38]                          @ 
-        b       .L84                                     @ 
+        ldrh    r2, [rSREG]                              @ Load SREG
+        ldr     r1, [rGSU, #408]                         @ READR14: Load GSU.pvRomBank
+        strh    r2, [rGSU, #28]                          @ R14 = SREG
+        ldrb    r2, [r1, r2]                             @ READR14: Load GSU.pvRomBank[R14]
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strb    r2, [rGSU, #38]                          @ READR14: Store ROMBUFFER
+        b       .L84                                     @ Branch back to main handler
 .L237:
         eor     ip, r1, rR15                             @ 
         tst     ip, #1                                   @ 
