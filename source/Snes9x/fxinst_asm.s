@@ -12,6 +12,7 @@
 @ R1 contains GSU.pvPrgBank, for fetching PIPE
 @ R2 contains pipe after interpreter
 @ R3 contains GSU R15 after interpreter
+@ IP contains PIPE after interpreter
 
 @ WYATT_TODO various optimizations:
 @ - Optimize TESTR14. See below
@@ -1797,46 +1798,56 @@ handle_fx_getbh:
         strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
 
-handle_fx_lm_r_common:
-        ldr     rSREG, .L3                               @ 
-        uxtb    rR15, rPIPE                              @ 
-        ldrh    r2, [rSREG, #30]                         @ 
-        ldr     ip, [rSREG, #412]                        @ 
-        add     r1, r2, #1                               @ 
-        strh    rR15, [rSREG, #34]                       @ 
-        uxth    r1, r1                                   @ 
-        ldrb    rPIPE, [ip, r1]                          @ 
-        add     r1, r2, #2                               @ 
-        orr     rR15, rR15, rPIPE, lsl #8                @ 
-        strh    rR15, [rSREG, #34]                       @ 
-        uxth    r1, r1                                   @ 
-        add     r2, r2, #3                               @ 
-        ldrb    rPIPE, [ip, r1]                          @ 
-        strh    r2, [rSREG, #30]                         @ 
-        ldr     r2, [rSREG, #404]                        @ 
-        eor     r1, rR15, #1                             @ 
-        ldrb    r1, [r2, r1]                             @ 
-        ldrb    rR15, [r2, rR15]                         @ 
-        lsl     vLow, vLow, #1                           @ 
-        orr     rR15, rR15, r1, lsl #8                   @ 
-        strh    rR15, [rSREG, vLow]                      @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        add     rSREG, rSREG, #0                         @ 
-        mov     rDREG, rSREG                             @ 
-        bx      lr                                       @ 
-.L3:
-        .word   GSU
-
+@ LM: Load word from RAM and store it in register N. The address is fetched from PIPE.
+@ WYATT_TODO validate me.
 handle_fx_lm_r:
-        bl      handle_fx_lm_r_common                    @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        add     r2, rR15, #1                             @ R15 + 1 into scratch register
+        uxth    r2, r2                                   @ Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        add     r2, rR15, #2                             @ R15 + 2 into scratch register
+        orr     ip, ip, rPIPE, lsl #8                    @ Combine both bytes of destination
+        strh    ip, [rGSU, #34]                          @ Store destination to vLastRamAdr
+        uxth    r2, r2                                   @ Wrap R15 at 16 bits
+        add     rR15, rR15, #3                           @ R15 + 3
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        ldr     rR15, [rGSU, #404]                       @ Load RAM base pointer
+        eor     r2, ip, #1                               @ Flip bottom bit of offset
+        ldrb    r2, [rR15, r2]                           @ Load top half of result
+        ldrb    ip, [rR15, ip]                           @ Load bottom half of result
+        orr     ip, ip, r2, lsl #8                       @ Combine result
+        strh    ip, [rGSU, vLow]                         @ Store result
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         b       loop_head                                @ 
+
+@ LM: Load word from RAM and store it in register N, then READR14. The address is fetched from PIPE.
+@ WYATT_TODO validate me.
 handle_fx_lm_r14:
-        mov     vLow, #14                                @ 
-        bl      handle_fx_lm_r_common                    @ 
-        ldrh    rR15, [rGSU, #28]                        @ 
-        ldr     r2, [rGSU, #408]                         @ 
-        ldrb    rR15, [r2, rR15]                         @ 
-        strb    rR15, [rGSU, #38]                        @ 
+        add     r2, rR15, #1                             @ R15 + 1 into scratch register
+        uxth    r2, r2                                   @ Wrap R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        add     r2, rR15, #2                             @ R15 + 2 into scratch register
+        orr     ip, ip, rPIPE, lsl #8                    @ Combine both bytes of destination
+        strh    ip, [rGSU, #34]                          @ Store destination to vLastRamAdr
+        uxth    r2, r2                                   @ Wrap R15 at 16 bits
+        add     rR15, rR15, #3                           @ R15 + 3
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        ldr     rR15, [rGSU, #404]                       @ Load RAM base pointer
+        eor     r2, ip, #1                               @ Flip bottom bit of offset
+        ldrb    r2, [rR15, r2]                           @ Load top half of result
+        ldrb    ip, [rR15, ip]                           @ Load bottom half of result
+        orr     ip, ip, r2, lsl #8                       @ Combine result
+        strh    ip, [rGSU, #28]                          @ Store result
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
+        ldrb    ip, [r2, ip]                             @ READR14: Load ROM(R14)
+        strb    ip, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
         b       loop_head                                @ 
 handle_fx_add_i:
         ldrh    rARM, [rSREG]                            @ 
