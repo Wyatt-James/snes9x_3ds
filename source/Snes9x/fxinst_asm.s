@@ -9,19 +9,30 @@
 #define rDREG  r10
 #define rGOTO  fp
 
+@ R0 contains vLow
 @ R1 contains GSU.pvPrgBank, for fetching PIPE
 @ R2 contains pipe after interpreter
 @ R3 contains GSU R15 after interpreter
+@ R4 contains the pointer to GSU
+@ R5 contains vCounter, the instruction counter
+@ R6 contains the GSU STAT register
+@ R7 contains the ARM flag register, NZCV flags synchronized with GSU
+@ R8 contains the GSU PIPE register
+@ R9 contains a pointer to the GSU SREG
+@ R10 contains a pointer to the GSU DREG
+@ FP contains a pointer to the instruction dispatch table
 @ IP contains PIPE after interpreter
+@ LR is reserved and must be preserved
 
 @ WYATT_TODO various optimizations:
 @ - Optimize TESTR14. See below
-@ - Fix aliased double-loads
+@ - Fix doubled loads and stores caused by aliasing
 @ - Fix regalloc occasionally reloading R15
 @     If CLRFLAGS is called, we can LDRH rSREG, [rSREG] to save a reg
 @ - Put the GSU struct in its own over-aligned segment. This would allow us to do certain comparisons, notably the one in TESTR14, in one fewer instruction.
 @ - Make a special version of INC and DEC for R15 to save 1 cycle for all other INCs. Might be viable for other instructions too.
 @ - Look into the possibility of avoiding the UXTH instructions in IBT/IWT. Shift to top of reg and load with register lsr 16?
+@ - Move dispatch's pipe duplication to individual instructions
 
 @ Optimize TESTR14. Most TESTR14s are interleaved with CLRFLAGS; only the DREG = 0 part needs to be.
 @ Current:
@@ -92,11 +103,11 @@ fx_run_asm:
         ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
 loop_dispatch:
         ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15
-        ldrb    ip, [r1, rR15]                           @ FETCHPIPE: Load from memory
+        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
         and     vLow, rPIPE, #15                         @ Compute vLow
-        mov     rPIPE, ip                                @ FETCHPIPE: redundant move? WYATT_TODO IP is used but rPIPE might be better.
+        mov     rPIPE, ip                                @ Duplicate PIPE. WYATT_TODO Probably better to move this to the individual instructions.
         ldr     pc, [rGOTO, r2, lsl #2]                  @ Branch to handler
 
 @ GETBS: get sign extended byte from ROM at address R14
