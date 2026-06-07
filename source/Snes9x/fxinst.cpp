@@ -1443,7 +1443,7 @@ static inline void fx_sms_r(uint8 reg) {
     R15++;
     FETCHPIPE;
     RAM(GSU.vLastRamAdr) = (uint8)v;
-    RAM(GSU.vLastRamAdr+1) = (uint8)(v>>8);
+    RAM(GSU.vLastRamAdr+1) = (uint8)(v>>8); // WYATT_TODO double-loads and stores EVERYWHERE.
     CLRFLAGS;
     R15++;
     
