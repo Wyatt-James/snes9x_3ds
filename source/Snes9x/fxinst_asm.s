@@ -9,6 +9,7 @@
 #define rDREG  r10
 #define rGOTO  fp
 
+@ R1 contains GSU.pvPrgBank, for fetching PIPE
 @ R2 contains pipe after interpreter
 @ R3 contains GSU R15 after interpreter
 
@@ -18,6 +19,8 @@
 @ - Fix regalloc occasionally reloading R15
 @     If CLRFLAGS is called, we can LDRH rSREG, [rSREG] to save a reg
 @ - Put the GSU struct in its own over-aligned segment. This would allow us to do certain comparisons, notably the one in TESTR14, in one fewer instruction.
+@ - Make a special version of INC and DEC for R15 to save 1 cycle for all other INCs. Might be viable for other instructions too.
+@ - Look into the possibility of avoiding the UXTH instructions in IBT/IWT. Shift to top of reg and load with register lsr 16?
 
 @ Optimize TESTR14. Most TESTR14s are interleaved with CLRFLAGS; only the DREG = 0 part needs to be.
 @ Current:
@@ -68,10 +71,10 @@ fx_run_asm:
         add     r1, r2, rR15, lsl #3                     @ Compute target address
         ldr     r2, [r2, rR15, lsl #3]                   @ Load plot from the table 
         ldr     rR15, [r1, #4]                           @ Load rpix from the table
-        ldrh    r1, [rGSU, #28]                          @ READR14: Load GSU R14
+        ldrh    r1, [rGSU, #28]                          @ READR14: Load R14
       @ cmp     vLow, #0                                 @ If nInstructions == 0, end. Unreachable.
-        ldr     vLow, [rGSU, #408]                       @ READR14: Load GSU.pvRomBank
-        ldrb    r1, [vLow, r1]                           @ READR14: Load GSU.pvRomBank[R14]
+        ldr     vLow, [rGSU, #408]                       @ READR14: Load ROM base pointer
+        ldrb    r1, [vLow, r1]                           @ READR14: Load ROM(R14)
         ldrb    rSREG, [rGSU, #61]                       @ Load reserved regs
         ldrb    rDREG, [rGSU, #60]                       @  |
         ldrh    rSTAT, [rGSU, #64]                       @  |
@@ -79,7 +82,7 @@ fx_run_asm:
         ldrb    rPIPE, [rGSU, #62]                       @  |
         add     rSREG, rGSU, rSREG, lsl #1               @  |
         add     rDREG, rGSU, rDREG, lsl #1               @  V
-        strb    r1, [rGSU, #38]                          @ READR14: Store ROMBUFFER
+        strb    r1, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
         str     r2, [rGOTO, #2352]                       @ Populate GOTO table
         str     r2, [rGOTO, #304]                        @  |
         str     rR15, [rGOTO, #3376]                     @  |
@@ -133,7 +136,7 @@ loop_end:
 handle_fx_stop:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #30]                        @ Store R15
-        mov     rR15, #0                                 @ GSU.vPlotOptionReg = 0
+        mov     rR15, #0                                 @ plotOptionReg = 0
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
         ldr     r2, [rGSU, #100]                         @ R2 = GSU.pvRegisters[GSU_CFGR]
         bic     rSTAT, rSTAT, #32                        @ CF(G)
@@ -143,7 +146,7 @@ handle_fx_stop:
         orrge   rSTAT, rSTAT, #32768                     @  |
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @  |
-        strb    rR15, [rGSU, #36]                        @ GSU.vPlotOptionReg = 0
+        strb    rR15, [rGSU, #36]                        @ Store plotOptionReg
         b       loop_end                                 @ 
 handle_fx_plot_2bit:
         add     rR15, rR15, #1                           @ 
@@ -879,7 +882,7 @@ handle_fx_swap:
         rev16   rR15, rR15                               @ Byteswap value
         add     r2, rGSU, #28                            @ TESTR14: Pointer to R14
         strh    rR15, [rDREG]                            @ Store value into DREG
-        orr     r1, rR15, rR15, lsl #16                  @ Duplicate value into both halves of a register for flags. Could technically just shift here.
+        orr     r1, rR15, rR15, lsl #16                  @ Duplicate value into both halves of a register for flags. WYATT_TODO could technically just shift here.
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         movs    rARM, r1                                 @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
@@ -895,7 +898,7 @@ handle_fx_swap:
 
 @ COLOR: copy SREG to color register
 handle_fx_color:
-        ldrb    r1, [rGSU, #36]                          @ Load GSU.vPlotOptionReg
+        ldrb    r1, [rGSU, #36]                          @ Load plotOptionReg
         ldrb    r2, [rSREG]                              @ Load color from SREG
         tst     r1, #4                                   @ If plotOptionReg & 0x04, duplicate the high nibble of color to the low nibble
         andne   vLow, r2, #240                           @  |
@@ -907,7 +910,7 @@ handle_fx_color:
         orrne   r2, r1, r2                               @  V
         add     rR15, rR15, #1                           @ R15++
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
-        strb    r2, [rGSU, #37]                          @ Store resulting color to GSU.vColorReg
+        strb    r2, [rGSU, #37]                          @ Store result to GSU.vColorReg
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #30]                        @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -1276,473 +1279,522 @@ handle_fx_from_r:
         ldrbeq  rR15, [r2, rR15]                         @  |
         strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
+
+@ HIB: arithmetic right-shift register by 8, SREG to DREG
 handle_fx_hib:
-        ldrh    rR15, [rSREG]                            @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        lsr     rR15, rR15, #8                           @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        sxtb    r2, rR15                                 @ 
-        add     rR15, rGSU, #28                          @ 
-        msr     cpsr_f, rARM                             @ 
-        movs    rARM, r2                                 @ 
-        mrs     rARM, cpsr                               @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        add     rSREG, rGSU, #0                          @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        mov     rDREG, rSREG                             @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        ldrh    rR15, [rSREG]                            @ Load result from SREG
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        lsr     rR15, rR15, #8                           @ Prep high byte
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        strh    rR15, [rDREG]                            @ Store result
+        sxtb    r2, rR15                                 @ Sign-extend result into scratch register
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        movs    rARM, r2                                 @ Set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strbeq  rR15, [rGSU, #38]                        @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
+
+@ OR: logically OR SREG and register N, store in DREG
 handle_fx_or_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rSREG]                            @ 
-        ldrh    r2, [rGSU, vLow]                         @ 
-        add     rR15, rR15, rR15, lsl #16                @ 
-        add     r2, r2, r2, lsl #16                      @ 
-        msr     cpsr_f, rARM                             @ 
-        orrs    rR15, rR15, r2                           @ 
-        mrs     rARM, cpsr                               @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        add     rSREG, rGSU, #0                          @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        mov     rDREG, rSREG                             @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    rR15, [rSREG]                            @ Load value 1 from SREG
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
+        add     rR15, rR15, rR15, lsl #16                @ Duplicate value into both halves of a register for flags
+        add     r2, r2, r2, lsl #16                      @ Duplicate value into both halves of a register for flags
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        orrs    rR15, rR15, r2                           @ OR and set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        strh    rR15, [rDREG]                            @ Store result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
+
+@ INC: increment a register
 handle_fx_inc_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, vLow]                       @ 
-        msr     cpsr_f, rARM                             @ 
-        lsl     rARM, rR15, #16                          @ 
-        movs    rARM, rARM                               @ 
-        mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        mov     rDREG, rSREG                             @ 
-        add     rR15, rR15, #1                           @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    rR15, [rGSU, vLow]                       @ Load value
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        add     rR15, rR15, #1                           @ Increment value
+        strh    rR15, [rGSU, vLow]                       @ Store result
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsl     rARM, rR15, #16                          @ Set flags
+        movs    rARM, rARM                               @  |
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        ldrh    rR15, [rGSU, #30]                        @ Load R15. Actually has to be reloaded here.
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        add     rR15, rR15, #1                           @ R15++
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
+
+@ INC R14: increment R14 and then READR14
 handle_fx_inc_r14:
-        ldrh    rR15, [rGSU, #28]                        @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        add     rR15, rR15, #1                           @ 
-        add     r2, r2, #1                               @ 
-        msr     cpsr_f, rARM                             @ 
-        lsl     rARM, rR15, #16                          @ 
-        movs    rARM, rARM                               @ 
-        mrs     rARM, cpsr                               @ 
-        uxth    rR15, rR15                               @ 
-        add     rSREG, rGSU, #0                          @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #28]                        @ 
-        strh    r2, [rGSU, #30]                          @ 
-        ldr     r2, [rGSU, #408]                         @ 
-        ldrb    rR15, [r2, rR15]                         @ 
-        strb    rR15, [rGSU, #38]                        @ 
+        ldrh    rR15, [rGSU, #28]                        @ Load value from R14
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        add     rR15, rR15, #1                           @ Increment value
+        add     r2, r2, #1                               @ R15++
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsl     rARM, rR15, #16                          @ Set flags
+        movs    rARM, rARM                               @  |
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, #28]                        @ Store result to R14
+        strh    r2, [rGSU, #30]                          @ Store R15
+        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
+        ldrb    rR15, [r2, rR15]                         @ READR14: Load ROM(R14)
+        strb    rR15, [rGSU, #38]                        @ READR14: Store to ROMBUFFER
         b       loop_head                                @ 
+
+@ GETC: transfer ROMBUFFER to color register
 handle_fx_getc:
-        ldrb    r1, [rGSU, #36]                          @ 
-        ldrb    r2, [rGSU, #38]                          @ 
-        tst     r1, #4                                   @ 
-        andne   vLow, r2, #240                           @ 
-        orrne   r2, vLow, r2, lsr #4                     @ 
-        tst     r1, #8                                   @ 
-        ldrbne  r1, [rGSU, #37]                          @ 
-        andne   r2, r2, #15                              @ 
-        bicne   r1, r1, #15                              @ 
-        orrne   r2, r1, r2                               @ 
-        add     rR15, rR15, #1                           @ 
-        add     rSREG, rGSU, #0                          @ 
-        strb    r2, [rGSU, #37]                          @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        ldrb    r1, [rGSU, #36]                          @ Load plotOptionReg
+        ldrb    r2, [rGSU, #38]                          @ Load ROMBUFFER
+        tst     r1, #4                                   @ If plotOptionReg & 0x04, duplicate the high nibble of color to the low nibble
+        andne   vLow, r2, #240                           @  |
+        orrne   r2, vLow, r2, lsr #4                     @  V
+        tst     r1, #8                                   @ If plotOptionReg & 0x08, only update the bottom nibble
+        ldrbne  r1, [rGSU, #37]                          @  |
+        andne   r2, r2, #15                              @  |
+        bicne   r1, r1, #15                              @  |
+        orrne   r2, r1, r2                               @  V
+        add     rR15, rR15, #1                           @ R15++
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        strb    r2, [rGSU, #37]                          @ Store result to GSU.vColorReg
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
+
+@ DEC: decrement a register
 handle_fx_dec_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        add     rSREG, rGSU, #0                          @ 
-        sub     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, vLow]                       @ 
-        msr     cpsr_f, rARM                             @ 
-        lsl     rARM, rR15, #16                          @ 
-        movs    rARM, rARM                               @ 
-        mrs     rARM, cpsr                               @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        mov     rDREG, rSREG                             @ 
-        add     rR15, rR15, #1                           @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    rR15, [rGSU, vLow]                       @ Load value
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        sub     rR15, rR15, #1                           @ Decrement value
+        strh    rR15, [rGSU, vLow]                       @ Store result
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsl     rARM, rR15, #16                          @ Set flags
+        movs    rARM, rARM                               @  |
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        ldrh    rR15, [rGSU, #30]                        @ Load R15. Actually has to be reloaded here.
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        add     rR15, rR15, #1                           @ R15++
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
+
+@ DEC R14: decrement R14 and then READR14
 handle_fx_dec_r14:
-        ldrh    rR15, [rGSU, #28]                        @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        sub     rR15, rR15, #1                           @ 
-        add     r2, r2, #1                               @ 
-        msr     cpsr_f, rARM                             @ 
-        lsl     rARM, rR15, #16                          @ 
-        movs    rARM, rARM                               @ 
-        mrs     rARM, cpsr                               @ 
-        uxth    rR15, rR15                               @ 
-        add     rSREG, rGSU, #0                          @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #28]                        @ 
-        strh    r2, [rGSU, #30]                          @ 
-        ldr     r2, [rGSU, #408]                         @ 
-        ldrb    rR15, [r2, rR15]                         @ 
-        strb    rR15, [rGSU, #38]                        @ 
+        ldrh    rR15, [rGSU, #28]                        @ Load value from R14
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        sub     rR15, rR15, #1                           @ Decrement value
+        add     r2, r2, #1                               @ R15++
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsl     rARM, rR15, #16                          @ Set flags
+        movs    rARM, rARM                               @  |
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, #28]                        @ Store result to R14
+        strh    r2, [rGSU, #30]                          @ Store R15
+        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
+        ldrb    rR15, [r2, rR15]                         @ READR14: Load ROM(R14)
+        strb    rR15, [rGSU, #38]                        @ READR14: Store to ROMBUFFER
         b       loop_head                                @ 
+
+@ GETB: get byte from ROMBUFFER
 handle_fx_getb:
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldrb    rR15, [rGSU, #38]                        @ 
-        add     rSREG, rGSU, #0                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        mov     rDREG, rSREG                             @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        ldrb    rR15, [rGSU, #38]                        @ Load value from ROMBUFFER
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        strh    rR15, [rDREG]                            @ Store value to DREG
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
+
+@ IWT: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
 handle_fx_iwt_r:
-        add     r2, rR15, #1                             @ 
-        uxth    r2, r2                                   @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        add     r2, rR15, #2                             @ 
-        orr     ip, ip, rPIPE, lsl #8                    @ 
-        lsl     vLow, vLow, #1                           @ 
-        uxth    r2, r2                                   @ 
-        add     rR15, rR15, #3                           @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        add     rSREG, rGSU, #0                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        mov     rDREG, rSREG                             @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strh    ip, [rGSU, vLow]                         @ 
+        add     r2, rR15, #1                             @ R15 + 1 into scratch register
+        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        add     r2, rR15, #2                             @ R15 + 2 into scratch register
+        orr     ip, ip, rPIPE, lsl #8                    @ Combine both PIPEs into result
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
+        add     rR15, rR15, #3                           @ R15 += 3
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE. Value not immediately used.
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strh    ip, [rGSU, vLow]                         @ Store result to register N
         b       loop_head                                @ 
+
+@ IWT R14: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
 handle_fx_iwt_r14:
-        add     r2, rR15, #1                             @ 
-        uxth    r2, r2                                   @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        add     r2, rR15, #2                             @ 
-        orr     ip, ip, rPIPE, lsl #8                    @ 
-        uxth    r2, r2                                   @ 
-        add     rR15, rR15, #3                           @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        add     rSREG, rGSU, #0                          @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    ip, [rGSU, #28]                          @ 
-        ldr     rR15, [rGSU, #408]                       @ 
-        ldrb    rR15, [rR15, ip]                         @ 
-        strb    rR15, [rGSU, #38]                        @ 
+        add     r2, rR15, #1                             @ R15 + 1 into scratch register
+        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        add     r2, rR15, #2                             @ R15 + 2 into scratch register
+        orr     ip, ip, rPIPE, lsl #8                    @ Combine both PIPEs into result
+        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
+        add     rR15, rR15, #3                           @ R15 += 3
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE. Value not immediately used.
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        strh    ip, [rGSU, #28]                          @ Store result to R14
+        ldr     rR15, [rGSU, #408]                       @ READR14: Load ROM base pointer
+        ldrb    rR15, [rR15, ip]                         @ READR14: Load ROM(R14)
+        strb    rR15, [rGSU, #38]                        @ READR14: Store to ROMBUFFER
         b       loop_head                                @ 
+
+@ STB: Store byte in SREG at the RAM location pointed to by register N
 handle_fx_stb_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        ldr     r2, [rGSU, #404]                         @ 
-        strh    rR15, [rGSU, #34]                        @ 
-        ldrh    r1, [rSREG]                              @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strb    r1, [r2, rR15]                           @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        add     rSREG, rGSU, #0                          @ 
-        add     rR15, rR15, #1                           @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    rR15, [rGSU, vLow]                       @ Load destination pointer
+        ldr     r2, [rGSU, #404]                         @ Load RAM base pointer
+        strh    rR15, [rGSU, #34]                        @ Store destination pointer to GSU.vLastRamAdr
+        ldrh    r1, [rSREG]                              @ Load value from SREG
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strb    r1, [r2, rR15]                           @ Store value to RAM(register N)
+        ldrh    rR15, [rGSU, #30]                        @ Load R15. WYATT_TODO unnecessary
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        add     rR15, rR15, #1                           @ R15++
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
+
+@ LDB: Load byte from the RAM location pointed to by register N into DREG
 handle_fx_ldb_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    r2, [rGSU, vLow]                         @ 
-        ldr     r1, [rGSU, #404]                         @ 
-        strh    r2, [rGSU, #34]                          @ 
-        ldrb    r2, [r1, r2]                             @ 
-        add     rR15, rR15, #1                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        strh    r2, [rDREG]                              @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        add     rSREG, rGSU, #0                          @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        mov     rDREG, rSREG                             @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    r2, [rGSU, vLow]                         @ Load source pointer
+        ldr     r1, [rGSU, #404]                         @ Load RAM base pointer
+        strh    r2, [rGSU, #34]                          @ Store source pointer to GSU.vLastRamAdr
+        ldrb    r2, [r1, r2]                             @ Load result
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        strh    r2, [rDREG]                              @ Store result to DREG
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strbeq  rR15, [rGSU, #38]                        @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
+
+@ CMODE: set plot option register to the value in SREG
 handle_fx_cmode:
-        ldrb    rR15, [rSREG]                            @ 
-        tst     rR15, #16                                @ 
-        strb    rR15, [rGSU, #36]                        @ 
-        movne   rR15, #256                               @ 
-        ldreq   rR15, [rGSU, #392]                       @ 
-        str     rR15, [rGSU, #388]                       @ 
-        bl      fx_computeScreenPointers                 @ 
-        add     rSREG, rGSU, #0                          @ 
-        ldrh    rR15, [rGSU, #30]                        @ 
-        mov     rDREG, rSREG                             @ 
-        add     rR15, rR15, #1                           @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strh    rR15, [rGSU, #30]                        @ 
+        ldrb    rR15, [rSREG]                            @ Load result in SREG
+        tst     rR15, #16                                @ Test plotOptionReg for screenHeight
+        strb    rR15, [rGSU, #36]                        @ Store result
+        movne   rR15, #256                               @ If plotOptionReg & 0x10, fake screenHeight as 256
+        ldreq   rR15, [rGSU, #392]                       @ Else, set screenHeight to its real height
+        str     rR15, [rGSU, #388]                       @ Store screenHeight
+        bl      fx_computeScreenPointers                 @ Recompute screen ptrs. WYATT_TODO if regs are changed, be careful!
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldrh    rR15, [rGSU, #30]                        @ Load R15. WYATT_TODO can be moved above computeScreenPointers
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        add     rR15, rR15, #1                           @ R15++
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
+
+@ ADC: add-with-carry, SREG + register N, store in DREG
 handle_fx_adc_r:
-        ldrh    r2, [rGSU, #30]                          @ 
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    r1, [rSREG]                              @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        add     r2, r2, #1                               @ 
-        msr     cpsr_f, rARM                             @ 
-        lsl     rARM, r1, #16                            @ 
-        orrcs   rARM, rARM, #32768                       @ 
-        orrcs   rR15, rR15, #-2147483648                 @ 
-        adds    rR15, rARM, rR15, ror #16                @ 
-        mrs     rARM, cpsr                               @ 
-        lsr     rR15, rR15, #16                          @ 
-        strh    r2, [rGSU, #30]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        add     rSREG, rGSU, #0                          @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        mov     rDREG, rSREG                             @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
+        ldrh    rR15, [rGSU, vLow]                       @ Load value 2 from register N
+        add     r2, r2, #1                               @ R15++
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsl     rARM, r1, #16                            @ Shift value 1 into the upper half of the register
+        orrcs   rARM, rARM, #32768                       @ Move carry flag into value 1
+        orrcs   rR15, rR15, #-2147483648                 @ Move carry flag into value 2
+        adds    rR15, rARM, rR15, ror #16                @ Add the values and set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        lsr     rR15, rR15, #16                          @ Shift result into bottom half of register
+        strh    r2, [rGSU, #30]                          @ Store R15
+        strh    rR15, [rDREG]                            @ Store result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strbeq  rR15, [rGSU, #38]                        @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
+
+@ SBC: subtract-with-carry, SREG - register N, store in DREG
 handle_fx_sbc_r:
-        ldrh    rR15, [rSREG]                            @ 
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    r2, [rGSU, vLow]                         @ 
-        lsl     rR15, rR15, #16                          @ 
-        msr     cpsr_f, rARM                             @ 
-        sbcs    rR15, rR15, r2, lsl #16                  @ 
-        mrs     rARM, cpsr                               @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        lsrs    rR15, rR15, #16                          @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        orreq   rARM, rARM, #1073741824                  @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        add     rSREG, rGSU, #0                          @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        mov     rDREG, rSREG                             @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
+        ldrh    rR15, [rSREG]                            @ Load value 1
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2
+        lsl     rR15, rR15, #16                          @ Shift value 1 into top half of register
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        sbcs    rR15, rR15, r2, lsl #16                  @ Do the subtract-with-carry
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        lsrs    rR15, rR15, #16                          @ Shift result into bottom half of register and set flags
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        orreq   rARM, rARM, #1073741824                  @ If the result is 0, set the Z flag
+        strh    rR15, [rDREG]                            @ Store the result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strbeq  rR15, [rGSU, #38]                        @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
+
+@ BIC: DREG = SREG & ~register N
 handle_fx_bic_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rSREG]                            @ 
-        ldrh    r2, [rGSU, vLow]                         @ 
-        add     rR15, rR15, rR15, lsl #16                @ 
-        add     r2, r2, r2, lsl #16                      @ 
-        msr     cpsr_f, rARM                             @ 
-        bics    rR15, rR15, r2                           @ 
-        mrs     rARM, cpsr                               @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        add     rSREG, rGSU, #0                          @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        mov     rDREG, rSREG                             @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    rR15, [rSREG]                            @ Load value 1
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2
+        add     rR15, rR15, rR15, lsl #16                @ Duplicate value 1 into both halves of a register for flags.
+        add     r2, r2, r2, lsl #16                      @ Duplicate value 2 into both halves of a register for flags.
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        bics    rR15, rR15, r2                           @ Bit clear and set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        strh    rR15, [rDREG]                            @ Store result to DREG
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
+
+@ UMULT: 8-bit to 16-bit unsigned multiply, SREG * register N, stored in DREG
 handle_fx_umult_r:
-        ldrb    rR15, [rSREG]                            @ 
-        ldrb    r2, [rGSU, vLow, lsl #1]                 @ 
-        add     rSREG, rGSU, #0                          @ 
-        smulbb  rR15, rR15, r2                           @ 
-        msr     cpsr_f, rARM                             @ 
-        lsl     rARM, rR15, #16                          @ 
-        movs    rARM, rARM                               @ 
-        mrs     rARM, cpsr                               @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        mov     rDREG, rSREG                             @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        ldrb    rR15, [rSREG]                            @ Load value 1
+        ldrb    r2, [rGSU, vLow, lsl #1]                 @ Load value 2
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        smulbb  rR15, rR15, r2                           @ Multiply
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        lsl     rARM, rR15, #16                          @ Shift result to top of register
+        movs    rARM, rARM                               @ Set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        strh    rR15, [rDREG]                            @ Store result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
+
+@ DIV2: Divides SREG by 2 and stores in DREG
 handle_fx_div2:
-        ldrh    rR15, [rSREG]                            @ 
-        ldrh    r2, [rGSU, #58]                          @ 
-        add     rSREG, rGSU, #0                          @ 
-        cmp     r2, rR15                                 @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        moveq   rR15, #1                                 @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        sxthne  rR15, rR15                               @ 
-        msr     cpsr_f, rARM                             @ 
-        asrs    rR15, rR15, #1                           @ 
-        mrs     rARM, cpsr                               @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        mov     rDREG, rSREG                             @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        ldrh    rR15, [rSREG]                            @ Load value
+        ldrh    r2, [rGSU, #58]                          @ Load 0xFFFF
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        cmp     r2, rR15                                 @ Compare value to 0xFFFF
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        moveq   rR15, #1                                 @ If value == 0xFFFF, set value to 1
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        sxthne  rR15, rR15                               @ Sign-extend value
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        asrs    rR15, rR15, #1                           @ Divide value by 2 with ASR
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        strh    rR15, [rDREG]                            @ Store result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
+
+@ LJMP: set program bank to register N and jump to SREG
 handle_fx_ljmp_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rGSU, vLow]                       @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        and     rR15, rR15, #127                         @ 
-        strb    rR15, [rGSU, #39]                        @ 
-        add     rR15, rR15, #108                         @ 
-        ldr     rR15, [rGSU, rR15, lsl #2]               @ 
-        ldrh    r2, [rSREG]                              @ 
-        str     rR15, [rGSU, #412]                       @ 
-        mov     rR15, #0                                 @ 
-        add     rSREG, rGSU, #0                          @ 
-        str     rR15, [rGSU, #72]                        @ 
-        mov     rR15, #1                                 @ 
-        strb    rR15, [rGSU, #1456]                      @ 
-        bic     rR15, r2, #15                            @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, #32]                        @ 
-        strh    r2, [rGSU, #30]                          @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    rR15, [rGSU, vLow]                       @ Load bank
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        and     rR15, rR15, #127                         @ AND bank to 7-bit
+        strb    rR15, [rGSU, #39]                        @ Store bank to GSU.vPrgBankReg 
+        add     rR15, rR15, #108                         @ Offset magic for apvRomBank
+        ldr     rR15, [rGSU, rR15, lsl #2]               @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
+        ldrh    r2, [rSREG]                              @ Load destination
+        str     rR15, [rGSU, #412]                       @ Store GSU.pvPrgBank pointer
+        mov     rR15, #0                                 @ GSU.vCacheFlags = 0
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        str     rR15, [rGSU, #72]                        @ GSU.vCacheFlags = 0
+        mov     rR15, #1                                 @ Enable cache
+        strb    rR15, [rGSU, #1456]                      @  |
+        bic     rR15, r2, #15                            @ R15 & 0xfff0
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, #32]                        @ GSU.vCacheBaseReg = R15 & 0xfff0
+        strh    r2, [rGSU, #30]                          @ Store destination to R15
         b       loop_head                                @ 
+
+@ LMULT: 16-bit to 32-bit signed multiplication SREG * R6, low result in R4, then high result in DREG.
 handle_fx_lmult:
-        ldrh    rR15, [rSREG]                            @ 
-        ldrh    r2, [rGSU, #12]                          @ 
-        add     rSREG, rGSU, #0                          @ 
-        smulbb  rR15, rR15, r2                           @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        strh    rR15, [rGSU, #8]                         @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        msr     cpsr_f, rARM                             @ 
-        asrs    rR15, rR15, #16                          @ 
-        mrs     rARM, cpsr                               @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        mov     rDREG, rSREG                             @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        ldrh    rR15, [rSREG]                            @ Load value 1
+        ldrh    r2, [rGSU, #12]                          @ Load value 2
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        smulbb  rR15, rR15, r2                           @ Multiply
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        strh    rR15, [rGSU, #8]                         @ Store low result
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        asrs    rR15, rR15, #16                          @ Set flags and shift high result down
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        strh    rR15, [rDREG]                            @ Store high result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
+
+@ LMS: load word from RAM (short address), store in register N
+@ WYATT_TODO would this be better with a bespoke R15 version?
 handle_fx_lms_r:
-        lsl     ip, ip, #1                               @ 
-        add     r2, rR15, #1                             @ 
-        strh    ip, [rGSU, #34]                          @ 
-        uxth    r2, r2                                   @ 
-        add     rR15, rR15, #2                           @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldr     rR15, [rGSU, #404]                       @ 
-        add     r2, ip, #1                               @ 
-        ldrb    r2, [rR15, r2]                           @ 
-        ldrb    rR15, [rR15, ip]                         @ 
-        lsl     vLow, vLow, #1                           @ 
-        orr     rR15, rR15, r2, lsl #8                   @ 
-        add     rSREG, rGSU, #0                          @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        mov     rDREG, rSREG                             @ 
-        strh    rR15, [rGSU, vLow]                       @ 
+        lsl     ip, ip, #1                               @ Shift PIPE left 1
+        add     r2, rR15, #1                             @ R15++ into scratch register
+        strh    ip, [rGSU, #34]                          @ Store shifted pipe GSU.vLastRamAdr
+        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
+        add     rR15, rR15, #2                           @ R15 + 2
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        ldr     rR15, [rGSU, #404]                       @ Load RAM base pointer
+        add     r2, ip, #1                               @ GSU.vLastRamAdr + 1
+        ldrb    r2, [rR15, r2]                           @ Load upper byte
+        ldrb    rR15, [rR15, ip]                         @ Load lower byte
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        orr     rR15, rR15, r2, lsl #8                   @ Combine both bytes
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    rR15, [rGSU, vLow]                       @ Store result
         b       loop_head                                @ 
+        
+@ LMS: load word from RAM (short address), store in register 14, then READR14
 handle_fx_lms_r14:
-        lsl     ip, ip, #1                               @ 
-        add     r2, rR15, #1                             @ 
-        strh    ip, [rGSU, #34]                          @ 
-        uxth    r2, r2                                   @ 
-        add     rR15, rR15, #2                           @ 
-        ldrb    rPIPE, [r1, r2]                          @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldr     rR15, [rGSU, #404]                       @ 
-        add     r2, ip, #1                               @ 
-        ldrb    r2, [rR15, r2]                           @ 
-        ldrb    rR15, [rR15, ip]                         @ 
-        add     rSREG, rGSU, #0                          @ 
-        orr     rR15, rR15, r2, lsl #8                   @ 
-        mov     rDREG, rSREG                             @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strh    rR15, [rGSU, #28]                        @ 
-        ldr     r2, [rGSU, #408]                         @ 
-        ldrb    rR15, [r2, rR15]                         @ 
-        strb    rR15, [rGSU, #38]                        @ 
+        lsl     ip, ip, #1                               @ Shift PIPE left 1
+        add     r2, rR15, #1                             @ R15++ into scratch register
+        strh    ip, [rGSU, #34]                          @ Store shifted pipe GSU.vLastRamAdr
+        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
+        add     rR15, rR15, #2                           @ R15 + 2
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        strh    rR15, [rGSU, #30]                        @ Store R15 + 2
+        ldr     rR15, [rGSU, #404]                       @ Load RAM base pointer
+        add     r2, ip, #1                               @ GSU.vLastRamAdr + 1
+        ldrb    r2, [rR15, r2]                           @ Load upper byte
+        ldrb    rR15, [rR15, ip]                         @ Load lower byte
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        orr     rR15, rR15, r2, lsl #8                   @ Combine both bytes
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strh    rR15, [rGSU, #28]                        @ Store result in R14
+        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
+        ldrb    rR15, [r2, rR15]                         @ READR14: Load ROM(R14)
+        strb    rR15, [rGSU, #38]                        @ READR14: Store to ROMBUFFER
         b       loop_head                                @ 
+
+@ XOR: exclusive OR between SREG and register N, stored in DREG
 handle_fx_xor_r:
-        lsl     vLow, vLow, #1                           @ 
-        ldrh    rR15, [rSREG]                            @ 
-        ldrh    r2, [rGSU, vLow]                         @ 
-        add     rR15, rR15, rR15, lsl #16                @ 
-        add     r2, r2, r2, lsl #16                      @ 
-        msr     cpsr_f, rARM                             @ 
-        eors    rR15, rR15, r2                           @ 
-        mrs     rARM, cpsr                               @ 
-        ldrh    r2, [rGSU, #30]                          @ 
-        add     rSREG, rGSU, #0                          @ 
-        add     r2, r2, #1                               @ 
-        strh    r2, [rGSU, #30]                          @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        mov     rDREG, rSREG                             @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrh    rR15, [rSREG]                            @ Load value 1
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2
+        add     rR15, rR15, rR15, lsl #16                @ Duplicate value 1 into both halves of a register
+        add     r2, r2, r2, lsl #16                      @ Duplicate value 2 into both halves of a register
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        eors    rR15, rR15, r2                           @ XOR and set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        add     r2, r2, #1                               @ R15++
+        strh    r2, [rGSU, #30]                          @ Store R15
+        strh    rR15, [rDREG]                            @ Store result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
+
+@ GETBH: Overwrite the high byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbh:
-        add     r2, rR15, #1                             @ 
-        ldrb    rR15, [rSREG]                            @ 
-        strh    r2, [rGSU, #30]                          @ 
-        ldrb    r2, [rGSU, #38]                          @ 
-        add     rSREG, rGSU, #0                          @ 
-        orr     rR15, rR15, r2, lsl #8                   @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        mov     rDREG, rSREG                             @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        add     r2, rR15, #1                             @ R15++
+        ldrb    rR15, [rSREG]                            @ Load SREG bottom byte
+        strh    r2, [rGSU, #30]                          @ Store R15
+        ldrb    r2, [rGSU, #38]                          @ Load ROMBUFFER
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        orr     rR15, rR15, r2, lsl #8                   @ Combine both sources
+        strh    rR15, [rDREG]                            @ Store result
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
 
 handle_fx_lm_r_common:
