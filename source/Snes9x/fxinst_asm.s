@@ -757,21 +757,21 @@ handle_fx_to_r:
 
 
 @ TO_R14: set register 14 as destination register
-@ If B flag is set, move SREG to R14 and READR14 instead
+@ If B flag is set, move SREG to R14, CLRFLAGS, and READR14 instead
 handle_fx_to_r14:
         tst     rSTAT, #4096                             @ Test B
-        bne     handle_fx_to_r14.b_is_not_set                    @ If B is not set, branch
-        add     rDREG, rGSU, #28                         @ Scratch pointer to R14. WYATT_TODO useless?
+        bne     handle_fx_to_r14.b_is_set                @ If B is set, branch
+        add     rDREG, rGSU, #28                         @ Else, DREG = R14
 .L84:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
 
-@ TO_R15: Set register 15 as destination register and increment
+@ TO_R15: Set DREG to R15 and increment R15
 @ If B flag is set, move SREG to R15 instead
 handle_fx_to_r15:
         tst     rSTAT, #4096                             @ Test B
-        beq     handle_fx_to_r15.b_is_set                @ If B is set, branch
+        beq     handle_fx_to_r15.b_is_not_set            @ If B is not set, branch (no return)
         ldrh    rR15, [rSREG]                            @ Load SREG into rR15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
@@ -1252,9 +1252,9 @@ handle_fx_ibt_r14:
         strb    rR15, [rGSU, #38]                        @ READR14: Store to ROMBUFFER
         b       loop_head                                @ 
 
-@ FROM: Set SREG
-@ If B flag is set, instead move the value of register N to DREG and set flags
-@ B usually isn't set. WYATT_TODO invert the branch.
+@ FROM: Set SREG to register N
+@ If B flag is set, move register N to DREG and set flags instead
+@ B is unlikely. WYATT_TODO invert the branch.
 handle_fx_from_r:
         tst     rSTAT, #4096                             @ Test B flag
         beq     handle_fx_from_r.b_is_not_set            @ If B is not set, just set SREG and increment R15
@@ -2181,13 +2181,15 @@ handle_fx_from_r.b_is_not_set:
         add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
         b       loop_head                                @ 
 
-handle_fx_to_r15.b_is_set:
+If B flag is not set, set DREG to R15 and increment R15
+handle_fx_to_r15.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #30]                        @ Store R15
         add     rDREG, rGSU, #30                         @ DREG = R15
         b       loop_head                                @ 
 
-handle_fx_to_r14.b_is_not_set:
+@ If B flag is set, move SREG to R14, CLRFLAGS, and READR14
+handle_fx_to_r14.b_is_set:
         ldrh    r2, [rSREG]                              @ Load SREG
         ldr     r1, [rGSU, #408]                         @ READR14: Load GSU.pvRomBank
         strh    r2, [rGSU, #28]                          @ R14 = SREG
