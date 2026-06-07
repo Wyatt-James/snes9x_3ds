@@ -2204,7 +2204,7 @@ handle_fx_from_r.b_is_not_set:
         add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
         b       loop_head                                @ 
 
-If B flag is not set, set DREG to R15 and increment R15
+@ If B flag is not set, set DREG to R15 and increment R15
 handle_fx_to_r15.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #30]                        @ Store R15
