@@ -160,6 +160,8 @@ handle_fx_stop:
         bic     rSTAT, rSTAT, #4864                      @  |
         strb    rR15, [rGSU, #36]                        @ Store plotOptionReg
         b       loop_end                                 @ 
+
+@ PLOT 2BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_2bit:
         add     rR15, rR15, #1                           @ 
         ldrh    r1, [rGSU, #2]                           @ 
@@ -215,6 +217,8 @@ handle_fx_plot_2bit:
         biceq   rR15, rR15, ip                           @ 
         strb    rR15, [r2, #1]                           @ 
         b       loop_head                                @ 
+
+@ RPIX 2BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_2bit:
         add     rR15, rR15, #1                           @ 
         ldr     r2, [rGSU, #388]                         @ 
@@ -262,6 +266,8 @@ handle_fx_rpix_2bit:
         ldrbeq  rR15, [r2, rR15]                         @ 
         strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
+
+@ PLOT 4BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_4bit:
         add     rR15, rR15, #1                           @ 
         ldr     r2, [rGSU, #388]                         @ 
@@ -330,6 +336,8 @@ handle_fx_plot_4bit:
         biceq   rR15, r2, rR15                           @ 
         strb    rR15, [r1, #17]                          @ 
         b       loop_head                                @ 
+
+@ RPIX 4BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_4bit:
         add     r2, rGSU, #0                             @ 
         mov     rSREG, r2                                @ 
@@ -384,6 +392,8 @@ handle_fx_rpix_4bit:
         ldrbeq  rR15, [r2, rR15]                         @ 
         strbeq  rR15, [rGSU, #38]                        @ 
         b       loop_head                                @ 
+
+@ PLOT 8BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_8bit:
         add     rR15, rR15, #1                           @ 
         ldrh    r2, [rGSU, #2]                           @ 
@@ -474,6 +484,8 @@ handle_fx_plot_8bit:
         biceq   r2, r1, r2                               @ 
         strb    r2, [rR15, #49]                          @ 
         b       loop_head                                @ 
+
+@ RPIX 8BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_8bit:
         add     rR15, rR15, #1                           @ 
         ldrb    r1, [rGSU, #4]                           @ 
