@@ -166,7 +166,7 @@ handle_fx_plot_2bit:
         ldrb    r2, [rGSU, #37]                          @ 
         tst     vLow, #2                                 @ 
         uxtb    r1, r1                                   @ 
-        bne     .L237                                    @ 
+        bne     handle_fx_plot_2bit.L237                 @ 
 .L15:
         and     ip, r2, #15                              @ 
 .L17:
@@ -268,7 +268,7 @@ handle_fx_plot_4bit:
         ldrb    r2, [rGSU, #37]                          @ 
         tst     vLow, #2                                 @ 
         uxtb    rR15, rR15                               @ 
-        bne     .L238                                    @ 
+        bne     handle_fx_plot_4bit.L238                 @ 
 .L25:
         and     ip, r2, #15                              @ 
 .L27:
@@ -390,7 +390,7 @@ handle_fx_plot_8bit:
         tst     r1, #16                                  @ 
         and     vLow, r1, #1                             @ 
         ldrb    r1, [rGSU, #37]                          @ 
-        beq     .L239                                    @ 
+        beq     handle_fx_plot_8bit.L239                 @ 
         orrs    vLow, r1, vLow                           @ 
         beq     loop_head                                @ 
 .L40:
@@ -760,7 +760,7 @@ handle_fx_to_r:
 @ If B flag is set, move SREG to R14 and READR14 instead
 handle_fx_to_r14:
         tst     rSTAT, #4096                             @ Test B
-        bne     .L241                                    @ If B is not set, branch
+        bne     handle_fx_to_r14.b_is_not_set                    @ If B is not set, branch
         add     rDREG, rGSU, #28                         @ Scratch pointer to R14. WYATT_TODO useless?
 .L84:
         add     rR15, rR15, #1                           @ R15++
@@ -771,7 +771,7 @@ handle_fx_to_r14:
 @ If B flag is set, move SREG to R15 instead
 handle_fx_to_r15:
         tst     rSTAT, #4096                             @ Test B
-        beq     .L86                                     @ If B is set, branch
+        beq     handle_fx_to_r15.b_is_set                @ If B is set, branch
         ldrh    rR15, [rSREG]                            @ Load SREG into rR15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
@@ -2180,12 +2180,14 @@ handle_fx_from_r.b_is_not_set:
         strh    rR15, [rGSU, #30]                        @ Store R15
         add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
         b       loop_head                                @ 
-.L86:
+
+handle_fx_to_r15.b_is_set:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #30]                        @ Store R15
         add     rDREG, rGSU, #30                         @ DREG = R15
         b       loop_head                                @ 
-.L241:
+
+handle_fx_to_r14.b_is_not_set:
         ldrh    r2, [rSREG]                              @ Load SREG
         ldr     r1, [rGSU, #408]                         @ READR14: Load GSU.pvRomBank
         strh    r2, [rGSU, #28]                          @ R14 = SREG
@@ -2195,19 +2197,24 @@ handle_fx_from_r.b_is_not_set:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #38]                          @ READR14: Store ROMBUFFER
         b       .L84                                     @ Branch back to main handler
-.L237:
+
+handle_fx_plot_2bit.L237:
         eor     ip, r1, rR15                             @ 
         tst     ip, #1                                   @ 
         lsrne   r2, r2, #4                               @ 
         movne   ip, r2                                   @ 
         bne     .L17                                     @ 
         b       .L15                                     @ 
-.L239:
+
+
+handle_fx_plot_8bit.L239:
         and     ip, r1, #15                              @ 
         orrs    vLow, vLow, ip                           @ 
         bne     .L40                                     @ 
         b       loop_head                                @ 
-.L238:
+
+
+handle_fx_plot_4bit.L238:
         eor     ip, rR15, r1                             @ 
         tst     ip, #1                                   @ 
         lsrne   r2, r2, #4                               @ 
