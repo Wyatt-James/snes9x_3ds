@@ -172,7 +172,7 @@ handle_fx_plot_2bit:
         ldrb    rR15, [rGSU, #4]                         @ Load Y
         cmp     rR15, r2                                 @ Test Y > screen height
         add     r2, r1, #1                               @ X++
-        strh    r2, [rGSU, #2]                           @ Store incremented R1
+        strh    r2, [rGSU, #2]                           @  |
         bcs     handle_fx_plot_4bit.return               @ If Y > screen height, return
         ldrb    vLow, [rGSU, #36]                        @ Load vPlotOptionReg
         ldrb    r2, [rGSU, #37]                          @ Load vColorReg
@@ -279,7 +279,7 @@ handle_fx_plot_4bit:
         ldrb    rR15, [rGSU, #4]                         @ Load Y
         cmp     rR15, r2                                 @ Test Y > screen height
         add     r2, r1, #1                               @ X++
-        strh    r2, [rGSU, #2]                           @ Store incremented R1
+        strh    r2, [rGSU, #2]                           @  |
         bcs     handle_fx_plot_4bit.return               @ If Y > screen height, return
         ldrb    vLow, [rGSU, #36]                        @ Load vPlotOptionReg
         ldrb    r2, [rGSU, #37]                          @ Load vColorReg
