@@ -572,13 +572,13 @@ static inline void fx_plot_4bit(uint8 unused)
     if(y >= GSU.vScreenHeight) return;
 #endif
 
-    if(GSU.vPlotOptionReg & 0x02)
-	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg;
+    if(GSU.vPlotOptionReg & 0x02) // Likelihood depends on game
+	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg; // About even chance
     else
 	    c = GSU.vColorReg;
 
-    // Avoid overwriting transparent pixels? Seems like just an optimization
-    if( !((GSU.vPlotOptionReg & 0x01) || (c & 0xf)))
+    // Alpha cutout mode
+    if( !((GSU.vPlotOptionReg & 0x01) || (c & 0xf))) // Unlikely
         return;
 
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
@@ -644,8 +644,8 @@ static inline void fx_plot_8bit(uint8 unused)
 
     c = GSU.vColorReg;
     
-    if( !(GSU.vPlotOptionReg & 0x10) ) {
-	    if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf))
+    if( !(GSU.vPlotOptionReg & 0x10) ) { // Likely (star fox map)
+	    if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf)) // Unlikely (star fox map)
             return;
     }
     else
