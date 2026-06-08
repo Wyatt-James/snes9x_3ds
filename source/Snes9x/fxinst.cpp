@@ -500,12 +500,13 @@ static inline void fx_plot_2bit(uint8 unused)
 	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg;
     else
 	    c = GSU.vColorReg;
-    
+
+    // Avoid overwriting transparent pixels? Seems like just an optimization
     if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf)) 
         return;
 
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    uint32 v = 128 >> (x&7);
+    uint32 v = 128 >> (x&7); // WYATT_TODO should be 128U
 
     if(c & 0x01) a[0] |= v;
     else         a[0] &= ~v;
@@ -565,7 +566,7 @@ static inline void fx_plot_4bit(uint8 unused)
     R15++;
     CLRFLAGS;
     R1++;
-    
+
 #ifdef CHECK_LIMITS
     if(y >= GSU.vScreenHeight) return;
 #endif
@@ -575,11 +576,12 @@ static inline void fx_plot_4bit(uint8 unused)
     else
 	    c = GSU.vColorReg;
 
-    if( !(GSU.vPlotOptionReg & 0x01) && !(c & 0xf))
+    // Avoid overwriting transparent pixels? Seems like just an optimization
+    if( !((GSU.vPlotOptionReg & 0x01) || (c & 0xf)))
         return;
 
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    uint32 v = 128 >> (x&7);
+    uint32 v = 128 >> (x&7); // WYATT_TODO should be 128U
 
     if(c & 0x01) a[0x00] |= v;
     else         a[0x00] &= ~v;
