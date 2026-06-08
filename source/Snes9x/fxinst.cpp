@@ -516,6 +516,7 @@ static inline void fx_plot_2bit(uint8 unused)
     DEFEAT_TAIL_MERGE;
 }
 
+// WYATT_TODO(1 << shift) should be an immediate instead
 #define TESTBIT(offset_, shift_)   \
 asm (                              \
     "tst %1, %2\n\t"               \
@@ -527,7 +528,6 @@ asm (                              \
       "r" (1)                      \
     : "cc"                         \
 )
-
 /* 2c(ALT1) - rpix - read color of the pixel with R1,R2 as x,y */
 static inline void fx_rpix_2bit(uint8 unused)
 {
@@ -537,7 +537,6 @@ static inline void fx_rpix_2bit(uint8 unused)
     uint8 v;
 
     R15++;
-    CLRFLAGS;
 
 #ifdef CHECK_LIMITS
     if(y >= GSU.vScreenHeight) return;
@@ -550,7 +549,9 @@ static inline void fx_rpix_2bit(uint8 unused)
     TESTBIT(0, 0);
     TESTBIT(1, 1);
     DREG = dReg;
+
     TESTR14;
+    CLRFLAGS;
 
     DEFEAT_TAIL_MERGE;
 }
@@ -604,7 +605,6 @@ static inline void fx_rpix_4bit(uint8 unused)
     uint8 v;
 
     R15++;
-    CLRFLAGS;
 
 #ifdef CHECK_LIMITS
     if(y >= GSU.vScreenHeight) return;
@@ -619,7 +619,9 @@ static inline void fx_rpix_4bit(uint8 unused)
     TESTBIT(0x10, 2);
     TESTBIT(0x11, 3);
     DREG = dReg;
+
     TESTR14;
+    CLRFLAGS;
 
     DEFEAT_TAIL_MERGE;
 }
@@ -682,7 +684,6 @@ static inline void fx_rpix_8bit(uint8 unused)
     uint8 v;
 
     R15++;
-    CLRFLAGS;
 
 #ifdef CHECK_LIMITS
     if(y >= GSU.vScreenHeight) return;
@@ -703,7 +704,9 @@ static inline void fx_rpix_8bit(uint8 unused)
 
     ARMFLAGS &= ~ARM_ZERO;
     if (USEX16(DREG) == 0) ARMFLAGS |= ARM_ZERO;
+    
     TESTR14;
+    CLRFLAGS;
 
     DEFEAT_TAIL_MERGE;
 }
