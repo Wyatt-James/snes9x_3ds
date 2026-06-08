@@ -2201,12 +2201,14 @@ handle_fx_to_r14.b_is_set:
         b       .L84                                     @ Branch back to main handler
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
+@ Inlining this or not is a bit of a tossup
 handle_fx_plot_2bit.L237:
         eor     ip, r1, rR15                             @ X ^ Y
         tst     ip, #1                                   @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L15                                     @ 
 
+@ If !((plotOptionReg & 1) || (color & 0xf))
 handle_fx_plot_8bit.L239:
         and     ip, r1, #15                              @ 
         orrs    vLow, vLow, ip                           @ 
@@ -2214,6 +2216,7 @@ handle_fx_plot_8bit.L239:
         b       loop_head                                @ 
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
+@ Inlining this or not is a bit of a tossup
 handle_fx_plot_4bit.L238:
         eor     ip, r1, rR15                             @ X ^ Y
         tst     ip, #1                                   @ Test if odd
