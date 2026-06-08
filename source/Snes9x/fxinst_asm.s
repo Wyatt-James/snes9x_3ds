@@ -206,7 +206,7 @@ handle_fx_plot_2bit:
         @ R1 is free
         @ R2 is color
         @ rR15 is pixel 0 Pointer
-        @ IP is the pixel modifier
+        @ IP is the pixel mask
 
         ldrb    vLow, [rR15, #0]                         @ Load pixel 0
         tst     r2, #1                                   @ Pixel conditional
@@ -223,52 +223,41 @@ handle_fx_plot_2bit:
 
 @ RPIX 2BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_2bit:
-        add     rR15, rR15, #1                           @ 
-        ldr     r2, [rGSU, #388]                         @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldrb    rR15, [rGSU, #4]                         @ 
-        add     r1, rGSU, #0                             @ 
-        cmp     rR15, r2                                 @ 
-        mov     rSREG, r1                                @ 
-        mov     rDREG, r1                                @ 
-        ldrh    r2, [rGSU, #2]                           @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        bcs     loop_head                                @ 
-        mov     vLow, #128                               @ 
-        uxtb    r2, r2                                   @ 
-        lsr     ip, r2, #3                               @ 
-        and     r2, r2, #7                               @ 
-        asr     vLow, vLow, r2                           @ 
-        uxtb    r2, vLow                                 @ 
-        add     ip, rGSU, ip, lsl #2                     @ 
-        lsr     vLow, rR15, #3                           @ 
-        ldr     ip, [ip, #260]                           @ 
-        add     vLow, rGSU, vLow, lsl #2                 @ 
-        lsl     rR15, rR15, #1                           @ 
-        ldr     vLow, [vLow, #132]                       @ 
-        and     rR15, rR15, #14                          @ 
-        add     rR15, rR15, ip                           @ 
-        add     ip, vLow, rR15                           @ 
-        ldrb    vLow, [vLow, rR15]                       @ 
-        ldrb    rR15, [ip, #1]                           @ 
-        str     r2, [sp]                                 @ 
-        str     rR15, [sp, #4]                           @ 
-        ldr     ip, [sp]                                 @ 
-        mov     rR15, #1                                 @ 
-        mov     r2, #0                                   @ 
-        tst     ip, vLow                                 @ 
-        orrne   r2, r2, rR15, lsl #0                     @ 
-        ldr     vLow, [sp, #4]                           @ 
-        tst     ip, vLow                                 @ 
-        orrne   r2, r2, rR15, lsl #1                     @ 
-        add     rR15, rGSU, #28                          @ 
-        strh    r2, [r1]                                 @ 
-        cmp     r1, rR15                                 @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
-        b       loop_head                                @ 
+        add     rR15, rR15, #1                           @ R15++
+        ldr     r1, [rGSU, #388]                         @ R1 = screen height
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        ldrb    rR15, [rGSU, #4]                         @ R15 = Y
+        cmp     rR15, r1                                 @ Test Y > screen height
+        ldrb    r1, [rGSU, #2]                           @ R1 = X
+        bcs     handle_fx_rpix_8bit.return               @ If Y > screen height, return
+        
+        @ R1 is X, rR15 is Y
+        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        add     vLow, rGSU, vLow, lsl #2                 @  |
+        ldr     vLow, [vLow, #260]                       @  |
+        mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
+        and     r1, r1, #7                               @  |
+        lsr     ip, ip, r1                               @  |
+        lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        add     r1, rGSU, r1, lsl #2                     @  |
+        ldr     r1, [r1, #132]                           @  |
+        lsl     rR15, rR15, #29                          @ R15 = pixel 0 pointer
+        add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        add     rR15, rR15, r1                           @  |
+
+        @ rR15 is pixel 0 Pointer, IP is the pixel mask
+        mov vLow, #0                                     @ Initial result
+
+        ldrb r1, [rR15, #0]                              @ Pixel 0
+        tst ip, r1                                       @  |
+        orrne vLow, vLow, #1                             @  |
+
+        ldrb r1, [rR15, #1]                              @ Pixel 1
+        tst ip, r1                                       @  |
+        orrne vLow, vLow, #2                             @  |
+
+        strh vLow, [rDREG]                               @ Store result
+        b handle_fx_rpix_8bit.return
 
 @ PLOT 4BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_4bit:
@@ -313,7 +302,7 @@ handle_fx_plot_4bit:
         @ R1 is free
         @ R2 is color
         @ rR15 is pixel 0 Pointer
-        @ IP is the pixel modifier
+        @ IP is the pixel mask
 
         ldrb    vLow, [rR15, #0]                         @ Load pixel 0
         tst     r2, #1                                   @ Pixel conditional
@@ -348,59 +337,46 @@ handle_fx_plot_4bit.return:
 
 @ RPIX 4BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_4bit:
-        add     r2, rGSU, #0                             @ 
-        mov     rSREG, r2                                @ 
-        add     rR15, rR15, #1                           @ 
-        ldrb    r1, [rGSU, #4]                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldr     rR15, [rGSU, #388]                       @ 
-        mov     rDREG, rSREG                             @ 
-        cmp     r1, rR15                                 @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        ldrh    rR15, [rGSU, #2]                         @ 
-        str     rSREG, [sp]                              @ 
-        bcs     loop_head                                @ 
-        mov     ip, #0                                   @ 
-        mov     r2, #128                                 @ 
-        uxtb    rR15, rR15                               @ 
-        lsr     vLow, rR15, #3                           @ 
-        add     vLow, rGSU, vLow, lsl #2                 @ 
-        ldr     vLow, [vLow, #260]                       @ 
-        and     rR15, rR15, #7                           @ 
-        str     vLow, [sp, #4]                           @ 
-        lsr     vLow, r1, #3                             @ 
-        add     vLow, rGSU, vLow, lsl #2                 @ 
-        asr     r2, r2, rR15                             @ 
-        lsl     r1, r1, #1                               @ 
-        mov     rR15, ip                                 @ 
-        ldr     ip, [vLow, #132]                         @ 
-        ldr     vLow, [sp, #4]                           @ 
-        and     r1, r1, #14                              @ 
-        add     r1, r1, vLow                             @ 
-        add     vLow, ip, r1                             @ 
-        uxtb    r2, r2                                   @ 
-        ldrb    ip, [ip, r1]                             @ 
-        mov     r1, #1                                   @ 
-        tst     r2, ip                                   @ 
-        orrne   rR15, rR15, r1, lsl #0                   @ 
-        ldrb    ip, [vLow, #1]                           @ 
-        tst     r2, ip                                   @ 
-        orrne   rR15, rR15, r1, lsl #1                   @ 
-        ldrb    ip, [vLow, #16]                          @ 
-        ldrb    vLow, [vLow, #17]                        @ 
-        tst     r2, ip                                   @ 
-        orrne   rR15, rR15, r1, lsl #2                   @ 
-        tst     r2, vLow                                 @ 
-        orrne   rR15, rR15, r1, lsl #3                   @ 
-        mov     r2, rDREG                                @ 
-        strh    rR15, [rDREG]                            @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rDREG, rR15                              @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
-        b       loop_head                                @ 
+        add     rR15, rR15, #1                           @ R15++
+        ldr     r1, [rGSU, #388]                         @ R1 = screen height
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        ldrb    rR15, [rGSU, #4]                         @ R15 = Y
+        cmp     rR15, r1                                 @ Test Y > screen height
+        ldrb    r1, [rGSU, #2]                           @ R1 = X
+        bcs     handle_fx_rpix_8bit.return               @ If Y > screen height, return
+        
+        @ R1 is X, rR15 is Y
+        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        add     vLow, rGSU, vLow, lsl #2                 @  |
+        ldr     vLow, [vLow, #260]                       @  |
+        mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
+        and     r1, r1, #7                               @  |
+        lsr     ip, ip, r1                               @  |
+        lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        add     r1, rGSU, r1, lsl #2                     @  |
+        ldr     r1, [r1, #132]                           @  |
+        lsl     rR15, rR15, #29                          @ R15 = pixel 0 pointer
+        add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        add     rR15, rR15, r1                           @  |
+
+        @ rR15 is pixel 0 Pointer, IP is the pixel mask
+        mov vLow, #0                                     @ Initial result, sets Z flag
+
+        ldrb r1, [rR15, #0]                              @ Pixel 0
+        tst ip, r1                                       @  |
+        orrne vLow, vLow, #1                             @  |
+        ldrb r2, [rR15, #1]                              @ Pixel 1
+        tst ip, r2                                       @  |
+        orrne vLow, vLow, #2                             @  |
+        ldrb r1, [rR15, #16]                             @ Pixel 2
+        tst ip, r1                                       @  |
+        orrne vLow, vLow, #4                             @  |
+        ldrb r2, [rR15, #17]                             @ Pixel 3
+        tst ip, r2                                       @  |
+        orrne vLow, vLow, #8                             @  |
+
+        strh vLow, [rDREG]                               @ Store result
+        b handle_fx_rpix_8bit.return
 
 @ PLOT 8BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_8bit:
@@ -496,72 +472,71 @@ handle_fx_plot_8bit:
 
 @ RPIX 8BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_8bit:
-        add     rR15, rR15, #1                           @ 
-        ldrb    r1, [rGSU, #4]                           @ 
-        strh    rR15, [rGSU, #30]                        @ 
-        ldr     rR15, [rGSU, #388]                       @ 
-        add     vLow, rGSU, #0                           @ 
-        cmp     r1, rR15                                 @ 
-        mov     rSREG, vLow                              @ 
-        mov     rDREG, vLow                              @ 
-        ldrh    r2, [rGSU, #2]                           @ 
-        bic     rSTAT, rSTAT, #4864                      @ 
-        bcs     loop_head                                @ 
-        mov     ip, #128                                 @ 
-        uxtb    r2, r2                                   @ 
-        bic     rR15, rARM, #1073741824                  @ 
-        lsr     rARM, r2, #3                             @ 
-        and     r2, r2, #7                               @ 
-        add     rARM, rGSU, rARM, lsl #2                 @ 
-        asr     r2, ip, r2                               @ 
-        lsr     ip, r1, #3                               @ 
-        ldr     rARM, [rARM, #260]                       @ 
-        add     ip, rGSU, ip, lsl #2                     @ 
-        lsl     r1, r1, #1                               @ 
-        ldr     ip, [ip, #132]                           @ 
-        and     r1, r1, #14                              @ 
-        add     rARM, r1, rARM                           @ 
-        add     r1, ip, rARM                             @ 
-        uxtb    r2, r2                                   @ 
-        ldrb    rARM, [ip, rARM]                         @ 
-        str     rR15, [sp]                               @ 
-        mov     ip, #1                                   @ 
-        mov     rR15, #0                                 @ 
-        tst     r2, rARM                                 @ 
-        orrne   rR15, rR15, ip, lsl #0                   @ 
-        ldrb    rARM, [r1, #1]                           @ 
-        tst     r2, rARM                                 @ 
-        orrne   rR15, rR15, ip, lsl #1                   @ 
-        ldrb    rARM, [r1, #16]                          @ 
-        tst     r2, rARM                                 @ 
-        orrne   rR15, rR15, ip, lsl #2                   @ 
-        ldrb    rARM, [r1, #17]                          @ 
-        tst     r2, rARM                                 @ 
-        orrne   rR15, rR15, ip, lsl #3                   @ 
-        ldrb    rARM, [r1, #32]                          @ 
-        tst     r2, rARM                                 @ 
-        orrne   rR15, rR15, ip, lsl #4                   @ 
-        ldrb    rARM, [r1, #33]                          @ 
-        tst     r2, rARM                                 @ 
-        orrne   rR15, rR15, ip, lsl #5                   @ 
-        ldrb    rARM, [r1, #48]                          @ 
-        ldrb    r1, [r1, #49]                            @ 
-        tst     r2, rARM                                 @ 
-        orrne   rR15, rR15, ip, lsl #6                   @ 
-        tst     r2, r1                                   @ 
-        orrne   rR15, rR15, ip, lsl #7                   @ 
-        strh    rR15, [vLow]                             @ 
-        uxth    rR15, rR15                               @ 
-        cmp     rR15, #0                                 @ 
-        ldr     rR15, [sp]                               @ 
-        mov     rARM, rR15                               @ 
-        orreq   rARM, rR15, #1073741824                  @ 
-        add     rR15, rGSU, #28                          @ 
-        cmp     rR15, vLow                               @ 
-        ldrheq  rR15, [rGSU, #28]                        @ 
-        ldreq   r2, [rGSU, #408]                         @ 
-        ldrbeq  rR15, [r2, rR15]                         @ 
-        strbeq  rR15, [rGSU, #38]                        @ 
+        add     rR15, rR15, #1                           @ R15++
+        ldr     r1, [rGSU, #388]                         @ R1 = screen height
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        ldrb    rR15, [rGSU, #4]                         @ R15 = Y
+        cmp     rR15, r1                                 @ Test Y > screen height
+        ldrb    r1, [rGSU, #2]                           @ R1 = X
+        bcs     handle_fx_rpix_8bit.return               @ If Y > screen height, return
+        
+        @ R1 is X, rR15 is Y
+        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        add     vLow, rGSU, vLow, lsl #2                 @  |
+        ldr     vLow, [vLow, #260]                       @  |
+        mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
+        and     r1, r1, #7                               @  |
+        lsr     ip, ip, r1                               @  |
+        lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        add     r1, rGSU, r1, lsl #2                     @  |
+        ldr     r1, [r1, #132]                           @  |
+        lsl     rR15, rR15, #29                          @ R15 = pixel 0 pointer
+        add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        add     rR15, rR15, r1                           @  |
+
+        @ rR15 is pixel 0 Pointer, IP is the pixel mask
+        mov vLow, #0                                     @ Initial result
+
+        ldrb r1, [rR15, #0]                              @ Pixel 0
+        tst ip, r1                                       @  |
+        orrne vLow, vLow, #1                             @  |
+        ldrb r2, [rR15, #1]                              @ Pixel 1
+        tst ip, r2                                       @  |
+        orrne vLow, vLow, #2                             @  |
+        ldrb r1, [rR15, #16]                             @ Pixel 2
+        tst ip, r1                                       @  |
+        orrne vLow, vLow, #4                             @  |
+        ldrb r2, [rR15, #17]                             @ Pixel 3
+        tst ip, r2                                       @  |
+        orrne vLow, vLow, #8                             @  |
+        ldrb r1, [rR15, #32]                             @ Pixel 4
+        tst ip, r1                                       @  |
+        orrne vLow, vLow, #16                            @  |
+        ldrb r2, [rR15, #33]                             @ Pixel 5
+        tst ip, r2                                       @  |
+        orrne vLow, vLow, #32                            @  |
+        ldrb r1, [rR15, #48]                             @ Pixel 6
+        tst ip, r1                                       @  |
+        orrne vLow, vLow, #64                            @  |
+        ldrb r2, [rR15, #49]                             @ Pixel 7
+        tst ip, r2                                       @  |
+        orrne vLow, vLow, #128                           @  |
+
+        strh vLow, [rDREG]                               @ Store result
+        cmp vLow, #0                                     @ Update ARM Z flag
+        bic rARM, rARM, #1073741824                      @  |
+        orreq rARM, rARM, #1073741824                    @  |
+        
+handle_fx_rpix_8bit.return:        
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrheq  rR15, [rGSU, #28]                        @  |
+        ldreq   r2, [rGSU, #408]                         @  |
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        ldrbeq  rR15, [r2, rR15]                         @  |
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strbeq  rR15, [rGSU, #38]                        @  |
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       loop_head                                @ 
 
 @ NOP: Clears flags and advances R15 
