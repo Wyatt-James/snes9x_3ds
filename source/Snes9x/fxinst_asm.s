@@ -208,17 +208,15 @@ handle_fx_plot_2bit:
         @ rR15 is pixel 0 Pointer
         @ IP is the pixel mask
 
-        ldrb    vLow, [rR15, #0]                         @ Load pixel 0
+        @ The pointer seems to always be 2-byte aligned, so this is a free speedup
+        ldrh    vLow, [rR15, #0]                         @ Load pixel pair 1
         tst     r2, #1                                   @ Pixel conditional
         orrne   vLow, vLow, ip                           @  |
         biceq   vLow, vLow, ip                           @  |
-        strb    vLow, [rR15, #0]                         @ Store pixel
-
-        ldrb    r1, [rR15, #1]                           @ Load pixel 1
         tst     r2, #2                                   @ Pixel conditional
-        orrne   r1, r1, ip                               @  |
-        biceq   r1, r1, ip                               @  |
-        strb    r1, [rR15, #1]                           @ Store pixel
+        orrne   vLow, vLow, ip, lsl #8                   @  |
+        biceq   vLow, vLow, ip, lsl #8                   @  |
+        strh    vLow, [rR15, #0]                         @ Store pixel pair
         b       handle_fx_plot_4bit.return               @ 
 
 @ RPIX 2BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
@@ -304,29 +302,24 @@ handle_fx_plot_4bit:
         @ rR15 is pixel 0 Pointer
         @ IP is the pixel mask
 
-        ldrb    vLow, [rR15, #0]                         @ Load pixel 0
+        @ The pointer seems to always be 2-byte aligned, so this is a free speedup
+        ldrh    vLow, [rR15, #0]                         @ Load pixel pair 1
         tst     r2, #1                                   @ Pixel conditional
         orrne   vLow, vLow, ip                           @  |
         biceq   vLow, vLow, ip                           @  |
-        strb    vLow, [rR15, #0]                         @ Store pixel
-
-        ldrb    r1, [rR15, #1]                           @ Load pixel 1
         tst     r2, #2                                   @ Pixel conditional
-        orrne   r1, r1, ip                               @  |
-        biceq   r1, r1, ip                               @  |
-        strb    r1, [rR15, #1]                           @ Store pixel
+        orrne   vLow, vLow, ip, lsl #8                   @  |
+        biceq   vLow, vLow, ip, lsl #8                   @  |
+        strh    vLow, [rR15, #0]                         @ Store pixel pair
 
-        ldrb    vLow, [rR15, #16]                        @ Load pixel 2
+        ldrh    vLow, [rR15, #16]                        @ Load pixel pair 2
         tst     r2, #4                                   @ Pixel conditional
         orrne   vLow, vLow, ip                           @  |
         biceq   vLow, vLow, ip                           @  |
-        strb    vLow, [rR15, #16]                        @ Store pixel
-
-        ldrb    r1, [rR15, #17]                          @ Load pixel 3
         tst     r2, #8                                   @ Pixel conditional
-        orrne   r1, r1, ip                               @  |
-        biceq   r1, r1, ip                               @  |
-        strb    r1, [rR15, #17]                          @ Store pixel
+        orrne   vLow, vLow, ip, lsl #8                   @  |
+        biceq   vLow, vLow, ip, lsl #8                   @  |
+        strh    vLow, [rR15, #16]                        @ Store pixel pair
 
 @ WYATT_TODO could tail-merge this with 2bit for free
 handle_fx_plot_4bit.return:
