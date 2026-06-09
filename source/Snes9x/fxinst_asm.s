@@ -242,13 +242,13 @@ handle_fx_rpix_2bit:
         lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #260]                       @  |
-        mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
+        mov     ip, #128                                 @ R15 = BIT(7) >> (X & 7)
         and     r1, r1, #7                               @  |
         lsr     ip, ip, r1                               @  |
         lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
         add     r1, rGSU, r1, lsl #2                     @  |
         ldr     r1, [r1, #132]                           @  |
-        lsl     rR15, rR15, #29                          @ R15 = pixel 0 pointer
+        lsl     rR15, rR15, #29                          @ IP = pixel 0 pointer
         add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
         add     rR15, rR15, r1                           @  |
 
@@ -297,13 +297,13 @@ handle_fx_plot_4bit:
         lsr     vLow, r1, #3                 @           @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2     @           @  |
         ldr     vLow, [vLow, #260]           @           @  |
-        mov     rR15, #128                   @           @ IP = BIT(7) >> (X & 7)
+        mov     rR15, #128                   @           @ R15 = BIT(7) >> (X & 7)
         and     r1, r1, #7                   @           @  |
         lsr     rR15, rR15, r1               @           @  |
         lsr     r1, ip, #3                   @           @ R1 = GSU.apvScreen[Y >> 3]
         add     r1, rGSU, r1, lsl #2         @           @  |
         ldr     r1, [r1, #132]               @           @  |
-        lsl     ip, ip, #29                  @           @ R15 = pixel 0 pointer
+        lsl     ip, ip, #29                  @           @ IP = pixel 0 pointer
         add     ip, vLow, ip, lsr #28        @           @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
         add     ip, ip, r1                   @           @  |
 
@@ -2214,8 +2214,8 @@ handle_fx_to_r14.b_is_set:
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
 @ Inlining this or not is a bit of a tossup
 handle_fx_plot_2bit.L237:
-        eor     ip, r1, rR15                             @ X ^ Y
-        tst     ip, #1                                   @ Test if odd
+        eor     rR15, r1, ip                             @ X ^ Y
+        tst     rR15, #1                                 @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L15                                     @ 
 
@@ -2229,8 +2229,8 @@ handle_fx_plot_8bit.L239:
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
 @ Inlining this or not is a bit of a tossup
 handle_fx_plot_4bit.L238:
-        eor     ip, r1, rR15                             @ X ^ Y
-        tst     ip, #1                                   @ Test if odd
+        eor     rR15, r1, ip                             @ X ^ Y
+        tst     rR15, #1                                 @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L25                                     @ 
 
