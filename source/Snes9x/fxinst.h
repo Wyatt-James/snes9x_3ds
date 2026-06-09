@@ -358,6 +358,12 @@ struct FxRegs_s
 #define CFGR USEX8(GSU.pvRegisters[GSU_CFGR])
 #define CLSR USEX8(GSU.pvRegisters[GSU_CLSR])
 
+#define PLOT_TRANSPARENT (1U << 0) // 0x01. If set, empty colors will not be drawn.
+#define PLOT_DITHER      (1U << 1) // 0x02. If set, even pixels will use the top nibble of COLOR and odd pixels the bottom nibble
+#define PLOT_HIGHNIBBLE  (1U << 2) // 0x04. If set, COLR and GETC will replace the color's low nibble with its high nibble
+#define PLOT_FREEZEHIGH  (1U << 3) // 0x08. If set, COLR and GETC will only modify the low nibble
+#define PLOT_OBJECT      (1U << 4) // 0x10. 
+
 #ifdef __cplusplus
 extern "C"
 {
