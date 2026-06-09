@@ -11,7 +11,7 @@
 
 @ R0 contains vLow
 @ R1 contains GSU.pvPrgBank, for fetching PIPE
-@ R2 contains pipe after interpreter
+@ R2 contains extended opcode after interpreter
 @ R3 contains GSU R15 after interpreter
 @ R4 contains the pointer to GSU
 @ R5 contains vCounter, the instruction counter
@@ -35,6 +35,7 @@
 @ - Move dispatch's pipe duplication to individual instructions
 @ - Remove stack usage. Only plot and rpix use stack due to register pressure, but we could use flag registers or something. Just be careful of early returns.
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
+@ - Add a separate dispatch for after instructions that ran CLRFLAGS. Would save an instruction but might not matter due to load latency.
 
 @ Optimize TESTR14. Most TESTR14s are interleaved with CLRFLAGS; only the DREG = 0 part needs to be.
 @ Current:
@@ -76,7 +77,7 @@ fx_run_asm:
         push    {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, lr}
         sub     sp, sp, #12                              @ Allocate 8 bytes on stack, plus 4 padding
         ldr     rGSU, .L242                              @ Load GSU pointer
-        sub     rVCNT, vLow, #1                          @ Decrement vCounter by 1, move to correct variable
+        mov     rVCNT, vLow                              @ Decrement vCounter by 1, move to correct variable
         ldr     rR15, [rGSU, #120]                       @ Load GSU.vMode
         ldr     rGOTO, .L242+4                           @ Load GOTO table
       @ cmp     rR15, #3                                 @ If vMode > 3, vMode = 0.  Unreachable.
@@ -97,20 +98,39 @@ fx_run_asm:
         add     rSREG, rGSU, rSREG, lsl #1               @  |
         add     rDREG, rGSU, rDREG, lsl #1               @  V
         strb    r1, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
-        str     r2, [rGOTO, #2352]                       @ Populate GOTO table
-        str     r2, [rGOTO, #304]                        @  |
-        str     rR15, [rGOTO, #3376]                     @  |
-        str     rR15, [rGOTO, #1328]                     @  V
+        str     rR15, [rGOTO, #3376]                     @ Populate GOTO table
+        str     rR15, [rGOTO, #1328]                     @  |
+        str     r2, [rGOTO, #2352]                       @  |
+        str     r2, [rGOTO, #304]                        @  V
       @ beq     loop_end                                 @ End if nInstructions == 0. Unreachable.
         ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
+        ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15.  Taken from loop_dispatch to reduce memory stalling
+        b       loop_dispatch
+loop_head:
+        ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
+loop_head.skip_1:
+        ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15. Taken from loop_dispatch to reduce memory stalling
+        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
+        beq     loop_end                                 @ 
 loop_dispatch:
-        ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15
-        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
         and     r2, rSTAT, #768                          @ Get opcode mode bits
+        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
         orr     r2, rPIPE, r2                            @ Compute opcode
         and     vLow, rPIPE, #15                         @ Compute vLow
         mov     rPIPE, ip                                @ Duplicate PIPE. WYATT_TODO Probably better to move this to the individual instructions.
         ldr     pc, [rGOTO, r2, lsl #2]                  @ Branch to handler
+loop_end:
+        sub     rR15, rSREG, rGSU                        @ Save reserved registers
+        asr     rR15, rR15, #1                           @  |
+        strb    rR15, [rGSU, #61]                        @  |
+        sub     rR15, rDREG, rGSU                        @  |
+        asr     rR15, rR15, #1                           @  |
+        strh    rSTAT, [rGSU, #64]                       @  |
+        str     rARM, [rGSU, #68]                        @  |
+        strb    rPIPE, [rGSU, #62]                       @  |
+        strb    rR15, [rGSU, #60]                        @  V
+        add     sp, sp, #12                              @ Free space on stack
+        pop     {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, pc} @ Return
 
 @ GETBS: get sign extended byte from ROM at address R14
 handle_fx_getbs:
@@ -127,24 +147,7 @@ handle_fx_getbs:
         ldrbeq  rR15, [r2, rR15]                         @  |
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = R0
         strbeq  rR15, [rGSU, #38]                        @  |
-        @ Fallthrough to loop head. WYATT_TODO the most common handler should go here.
-
-loop_head:
-        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if it underflows
-        ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
-        bcs     loop_dispatch                            @ 
-loop_end:
-        sub     rR15, rSREG, rGSU                        @ Save reserved registers
-        asr     rR15, rR15, #1                           @  |
-        strb    rR15, [rGSU, #61]                        @  |
-        sub     rR15, rDREG, rGSU                        @  |
-        asr     rR15, rR15, #1                           @  |
-        strh    rSTAT, [rGSU, #64]                       @  |
-        str     rARM, [rGSU, #68]                        @  |
-        strb    rPIPE, [rGSU, #62]                       @  |
-        strb    rR15, [rGSU, #60]                        @  V
-        add     sp, sp, #12                              @ Free space on stack
-        pop     {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, pc} @ Return
+        b       loop_head
 
 @ STOP: stop GSU execution
 handle_fx_stop:
@@ -165,59 +168,65 @@ handle_fx_stop:
 
 @ PLOT 2BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_2bit:
-        add     rR15, rR15, #1                           @ R15++
-        ldrh    r1, [rGSU, #2]                           @ Load X
-        ldr     r2, [rGSU, #388]                         @ Load screen height
-        strh    rR15, [rGSU, #30]                        @ Store R15
-        ldrb    rR15, [rGSU, #4]                         @ Load Y
-        cmp     rR15, r2                                 @ Test Y > screen height
-        add     r2, r1, #1                               @ X++
-        strh    r2, [rGSU, #2]                           @  |
-        bcs     handle_fx_plot_4bit.return               @ If Y > screen height, return
-        ldrb    vLow, [rGSU, #36]                        @ Load vPlotOptionReg
-        ldrb    r2, [rGSU, #37]                          @ Load vColorReg
-        tst     vLow, #2                                 @ Test vPlotOptionReg & 0x02
-        uxtb    r1, r1                                   @ Truncate X to 8-bit
-        bne     handle_fx_plot_2bit.L237                 @ If vPlotOptionReg & 0x02, potentially use upper nibble of color
+        ldrb    ip, [rGSU, #4]               @           @ Load Y
+        add     rR15, rR15, #1               @           @ R15++
+        ldr     rSREG, [rGSU, #388]          @           @ Load screen height
+        strh    rR15, [rGSU, #30]            @           @ Store R15
+        ldrh    r1, [rGSU, #2]               @           @ Load X
+        cmp     ip, rSREG                    @           @ Test Y > screen height
+        add     rSREG, rGSU, #0              @           @ CLRFLAGS: SREG = 0. WYATT_TODO move this to the return statement and branch there instead of to loop_head. This solves the UNLIKELY cases and allows us to use these two regs as scratch.
+        add     r2, r1, #1                   @           @ X++
+        strh    r2, [rGSU, #2]               @           @  |
+        mov     rDREG, rSREG                 @           @ CLRFLAGS: DREG = 0. Prevents stall from next branch getting folded
+        bcs     handle_fx_plot_2bit.return   @           @ If Y > screen height, return
+        ldrb    vLow, [rGSU, #36]            @           @ Load vPlotOptionReg
+        ldrb    r2, [rGSU, #37]              @           @ Load vColorReg
+        uxtb    r1, r1                       @           @ Truncate X to 8-bit
+        tst     vLow, #2                     @           @ Test vPlotOptionReg & 0x02
+        bne     handle_fx_plot_2bit.L237     @           @ If vPlotOptionReg & 0x02, potentially use upper nibble of color
 
         @ vLow is vPlotOptionReg
         @ R1 is X
         @ R2 is color
-        @ rR15 is Y
-        @ IP is free
+        @ IP is Y
+        @ rR15 is free
 .L15:
-        and     vLow, vLow, #1                           @ If (4-bit color) | (vPlotOptionReg & 1) is 0, return
-        orrs    vLow, vLow, r2, lsl #28                  @  |
-        beq     handle_fx_plot_4bit.return               @  |
-        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
-        add     vLow, rGSU, vLow, lsl #2                 @  |
-        ldr     vLow, [vLow, #260]                       @  |
-        mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
-        and     r1, r1, #7                               @  |
-        lsr     ip, ip, r1                               @  |
-        lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
-        add     r1, rGSU, r1, lsl #2                     @  |
-        ldr     r1, [r1, #132]                           @  |
-        lsl     rR15, rR15, #29                          @ R15 = pixel 0 pointer
-        add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     rR15, rR15, r1                           @  |
+        and     vLow, vLow, #1               @           @ If (4-bit color) | (vPlotOptionReg & 1) is 0, return
+        orrs    vLow, vLow, r2, lsl #28      @           @  |
+        beq     handle_fx_plot_2bit.return   @           @  |
+        lsr     vLow, r1, #3                 @           @ vLow = GSU.x[X >> 3]
+        add     vLow, rGSU, vLow, lsl #2     @           @  |
+        ldr     vLow, [vLow, #260]           @           @  |
+        mov     rR15, #128                   @           @ IP = BIT(7) >> (X & 7)
+        and     r1, r1, #7                   @           @  |
+        lsr     rR15, rR15, r1               @           @  |
+        lsr     r1, ip, #3                   @           @ R1 = GSU.apvScreen[Y >> 3]
+        add     r1, rGSU, r1, lsl #2         @           @  |
+        ldr     r1, [r1, #132]               @           @  |
+        lsl     ip, ip, #29                  @           @ R15 = pixel 0 pointer
+        add     ip, vLow, ip, lsr #28        @           @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        add     ip, ip, r1                   @           @  |
 
         @ vLow is free
         @ R1 is free
         @ R2 is color
-        @ rR15 is pixel 0 Pointer
-        @ IP is the pixel mask
+        @ IP is the pixel 0 Pointer
+        @ rR15 is the pixel mask
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        ldrh    vLow, [rR15, #0]                         @ Load pixel pair 1
-        tst     r2, #1                                   @ Pixel conditional
-        orrne   vLow, vLow, ip                           @  |
-        biceq   vLow, vLow, ip                           @  |
-        tst     r2, #2                                   @ Pixel conditional
-        orrne   vLow, vLow, ip, lsl #8                   @  |
-        biceq   vLow, vLow, ip, lsl #8                   @  |
-        strh    vLow, [rR15, #0]                         @ Store pixel pair
-        b       handle_fx_plot_4bit.return               @ 
+        ldrh    vLow, [ip, #0]               @           @ Load pixel pair
+        tst     r2, #1                       @           @ Pixel conditional
+        orrne   vLow, vLow, rR15             @ stall 1   @  |
+        biceq   vLow, vLow, rR15             @           @  |
+        tst     r2, #2                       @           @ Pixel conditional
+        orrne   vLow, vLow, rR15, lsl #8     @           @  |
+        biceq   vLow, vLow, rR15, lsl #8     @           @  |
+        strh    vLow, [ip, #0]               @           @ Store pixel pair
+
+handle_fx_plot_2bit.return:
+        bic     rSTAT, rSTAT, #4864          @           @ CLRFLAGS: STAT
+        ldr     r1, [rGSU, #412]             @           @ Taken from loop_head to allow this return handler to branch fold
+        b       loop_head.skip_1             @           @ 
 
 @ RPIX 2BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_2bit:
@@ -259,74 +268,75 @@ handle_fx_rpix_2bit:
 
 @ PLOT 4BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_4bit:
-        add     rR15, rR15, #1                           @ R15++
-        ldrh    r1, [rGSU, #2]                           @ Load X
-        ldr     r2, [rGSU, #388]                         @ Load screen height
-        strh    rR15, [rGSU, #30]                        @ Store R15
-        ldrb    rR15, [rGSU, #4]                         @ Load Y
-        cmp     rR15, r2                                 @ Test Y > screen height
-        add     r2, r1, #1                               @ X++
-        strh    r2, [rGSU, #2]                           @  |
-        bcs     handle_fx_plot_4bit.return               @ If Y > screen height, return
-        ldrb    vLow, [rGSU, #36]                        @ Load vPlotOptionReg
-        ldrb    r2, [rGSU, #37]                          @ Load vColorReg
-        tst     vLow, #2                                 @ Test vPlotOptionReg & 0x02
-        uxtb    r1, r1                                   @ Truncate X to 8-bit
-        bne     handle_fx_plot_4bit.L238                 @ If vPlotOptionReg & 0x02, potentially use upper nibble of color
+        ldrb    ip, [rGSU, #4]               @           @ Load Y
+        add     rR15, rR15, #1               @           @ R15++
+        ldr     rSREG, [rGSU, #388]          @           @ Load screen height
+        strh    rR15, [rGSU, #30]            @           @ Store R15
+        ldrh    r1, [rGSU, #2]               @           @ Load X
+        cmp     ip, rSREG                    @           @ Test Y > screen height
+        add     rSREG, rGSU, #0              @           @ CLRFLAGS: SREG = 0. WYATT_TODO move this to the return statement and branch there instead of to loop_head. This solves the UNLIKELY cases and allows us to use these two regs as scratch.
+        add     r2, r1, #1                   @           @ X++
+        strh    r2, [rGSU, #2]               @           @  |
+        mov     rDREG, rSREG                 @           @ CLRFLAGS: DREG = 0. Prevents stall from next branch getting folded
+        bcs     handle_fx_plot_4bit.return   @           @ If Y > screen height, return
+        ldrb    vLow, [rGSU, #36]            @           @ Load vPlotOptionReg
+        ldrb    r2, [rGSU, #37]              @           @ Load vColorReg
+        uxtb    r1, r1                       @           @ Truncate X to 8-bit
+        tst     vLow, #2                     @           @ Test vPlotOptionReg & 0x02
+        bne     handle_fx_plot_4bit.L238     @           @ If vPlotOptionReg & 0x02, potentially use upper nibble of color
 
         @ vLow is vPlotOptionReg
         @ R1 is X
         @ R2 is color
-        @ rR15 is Y
-        @ IP is free
+        @ IP is Y
+        @ rR15 is free
 .L25:
-        and     vLow, vLow, #1                           @ If (4-bit color) | (vPlotOptionReg & 1) is 0, return
-        orrs    vLow, vLow, r2, lsl #28                  @  |
-        beq     handle_fx_plot_4bit.return               @  |
-        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
-        add     vLow, rGSU, vLow, lsl #2                 @  |
-        ldr     vLow, [vLow, #260]                       @  |
-        mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
-        and     r1, r1, #7                               @  |
-        lsr     ip, ip, r1                               @  |
-        lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
-        add     r1, rGSU, r1, lsl #2                     @  |
-        ldr     r1, [r1, #132]                           @  |
-        lsl     rR15, rR15, #29                          @ R15 = pixel 0 pointer
-        add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     rR15, rR15, r1                           @  |
+        and     vLow, vLow, #1               @           @ If (4-bit color) | (vPlotOptionReg & 1) is 0, return
+        orrs    vLow, vLow, r2, lsl #28      @           @  |
+        beq     handle_fx_plot_4bit.return   @           @  |
+        lsr     vLow, r1, #3                 @           @ vLow = GSU.x[X >> 3]
+        add     vLow, rGSU, vLow, lsl #2     @           @  |
+        ldr     vLow, [vLow, #260]           @           @  |
+        mov     rR15, #128                   @           @ IP = BIT(7) >> (X & 7)
+        and     r1, r1, #7                   @           @  |
+        lsr     rR15, rR15, r1               @           @  |
+        lsr     r1, ip, #3                   @           @ R1 = GSU.apvScreen[Y >> 3]
+        add     r1, rGSU, r1, lsl #2         @           @  |
+        ldr     r1, [r1, #132]               @           @  |
+        lsl     ip, ip, #29                  @           @ R15 = pixel 0 pointer
+        add     ip, vLow, ip, lsr #28        @           @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        add     ip, ip, r1                   @           @  |
 
         @ vLow is free
         @ R1 is free
         @ R2 is color
-        @ rR15 is pixel 0 Pointer
-        @ IP is the pixel mask
+        @ IP is the pixel 0 Pointer
+        @ rR15 is the pixel mask
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        ldrh    vLow, [rR15, #0]                         @ Load pixel pair 1
-        tst     r2, #1                                   @ Pixel conditional
-        orrne   vLow, vLow, ip                           @  |
-        biceq   vLow, vLow, ip                           @  |
-        tst     r2, #2                                   @ Pixel conditional
-        orrne   vLow, vLow, ip, lsl #8                   @  |
-        biceq   vLow, vLow, ip, lsl #8                   @  |
-        strh    vLow, [rR15, #0]                         @ Store pixel pair
+        ldrh    r1, [ip, #0]                 @           @ Load pixel pair 1
+        tst     r2, #1                       @           @ Pixel conditional
+        ldrh    vLow, [ip, #16]              @           @ Load pixel pair 2. Up here to avoid a stall.
+        orrne   r1, r1, rR15                 @           @  |
+        biceq   r1, r1, rR15                 @           @  |
+        tst     r2, #2                       @           @ Pixel conditional
+        orrne   r1, r1, rR15, lsl #8         @           @  |
+        biceq   r1, r1, rR15, lsl #8         @           @  |
+        strh    r1, [ip, #0]                 @           @ Store pixel pair
 
-        ldrh    vLow, [rR15, #16]                        @ Load pixel pair 2
-        tst     r2, #4                                   @ Pixel conditional
-        orrne   vLow, vLow, ip                           @  |
-        biceq   vLow, vLow, ip                           @  |
-        tst     r2, #8                                   @ Pixel conditional
-        orrne   vLow, vLow, ip, lsl #8                   @  |
-        biceq   vLow, vLow, ip, lsl #8                   @  |
-        strh    vLow, [rR15, #16]                        @ Store pixel pair
+        @ Interleave between vLow and r1 to prevent stalls
+        tst     r2, #4                       @           @ Pixel conditional
+        orrne   vLow, vLow, rR15             @           @  |
+        biceq   vLow, vLow, rR15             @           @  |
+        tst     r2, #8                       @           @ Pixel conditional
+        orrne   vLow, vLow, rR15, lsl #8     @           @  |
+        biceq   vLow, vLow, rR15, lsl #8     @           @  |
+        strh    vLow, [ip, #16]              @           @ Store pixel pair
 
-@ WYATT_TODO could tail-merge this with 2bit for free
 handle_fx_plot_4bit.return:
-        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0. WYATT_TODO move this to the return statement and branch there instead of to loop_head. This solves the UNLIKELY cases and allows us to use these two regs as scratch.
-        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        bic     rSTAT, rSTAT, #4864          @           @ CLRFLAGS: STAT
+        ldr     r1, [rGSU, #412]             @           @ Taken from loop_head to allow this return handler to branch fold
+        b       loop_head.skip_1             @           @ 
 
 @ RPIX 4BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_4bit:
@@ -490,6 +500,7 @@ handle_fx_rpix_8bit:
         @ rR15 is pixel 0 Pointer, IP is the pixel mask
         mov vLow, #0                                     @ Initial result
 
+        @ WYATT_TODO this could be trivially changed to 16-bit loads. Pixels are always aligned so this would be faster.
         ldrb r1, [rR15, #0]                              @ Pixel 0
         tst ip, r1                                       @  |
         orrne vLow, vLow, #1                             @  |
