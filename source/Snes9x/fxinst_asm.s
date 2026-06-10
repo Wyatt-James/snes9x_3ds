@@ -462,7 +462,7 @@ handle_fx_plot_8bit:
         biceq   vLow, vLow, rR15, lsl #8     @           @  |
         strh    vLow, [ip, #48]              @           @ Store pixel pair
 
-handle_fx_plot_8bit.return:                              @ WYATT_TODO rest of CLRFLAGS
+handle_fx_plot_8bit.return:
         bic     rSTAT, rSTAT, #4864          @           @ CLRFLAGS: STAT
         ldr     r1, [rGSU, #412]             @           @ Taken from loop_head to allow this return handler to branch fold
         b       loop_head.skip_1             @           @ 
