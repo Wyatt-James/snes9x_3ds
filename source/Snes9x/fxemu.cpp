@@ -170,7 +170,7 @@ static void fx_readRegisterSpace()
     else
 		GSU.vScreenSize = (GSU.vScreenHeight/8) * (256/8) * avMult[GSU.vMode];
 
-    if (GSU.vPlotOptionReg & 0x10)
+    if (GSU.vPlotOptionReg & PLOT_OBJECT)
 		/* OBJ Mode (for drawing into sprites) */
 		GSU.vScreenHeight = 256;
 
