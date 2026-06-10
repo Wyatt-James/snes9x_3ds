@@ -643,14 +643,11 @@ static inline void fx_plot_8bit(uint8 unused)
 #endif
 
     c = GSU.vColorReg;
-    
-    if( !(GSU.vPlotOptionReg & PLOT_OBJECT) ) { // Likely (star fox map)
-	    if( !(GSU.vPlotOptionReg & PLOT_TRANSPARENT) && !(c & 0xf)) // Unlikely (star fox map)
-            return;
+
+    if (!(GSU.vPlotOptionReg & PLOT_TRANSPARENT)) {
+        if ( (GSU.vPlotOptionReg & PLOT_FREEZEHIGH) && !(c & 0xf)) return;
+        if (!(GSU.vPlotOptionReg & PLOT_FREEZEHIGH) && !c)         return;
     }
-    else
-	    if( !(GSU.vPlotOptionReg & PLOT_TRANSPARENT) && !c)
-            return;
 
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
     uint32 v = 128 >> (x&7);
