@@ -253,18 +253,17 @@ handle_fx_rpix_2bit:
         add     rR15, rR15, r1                           @  |
 
         @ rR15 is pixel 0 Pointer, IP is the pixel mask
-        mov vLow, #0                                     @ Initial result
+        ldrh    r1, [rR15, #0]                           @ Load pixel pair 1
+        mov     vLow, #0                                 @ Initial result
+        add     rR15, rGSU, #28                          @ Lifted from return to save a cycle
 
-        ldrb r1, [rR15, #0]                              @ Pixel 0
-        tst ip, r1                                       @  |
+        tst r1, ip                                       @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-
-        ldrb r1, [rR15, #1]                              @ Pixel 1
-        tst ip, r1                                       @  |
+        tst r1, ip, lsl #8                               @  |
         orrne vLow, vLow, #2                             @  |
 
         strh vLow, [rDREG]                               @ Store result
-        b handle_fx_rpix_8bit.return
+        b handle_fx_rpix_8bit.return_skip_1
 
 @ PLOT 4BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_4bit:
@@ -363,20 +362,24 @@ handle_fx_rpix_4bit:
         add     rR15, rR15, r1                           @  |
 
         @ rR15 is pixel 0 Pointer, IP is the pixel mask
-        mov vLow, #0                                     @ Initial result, sets Z flag
+        ldrh r1, [rR15, #0]                              @ Load pixel pair 1
+        ldrh r2, [rR15, #16]                             @ Load pixel pair 2
+        mov vLow, #0                                     @ Initial result
 
-        ldrb r1, [rR15, #0]                              @ Pixel 0
-        tst ip, r1                                       @  |
+        tst r1, ip                                       @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-        ldrb r2, [rR15, #1]                              @ Pixel 1
-        tst ip, r2                                       @  |
+        tst r1, ip, lsl #8                               @  |
         orrne vLow, vLow, #2                             @  |
-        ldrb r1, [rR15, #16]                             @ Pixel 2
-        tst ip, r1                                       @  |
+
+        tst r2, ip                                       @ Pixel pair 2
         orrne vLow, vLow, #4                             @  |
-        ldrb r2, [rR15, #17]                             @ Pixel 3
-        tst ip, r2                                       @  |
+        tst r2, ip, lsl #8                               @  |
         orrne vLow, vLow, #8                             @  |
+
+        strh vLow, [rDREG]                               @ Store result
+        cmp vLow, #0                                     @ Update ARM Z flag
+        bic rARM, rARM, #1073741824                      @  |
+        orreq rARM, rARM, #1073741824                    @  |
 
         strh vLow, [rDREG]                               @ Store result
         b handle_fx_rpix_8bit.return
@@ -451,7 +454,7 @@ handle_fx_plot_8bit:
         tst     r2, #32                      @           @ Pixel conditional
         orrne   r1, r1, rR15, lsl #8         @           @  |
         biceq   r1, r1, rR15, lsl #8         @           @  |
-        strh    r1, [ip, #32]                 @           @ Store pixel pair
+        strh    r1, [ip, #32]                @           @ Store pixel pair
 
         @ Pixel pair 4
         tst     r2, #64                      @           @ Pixel conditional
@@ -492,32 +495,30 @@ handle_fx_rpix_8bit:
         add     rR15, rR15, r1                           @  |
 
         @ rR15 is pixel 0 Pointer, IP is the pixel mask
+        ldrh r1, [rR15, #0]                              @ Load pixel pair 1
+        ldrh r2, [rR15, #16]                             @ Load pixel pair 2
         mov vLow, #0                                     @ Initial result
 
-        @ WYATT_TODO this could be trivially changed to 16-bit loads. Pixels are always aligned so this would be faster.
-        ldrb r1, [rR15, #0]                              @ Pixel 0
-        tst ip, r1                                       @  |
+        tst r1, ip                                       @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-        ldrb r2, [rR15, #1]                              @ Pixel 1
-        tst ip, r2                                       @  |
+        tst r1, ip, lsl #8                               @  |
         orrne vLow, vLow, #2                             @  |
-        ldrb r1, [rR15, #16]                             @ Pixel 2
-        tst ip, r1                                       @  |
+
+        ldrh r1, [rR15, #32]                             @ Load pixel pair 3
+        tst r2, ip                                       @ Pixel pair 2
         orrne vLow, vLow, #4                             @  |
-        ldrb r2, [rR15, #17]                             @ Pixel 3
-        tst ip, r2                                       @  |
+        tst r2, ip, lsl #8                               @  |
         orrne vLow, vLow, #8                             @  |
-        ldrb r1, [rR15, #32]                             @ Pixel 4
-        tst ip, r1                                       @  |
+
+        ldrh r2, [rR15, #48]                             @ Load pixel pair 4
+        tst r1, ip                                       @ Pixel pair 3
         orrne vLow, vLow, #16                            @  |
-        ldrb r2, [rR15, #33]                             @ Pixel 5
-        tst ip, r2                                       @  |
+        tst r1, ip, lsl #8                               @  |
         orrne vLow, vLow, #32                            @  |
-        ldrb r1, [rR15, #48]                             @ Pixel 6
-        tst ip, r1                                       @  |
+
+        tst r2, ip                                       @ Pixel pair 4
         orrne vLow, vLow, #64                            @  |
-        ldrb r2, [rR15, #49]                             @ Pixel 7
-        tst ip, r2                                       @  |
+        tst r2, ip, lsl #8                               @  |
         orrne vLow, vLow, #128                           @  |
 
         strh vLow, [rDREG]                               @ Store result
@@ -525,8 +526,9 @@ handle_fx_rpix_8bit:
         bic rARM, rARM, #1073741824                      @  |
         orreq rARM, rARM, #1073741824                    @  |
         
-handle_fx_rpix_8bit.return:        
+handle_fx_rpix_8bit.return:
         add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
+handle_fx_rpix_8bit.return_skip_1:
         cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
         ldrheq  rR15, [rGSU, #28]                        @  |
         ldreq   r2, [rGSU, #408]                         @  |
