@@ -30,10 +30,8 @@
 @ - Fix regalloc occasionally reloading R15
 @     If CLRFLAGS is called, we can use rSREG as scratch to save a reg
 @ - Put the GSU struct in its own over-aligned segment. This would allow us to do certain comparisons, notably the one in TESTR14, in one fewer instruction.
-@ - Make a special version of INC and DEC for R15 to save 1 cycle for all other INCs. Might be viable for other instructions too.
 @ - Look into the possibility of avoiding the UXTH instructions in IBT/IWT. Shift to top of reg and load with register lsr 16?
 @ - Move dispatch's pipe duplication to individual instructions
-@ - Remove stack usage. Only plot and rpix use stack due to register pressure, but we could use flag registers or something. Just be careful of early returns.
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
 @ - Add a separate dispatch for after instructions that ran CLRFLAGS. Would save an instruction but might not matter due to load latency.
 
@@ -1333,43 +1331,40 @@ handle_fx_or_r:
         strbeq  rR15, [rGSU, #38]                        @  |
         b       loop_head                                @ 
 
-@ INC: increment a register
+@ INC: increment a register. Cannot be called with R15.
 handle_fx_inc_r:
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @  |
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    rR15, [rGSU, vLow]                       @ Load value
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrh    r1, [rGSU, vLow]                         @ Load value
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
-        add     rR15, rR15, #1                           @ Increment value
-        strh    rR15, [rGSU, vLow]                       @ Store result
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        add     r1, r1, #1                               @ Increment value
+        strh    r1, [rGSU, vLow]                         @ Store result
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, rR15, #16                          @ Set flags
+        lsl     rARM, r1, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        ldrh    rR15, [rGSU, #30]                        @ Load R15. Actually has to be reloaded here.
-        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        add     rR15, rR15, #1                           @ R15++
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
 
 @ INC R14: increment R14 and then READR14
 handle_fx_inc_r14:
-        ldrh    rR15, [rGSU, #28]                        @ Load value from R14
-        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
-        add     rR15, rR15, #1                           @ Increment value
-        add     r2, r2, #1                               @ R15++
+        ldrh    r1, [rGSU, #28]                          @ Load value from R14
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @  |
+        add     r1, r1, #1                               @ Increment value
+        strh    r1, [rGSU, #28]                          @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, rR15, #16                          @ Set flags
-        movs    rARM, rARM                               @  |
-        mrs     rARM, cpsr                               @ Read flags from CPSR
-        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
-        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        strh    rR15, [rGSU, #28]                        @ Store result to R14
-        strh    r2, [rGSU, #30]                          @ Store R15
+        lsl     r1, r1, #16                              @ Set flags
+        movs    r1, r1                                   @  |
         ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
-        ldrb    rR15, [r2, rR15]                         @ READR14: Load ROM(R14)
-        strb    rR15, [rGSU, #38]                        @ READR14: Store to ROMBUFFER
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrb    r1, [r2, r1, lsr #16]                    @ READR14: Load ROM(R14)
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strb    r1, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
         b       loop_head                                @ 
 
 @ GETC: transfer ROMBUFFER to color register
@@ -1394,41 +1389,38 @@ handle_fx_getc:
 
 @ DEC: decrement a register
 handle_fx_dec_r:
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @  |
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    rR15, [rGSU, vLow]                       @ Load value
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrh    r1, [rGSU, vLow]                         @ Load value
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
-        sub     rR15, rR15, #1                           @ Decrement value
-        strh    rR15, [rGSU, vLow]                       @ Store result
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        sub     r1, r1, #1                               @ Increment value
+        strh    r1, [rGSU, vLow]                         @ Store result
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, rR15, #16                          @ Set flags
+        lsl     rARM, r1, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        ldrh    rR15, [rGSU, #30]                        @ Load R15. Actually has to be reloaded here.
-        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        add     rR15, rR15, #1                           @ R15++
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    rR15, [rGSU, #30]                        @ Store R15
         b       loop_head                                @ 
 
 @ DEC R14: decrement R14 and then READR14
 handle_fx_dec_r14:
-        ldrh    rR15, [rGSU, #28]                        @ Load value from R14
-        ldrh    r2, [rGSU, #30]                          @ Load R15. WYATT_TODO unnecessary
-        sub     rR15, rR15, #1                           @ Decrement value
-        add     r2, r2, #1                               @ R15++
+        ldrh    r1, [rGSU, #28]                          @ Load value from R14
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @  |
+        sub     r1, r1, #1                               @ Increment value
+        strh    r1, [rGSU, #28]                          @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, rR15, #16                          @ Set flags
-        movs    rARM, rARM                               @  |
-        mrs     rARM, cpsr                               @ Read flags from CPSR
-        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
-        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        strh    rR15, [rGSU, #28]                        @ Store result to R14
-        strh    r2, [rGSU, #30]                          @ Store R15
+        lsl     r1, r1, #16                              @ Set flags
+        movs    r1, r1                                   @  |
         ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
-        ldrb    rR15, [r2, rR15]                         @ READR14: Load ROM(R14)
-        strb    rR15, [rGSU, #38]                        @ READR14: Store to ROMBUFFER
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrb    r1, [r2, r1, lsr #16]                    @ READR14: Load ROM(R14)
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strb    r1, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
         b       loop_head                                @ 
 
 @ GETB: get byte from ROMBUFFER
