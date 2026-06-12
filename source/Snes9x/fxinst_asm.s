@@ -622,7 +622,6 @@ handle_fx_bra:
         b       loop_head                                @ 
 
 @ BGE: branch if greater or equal
-@ WYATT_TODO we can probably FETCHPIPE after the branch block to save an instruction. Same for all branches.
 handle_fx_bge:
         add     rR15, rR15, #1                           @ R15++
         uxth    r2, rR15                                 @ Wrap R15 at 16 bits
