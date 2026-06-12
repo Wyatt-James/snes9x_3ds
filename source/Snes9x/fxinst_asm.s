@@ -75,7 +75,6 @@
     .cfi_startproc
 fx_run_asm:
         push    {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, lr}
-        sub     sp, sp, #12                              @ Allocate 8 bytes on stack, plus 4 padding
         ldr     rGSU, .L242                              @ Load GSU pointer
         mov     rVCNT, vLow                              @ Decrement vCounter by 1, move to correct variable
         ldr     rR15, [rGSU, #120]                       @ Load GSU.vMode
@@ -129,7 +128,6 @@ loop_end:
         str     rARM, [rGSU, #68]                        @  |
         strb    rPIPE, [rGSU, #62]                       @  |
         strb    rR15, [rGSU, #60]                        @  V
-        add     sp, sp, #12                              @ Free space on stack
         pop     {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, pc} @ Return
 
 @ GETBS: get sign extended byte from ROM at address R14
