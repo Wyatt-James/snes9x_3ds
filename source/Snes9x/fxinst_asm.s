@@ -113,10 +113,9 @@ loop_head.skip_1:
         beq     loop_end                                 @ 
 loop_dispatch:
         and     r2, rSTAT, #768                          @ Get opcode mode bits
-        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
         orr     r2, rPIPE, r2                            @ Compute opcode
         and     vLow, rPIPE, #15                         @ Compute vLow
-        mov     rPIPE, ip                                @ Duplicate PIPE. WYATT_TODO Probably better to move this to the individual instructions.
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         ldr     pc, [rGOTO, r2, lsl #2]                  @ Branch to handler
 loop_end:
         sub     rR15, rSREG, rGSU                        @ Save reserved registers
@@ -616,18 +615,19 @@ handle_fx_rol:
 handle_fx_bra:
         add     rR15, rR15, #1                           @ R15++
         uxth    rR15, rR15                               @ Wrap R15 at 16 bits
-        sxtb    r2, ip                                   @ Sign-extend saved PIPE
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
         add     r2, rR15, r2                             @ Add PIPE to R15
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         strh    r2, [rGSU, #30]                          @ Store destination to R15
         b       loop_head                                @ 
 
 @ BGE: branch if greater or equal
+@ WYATT_TODO we can probably FETCHPIPE after the branch block to save an instruction. Same for all branches.
 handle_fx_bge:
         add     rR15, rR15, #1                           @ R15++
         uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
         ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
-        sxtb    ip, ip                                   @ Sign-extend saved PIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         addge   rR15, rR15, ip                           @ Handle branch
         addlt   rR15, rR15, #1                           @ 
@@ -636,110 +636,110 @@ handle_fx_bge:
 
 @ BLT: branch if less than
 handle_fx_blt:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addlt   rR15, rR15, ip                           @  Handle branch
-        addge   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addlt   rR15, rR15, ip                           @ Handle branch
+        addge   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ BNE: branch if not equal
 handle_fx_bne:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addne   rR15, rR15, ip                           @  Handle branch
-        addeq   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addne   rR15, rR15, ip                           @ Handle branch
+        addeq   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ BEQ: branch if equal
 handle_fx_beq:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addeq   rR15, rR15, ip                           @  Handle branch
-        addne   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addeq   rR15, rR15, ip                           @ Handle branch
+        addne   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ BPL: branch if positive or zero
 handle_fx_bpl:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addpl   rR15, rR15, ip                           @  Handle branch
-        addmi   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addpl   rR15, rR15, ip                           @ Handle branch
+        addmi   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ BMI: branch if negative
 handle_fx_bmi:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addmi   rR15, rR15, ip                           @  Handle branch
-        addpl   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addmi   rR15, rR15, ip                           @ Handle branch
+        addpl   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ BCC: branch if lower (unsigned <)
 handle_fx_bcc:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addcc   rR15, rR15, ip                           @  Handle branch
-        addcs   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addcc   rR15, rR15, ip                           @ Handle branch
+        addcs   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ BCS: branch if higher or same (unsigned >=)
 handle_fx_bcs:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addcs   rR15, rR15, ip                           @  Handle branch
-        addcc   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addcs   rR15, rR15, ip                           @ Handle branch
+        addcc   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ BVC: branch if no overflow
 handle_fx_bvc:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addvc   rR15, rR15, ip                           @  Handle branch
-        addvs   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addvc   rR15, rR15, ip                           @ Handle branch
+        addvs   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ BVS: branch if overflow
 handle_fx_bvs:
-        add     rR15, rR15, #1                           @  R15++
-        uxth    r2, rR15                                 @  Wrap R15 at 16 bits
-        ldrb    rPIPE, [r1, r2]                          @  FETCHPIPE
-        sxtb    ip, ip                                   @  Sign-extend saved PIPE
-        msr     cpsr_f, rARM                             @  Load flags into CPSR
-        addvs   rR15, rR15, ip                           @  Handle branch
-        addvc   rR15, rR15, #1                           @  
-        strh    rR15, [rGSU, #30]                        @  Store destination to R15
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        addvs   rR15, rR15, ip                           @ Handle branch
+        addvc   rR15, rR15, #1                           @ 
+        strh    rR15, [rGSU, #30]                        @ Store destination to R15
         b       loop_head                                @ 
 
 @ TO: set register n as destination register
@@ -1228,7 +1228,7 @@ handle_fx_ibt_r:
         uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
         strh    r2, [rGSU, #30]                          @ Store R15. WYATT_TODO unnecessary. Aliasing?
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        sxtb    ip, ip                                   @ Sign-extend existing PIPE. WYATT_TODO probably can use rPIPE? Either way sxtb is probably unnecessary
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
         add     rR15, rR15, #2                           @ R15 + 2
         ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE. We don't immediately use this value! This can be optimized.
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
@@ -1243,7 +1243,7 @@ handle_fx_ibt_r14:
         add     r2, rR15, #1                             @ R15 + 1 into scratch register
         uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
         strh    r2, [rGSU, #30]                          @ Store R15. WYATT_TODO unnecessary. Aliasing?
-        sxtb    ip, ip                                   @ Shift vLow for 2-byte offset
+        sxtb    ip, rPIPE                                @ Sign-extend PIPE
         add     rR15, rR15, #2                           @ R15 + 2
         ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE. We don't immediately use this value!
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
@@ -1251,7 +1251,7 @@ handle_fx_ibt_r14:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #30]                        @ Store R15
-        uxth    ip, ip                                   @ Unsigned-extend PIPE? What? It's 8-bit... WYATT_TODO
+        uxth    ip, ip                                   @ PIPE was sign-extended, so we need to zero-extend it for the load. WYATT_TODO could probably avoid this.
         ldr     rR15, [rGSU, #408]                       @ READR14: Load ROM base pointer
         ldrb    rR15, [rR15, ip]                         @ READR14: Load ROM(R14)
         strb    rR15, [rGSU, #38]                        @ READR14: Store to ROMBUFFER
@@ -1453,6 +1453,7 @@ handle_fx_getb:
 handle_fx_iwt_r:
         add     r2, rR15, #1                             @ R15 + 1 into scratch register
         uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
+        mov     ip, rPIPE                                @ We need a copy of PIPE. WYATT_TODO could save here since PIPE is fetched again.
         ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
         add     r2, rR15, #2                             @ R15 + 2 into scratch register
         orr     ip, ip, rPIPE, lsl #8                    @ Combine both PIPEs into result
@@ -1471,6 +1472,7 @@ handle_fx_iwt_r:
 handle_fx_iwt_r14:
         add     r2, rR15, #1                             @ R15 + 1 into scratch register
         uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
+        mov     ip, rPIPE                                @ We need a copy of PIPE. WYATT_TODO could save here since PIPE is fetched again.
         ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
         add     r2, rR15, #2                             @ R15 + 2 into scratch register
         orr     ip, ip, rPIPE, lsl #8                    @ Combine both PIPEs into result
@@ -1717,7 +1719,7 @@ handle_fx_lmult:
 @ LMS: load word from RAM (short address), store in register N
 @ WYATT_TODO would this be better with a bespoke R15 version?
 handle_fx_lms_r:
-        lsl     ip, ip, #1                               @ Shift PIPE left 1
+        lsl     ip, rPIPE, #1                            @ Shift PIPE left 1
         add     r2, rR15, #1                             @ R15 + 1 into scratch register
         strh    ip, [rGSU, #34]                          @ Store shifted pipe GSU.vLastRamAdr
         uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
@@ -1738,7 +1740,7 @@ handle_fx_lms_r:
         
 @ LMS: load word from RAM (short address), store in register 14, then READR14
 handle_fx_lms_r14:
-        lsl     ip, ip, #1                               @ Shift PIPE left 1
+        lsl     ip, rPIPE, #1                            @ Shift PIPE left 1
         add     r2, rR15, #1                             @ R15 + 1 into scratch register
         strh    ip, [rGSU, #34]                          @ Store shifted pipe GSU.vLastRamAdr
         uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
@@ -1809,6 +1811,7 @@ handle_fx_lm_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         add     r2, rR15, #1                             @ R15 + 1 into scratch register
         uxth    r2, r2                                   @ Wrap R15 at 16 bits
+        mov     ip, rPIPE                                @ We need a copy of PIPE. WYATT_TODO could save here since PIPE is fetched again.
         ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
         add     r2, rR15, #2                             @ R15 + 2 into scratch register
         orr     ip, ip, rPIPE, lsl #8                    @ Combine both bytes of destination
@@ -1833,6 +1836,7 @@ handle_fx_lm_r:
 handle_fx_lm_r14:
         add     r2, rR15, #1                             @ R15 + 1 into scratch register
         uxth    r2, r2                                   @ Wrap R15 at 16 bits
+        mov     ip, rPIPE                                @ We need a copy of PIPE. WYATT_TODO could save here since PIPE is fetched again.
         ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
         add     r2, rR15, #2                             @ R15 + 2 into scratch register
         orr     ip, ip, rPIPE, lsl #8                    @ Combine both bytes of destination
@@ -1945,7 +1949,7 @@ handle_fx_mult_i:
 @ SMS: Store register N in RAM (short address). The address is fetched from PIPE.
 handle_fx_sms_r:
         add     rR15, rR15, #1                           @ R15++
-        lsl     ip, ip, #1                               @ Shift PIPE left 1
+        lsl     ip, rPIPE, #1                            @ Shift PIPE left 1
         uxth    rR15, rR15                               @ Wrap R15 at 16 bits
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrh    r2, [rGSU, vLow]                         @ Load value from register N
@@ -2031,6 +2035,7 @@ handle_fx_sm_r:
         ldrh    r2, [rGSU, vLow]                         @ Load register N
         add     vLow, rR15, #1                           @ R15 + 1 into scratch register
         uxth    vLow, vLow                               @ Wrap R15 at 16 bits
+        mov     ip, rPIPE                                @ WYATT_TODO fix this. Temporary hack while removing IP from dispatch.
         strh    ip, [rGSU, #34]                          @ Store bottom byte of PIPE at GSU.vLastRamAdr. WYATT_TODO unnecessary
         strh    vLow, [rGSU, #30]                        @ Store R15. WYATT_TODO unnecessary
         ldrb    rPIPE, [r1, vLow]                        @ FETCHPIPE
