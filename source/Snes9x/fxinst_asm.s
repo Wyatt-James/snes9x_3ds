@@ -1356,9 +1356,9 @@ handle_fx_inc_r14:
         add     r1, r1, #1                               @ Increment value
         strh    r1, [rGSU, #28]                          @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
+        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
         lsl     r1, r1, #16                              @ Set flags
         movs    r1, r1                                   @  |
-        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrb    r1, [r2, r1, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
@@ -1412,9 +1412,9 @@ handle_fx_dec_r14:
         sub     r1, r1, #1                               @ Increment value
         strh    r1, [rGSU, #28]                          @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
+        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
         lsl     r1, r1, #16                              @ Set flags
         movs    r1, r1                                   @  |
-        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrb    r1, [r2, r1, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
