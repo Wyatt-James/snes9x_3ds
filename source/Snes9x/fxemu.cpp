@@ -12,6 +12,9 @@
 /* Aligned to 3DS L1 cacheline boundary */
 struct FxRegs_s GSU __attribute__((aligned(32)));
 
+/* Used for some ASM optimization. See link.ld for more info. */
+/* struct FxRegs_s GSU __attribute__((section(".gsu_segment"))); */
+
 #define FXEMU_ENABLE_CALL_COUNTING 0
 
 enum

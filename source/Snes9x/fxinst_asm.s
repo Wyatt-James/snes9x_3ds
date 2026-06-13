@@ -9,6 +9,10 @@
 #define rDREG  r10
 #define rGOTO  fp
 
+@ Constants for a wacky linker optimization. See link.ld for more info. Currently disabled.
+@ #define GSU_PTR #0x004FFFE4
+@ #define R14_PTR #0x00500000
+
 @ R0 contains vLow
 @ R1 contains GSU.pvPrgBank, for fetching PIPE
 @ R2 contains extended opcode after interpreter
@@ -252,7 +256,7 @@ handle_fx_rpix_2bit:
         @ rR15 is pixel 0 Pointer, IP is the pixel mask
         ldrh    r1, [rR15, #0]                           @ Load pixel pair 1
         mov     vLow, #0                                 @ Initial result
-        add     rR15, rGSU, #28                          @ Lifted from return to save a cycle
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14. Lifted from return to save a cycle
 
         tst r1, ip                                       @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
@@ -1106,7 +1110,7 @@ handle_fx_sex:
         movs    rR15, rR15                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         strh    rR15, [rDREG]                            @ Store value
-        add     rR15, rGSU, #28                          @ TESTR14: pointer to R14
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
         cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
         ldrheq  rR15, [rGSU, #28]                        @  |
         ldreq   r2, [rGSU, #408]                         @  |
@@ -1127,7 +1131,7 @@ handle_fx_asr:
         asrs    rR15, rR15, #1                           @ ASR by 1 and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #28                          @ TESTR14: pointer to R14
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
         cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
         ldrheq  rR15, [rGSU, #28]                        @  |
         ldreq   r2, [rGSU, #408]                         @  |
@@ -1149,7 +1153,7 @@ handle_fx_ror:
         rrxs    rR15, rR15                               @ Rotate right and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #28                          @ TESTR14: pointer to R14
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
         cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
         ldrheq  rR15, [rGSU, #28]                        @  |
         ldreq   r2, [rGSU, #408]                         @  |
@@ -1181,7 +1185,7 @@ handle_fx_lob:
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         strh    r2, [rDREG]                              @ Store result to DREG
-        add     rR15, rGSU, #28                          @ TESTR14: pointer to R14
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
         cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
         ldrheq  rR15, [rGSU, #28]                        @  |
         ldreq   r2, [rGSU, #408]                         @  |
@@ -1212,7 +1216,7 @@ handle_fx_fmult:
         add     r2, r2, #1                               @ R15++
         strh    r2, [rGSU, #30]                          @ Store R15
         strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #28                          @ TESTR14: pointer to R14
+        add     rR15, rGSU, #28                          @ TESTR14: Pointer to R14
         cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
         ldrheq  rR15, [rGSU, #28]                        @  |
         ldreq   r2, [rGSU, #408]                         @  |
