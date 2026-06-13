@@ -21,7 +21,7 @@
 @ R9 contains a pointer to the GSU SREG
 @ R10 contains a pointer to the GSU DREG
 @ FP contains a pointer to the instruction dispatch table
-@ IP contains PIPE after interpreter
+@ IP contains the dispatch branch destination after interpreter
 @ LR is reserved and must be preserved
 
 @ WYATT_TODO various optimizations:
@@ -108,14 +108,15 @@ loop_head:
         ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
 loop_head.skip_1:
         ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15. Taken from loop_dispatch to reduce memory stalling
-        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
-        beq     loop_end                                 @ 
 loop_dispatch:
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
+        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
+        ldr     ip, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
-        ldr     pc, [rGOTO, r2, lsl #2]                  @ Branch to handler
+        bx      ip                                       @ Branch to handler
 loop_end:
         sub     rR15, rSREG, rGSU                        @ Save reserved registers
         asr     rR15, rR15, #1                           @  |
