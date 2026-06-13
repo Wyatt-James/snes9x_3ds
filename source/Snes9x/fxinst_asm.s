@@ -28,6 +28,13 @@
 @ IP contains the dispatch branch destination after interpreter
 @ LR is reserved and must be preserved
 
+@ ----- Preferred regalloc order -----
+@ R2, IP, vLow
+@ rSREG, rDREG (if overwritten later)
+@ rARM (if overwritten later)
+@ R1 (reload necessary if modified)
+@ rR15 (reload necessary if modified)
+
 @ WYATT_TODO various optimizations:
 @ - Optimize TESTR14. See below
 @ - Fix doubled loads and stores caused by aliasing
@@ -39,6 +46,9 @@
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
 @ - Add a separate dispatch for after instructions that ran CLRFLAGS. Would save an instruction but might not matter due to load latency.
 @ - Move vLow calculation out of dispatch and into the individual handlers. Some 41-45% of instructions don't need it.
+@ - Once R15 reloads have been fixed, remove R15 saves from handlers that are guaranteed not to use R15 via SREG/DREG. Also add an R15 store in loop_end.
+@     Maybe add alternate opcode tables for versions with R15 DREG/SREG to further save?
+@ - Optimize regalloc to minimize reloads of R1 and rR15
 
 @ Optimize TESTR14. Most TESTR14s are interleaved with CLRFLAGS; only the DREG = 0 part needs to be.
 @ Current:
@@ -1343,35 +1353,35 @@ handle_fx_inc_r:
         strh    rR15, [rGSU, #30]                        @  |
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrh    r1, [rGSU, vLow]                         @ Load value
+        ldrh    r2, [rGSU, vLow]                         @ Load value
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        add     r1, r1, #1                               @ Increment value
-        strh    r1, [rGSU, vLow]                         @ Store result
+        add     r2, r2, #1                               @ Increment value
+        strh    r2, [rGSU, vLow]                         @ Store result
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, r1, #16                            @ Set flags
+        lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       loop_head                                @ 
+        b       loop_dispatch                            @ Skip reloading r1 and rR15
 
 @ INC R14: increment R14 and then READR14
 handle_fx_inc_r14:
-        ldrh    r1, [rGSU, #28]                          @ Load value from R14
+        ldrh    r2, [rGSU, #28]                          @ Load value from R14
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #30]                        @  |
-        add     r1, r1, #1                               @ Increment value
-        strh    r1, [rGSU, #28]                          @ Store result to R14
+        add     r2, r2, #1                               @ Increment value
+        strh    r2, [rGSU, #28]                          @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
-        lsl     r1, r1, #16                              @ Set flags
-        movs    r1, r1                                   @  |
+        ldr     ip, [rGSU, #408]                         @ READR14: Load ROM base pointer
+        lsl     r2, r2, #16                              @ Set flags
+        movs    r2, r2                                   @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrb    r1, [r2, r1, lsr #16]                    @ READR14: Load ROM(R14)
+        ldrb    r2, [ip, r2, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        strb    r1, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
-        b       loop_head                                @ 
+        strb    r2, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
+        b       loop_dispatch                            @ Skip reloading r1 and rR15
 
 @ GETC: transfer ROMBUFFER to color register
 handle_fx_getc:
@@ -1399,35 +1409,36 @@ handle_fx_dec_r:
         strh    rR15, [rGSU, #30]                        @  |
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrh    r1, [rGSU, vLow]                         @ Load value
+        ldrh    r2, [rGSU, vLow]                         @ Load value
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        sub     r1, r1, #1                               @ Increment value
-        strh    r1, [rGSU, vLow]                         @ Store result
+        sub     r2, r2, #1                               @ Decrement value
+        strh    r2, [rGSU, vLow]                         @ Store result
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, r1, #16                            @ Set flags
+        lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       loop_head                                @ 
+        b       loop_dispatch                            @ Skip reloading r1 and rR15
 
 @ DEC R14: decrement R14 and then READR14
 handle_fx_dec_r14:
-        ldrh    r1, [rGSU, #28]                          @ Load value from R14
-        add     rR15, rR15, #1                           @ R15++
+        ldrh    r2, [rGSU, #28]                          @ Load value from R14
+        add     rR15, rR15, #1                 
+                  @ R15++
         strh    rR15, [rGSU, #30]                        @  |
-        sub     r1, r1, #1                               @ Increment value
-        strh    r1, [rGSU, #28]                          @ Store result to R14
+        sub     r2, r2, #1                               @ Decrement value
+        strh    r2, [rGSU, #28]                          @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        ldr     r2, [rGSU, #408]                         @ READR14: Load ROM base pointer
-        lsl     r1, r1, #16                              @ Set flags
-        movs    r1, r1                                   @  |
+        ldr     ip, [rGSU, #408]                         @ READR14: Load ROM base pointer
+        lsl     r2, r2, #16                              @ Set flags
+        movs    r2, r2                                   @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrb    r1, [r2, r1, lsr #16]                    @ READR14: Load ROM(R14)
+        ldrb    r2, [ip, r2, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        strb    r1, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
-        b       loop_head                                @ 
+        strb    r2, [rGSU, #38]                          @ READR14: Store to ROMBUFFER
+        b       loop_dispatch                            @ Skip reloading r1 and rR15
 
 @ GETB: get byte from ROMBUFFER
 handle_fx_getb:
