@@ -115,9 +115,6 @@ fx_run_asm:
         str     r2, [rGOTO, #2352]                       @  |
         str     r2, [rGOTO, #304]                        @  V
       @ beq     loop_end                                 @ End if nInstructions == 0. Unreachable.
-        ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
-        ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15.  Taken from loop_dispatch to reduce memory stalling
-        b       loop_dispatch
 loop_head:
         ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
 loop_head.skip_1:
