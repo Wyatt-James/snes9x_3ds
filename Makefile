@@ -88,7 +88,8 @@ COMMON          := $(OPT_FLAGS) $(LIBFLAGS) -mword-relocations -fomit-frame-poin
 CFLAGS          := $(COMMON) $(C_WARNINGS) -std=gnu99
 CXXFLAGS        := $(COMMON) $(CXX_WARNINGS) -fno-rtti -fno-exceptions -std=gnu++20
 ASFLAGS         := -g -ggdb -masm-syntax-unified $(ARCH)
-LDFLAGS         = -specs=3dsx.specs $(ARCH) -Wl,-Map,$(notdir $*.map)
+LDSCRIPT        := $(TOPDIR)/link.ld
+LDFLAGS         = -specs=3dsx.specs $(ARCH) -Wl,-Map,$(notdir $*.map) -T $(LDSCRIPT)
 
 #---------------------------------------------------------------------------------
 # Libraries needed to link into the executable.
@@ -263,7 +264,7 @@ $(OUTPUT_FILE).smdh : $(APP_ICON_IMAGE)
 
 $(OFILES_SOURCES) : $(HFILES)
 
-$(OUTPUT_FILE).elf : $(OFILES)
+$(OUTPUT_FILE).elf : $(OFILES) $(LDSCRIPT)
 
 $(OUTPUT_FILE).3ds : $(OUTPUT_FILE).elf
 	@$(MAKEROM) -f cci -o $(OUTPUT_FILE).3ds -DAPP_ENCRYPTED=true $(COMMON_MAKEROM_PARAMS)
