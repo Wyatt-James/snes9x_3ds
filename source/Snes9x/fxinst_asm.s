@@ -34,6 +34,7 @@
 @ - Move dispatch's pipe duplication to individual instructions
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
 @ - Add a separate dispatch for after instructions that ran CLRFLAGS. Would save an instruction but might not matter due to load latency.
+@ - Move vLow calculation out of dispatch and into the individual handlers. Some 41-45% of instructions don't need it.
 
 @ Optimize TESTR14. Most TESTR14s are interleaved with CLRFLAGS; only the DREG = 0 part needs to be.
 @ Current:
