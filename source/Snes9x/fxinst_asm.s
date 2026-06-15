@@ -2229,9 +2229,10 @@ handle_fx_plot_2bit.L237:
 @ R1 is X, IP is Y, vLow is vPlotOptionReg, R2 is COLOR
 handle_fx_plot_8bit.L239:
         tst     vLow, #8                                 @ Test PLOT_FREEZEHIGH
-        tstne   r2, #15                                  @ If PLOT_FREEZEHIGH, exit if bottom nibble == 0
-        tsteq   r2, #255                                 @ Else, exit if whole byte == 0
-        bne     .L40                                     @ If pixel is transparent, return. Else, continue drawing.
+        mov     vLow, r2                                 @ We need to preserve COLOR, so use vLow
+        andne   vLow, vLow, #15                          @ If PLOT_FREEZEHIGH, only test the bottom nibble
+        tst     vLow, #255                               @ If COLOR == 0, return. Else, continue drawing
+        bne     .L40                                     @  |
         b       handle_fx_plot_8bit.return               @  |
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
