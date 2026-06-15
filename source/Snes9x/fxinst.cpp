@@ -81,7 +81,7 @@ register uint16* pvSregLocal asm("r9");
 register uint16* pvDregLocal asm("r10");
 #define DREG_PTR pvDregLocal
 #define DREG *DREG_PTR
-register void* unusedReg asm("lr");
+// register void* unusedReg asm("lr");
 
 // If any of these registers are used by your function or its
 // statically-linked subroutines, these must be placed at the
