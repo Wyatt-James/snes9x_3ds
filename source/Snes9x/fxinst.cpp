@@ -364,7 +364,7 @@ static inline void fx_to_r15(uint8 unused) {
 }
 
 /* 20-2f - with rn - set register n as source and destination register */
-static inline void fx_with(uint8 reg) {
+static inline void fx_with_r(uint8 reg) {
     ASSUME_REG(0, 15);
     SF(B);
     SREG_PTR = DREG_PTR = &GSU.avReg[reg];

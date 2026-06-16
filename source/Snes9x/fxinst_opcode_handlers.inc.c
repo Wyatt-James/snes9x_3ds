@@ -25,7 +25,7 @@
         HANDLER(fx_to_r)
         HANDLER(fx_to_r14)
         HANDLER(fx_to_r15)
-        HANDLER(fx_with)
+        HANDLER(fx_with_r)
         HANDLER(fx_stw_r)
         HANDLER(fx_loop)
         HANDLER(fx_alt1)

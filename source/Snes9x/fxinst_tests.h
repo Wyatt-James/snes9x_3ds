@@ -145,7 +145,7 @@ FX_Result fxtest_dec_r(const FX_Gsu* GSU, const uint16 v1); // WRITES flags
 //   fx_to_r
 //   fx_to_r14
 //   fx_to_r15
-//   fx_with
+//   fx_with_r
 //   fx_stw_r
 //   fx_stb_r
 //   fx_alt1

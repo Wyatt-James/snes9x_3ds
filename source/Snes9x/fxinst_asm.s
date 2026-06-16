@@ -829,7 +829,7 @@ handle_fx_to_r15.b_is_not_set:
         b       loop_head_flags                          @ 
 
 @ WITH: set register n as source and destination register
-handle_fx_with:
+handle_fx_with_r:
         add     rDREG, rGSU, vLow, lsl #1                @ Calculate register
         add     rR15, rR15, #1                           @ R15++
         mov     rSREG, rDREG                             @ Copy register to SREG
