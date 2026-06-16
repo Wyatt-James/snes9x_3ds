@@ -114,11 +114,13 @@ fx_run_asm:
         str     r2, [rGOTO, #2352]                       @  |
         str     r2, [rGOTO, #304]                        @  V
       @ beq     loop_end                                 @ End if nInstructions == 0. Unreachable.
-loop_head:
+
+@ Dispatch for after instructions that do not run CLRFLAGS
+loop_head_flags:
         ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
-loop_head.skip_1:
+loop_head_flags.skip_1:
         ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15. Taken from loop_dispatch to reduce memory stalling
-loop_dispatch:
+loop_dispatch_flags:
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
@@ -127,6 +129,20 @@ loop_dispatch:
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         bx      ip                                       @ Branch to handler
+
+@ Dispatch for after instructions that run CLRFLAGS
+loop_head:
+        ldr     r1, [rGSU, #412]                         @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
+loop_head.skip_1:
+        ldrh    rR15, [rGSU, #30]                        @ FETCHPIPE: Load R15. Taken from loop_dispatch to reduce memory stalling
+loop_dispatch:
+        ldr     ip, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
+        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
+        beq     loop_end                                 @ 
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        bx      ip                                       @ Branch to handler
+
 loop_end:
         sub     rR15, rSREG, rGSU                        @ Save reserved registers
         asr     rR15, rR15, #1                           @  |
@@ -629,7 +645,7 @@ handle_fx_bra:
         add     r2, rR15, r2                             @ Add PIPE to R15
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         strh    r2, [rGSU, #30]                          @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BGE: branch if greater or equal
 handle_fx_bge:
@@ -641,7 +657,7 @@ handle_fx_bge:
         addge   rR15, rR15, ip                           @ Handle branch
         addlt   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BLT: branch if less than
 handle_fx_blt:
@@ -653,7 +669,7 @@ handle_fx_blt:
         addlt   rR15, rR15, ip                           @ Handle branch
         addge   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BNE: branch if not equal
 handle_fx_bne:
@@ -665,7 +681,7 @@ handle_fx_bne:
         addne   rR15, rR15, ip                           @ Handle branch
         addeq   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BEQ: branch if equal
 handle_fx_beq:
@@ -677,7 +693,7 @@ handle_fx_beq:
         addeq   rR15, rR15, ip                           @ Handle branch
         addne   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BPL: branch if positive or zero
 handle_fx_bpl:
@@ -689,7 +705,7 @@ handle_fx_bpl:
         addpl   rR15, rR15, ip                           @ Handle branch
         addmi   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BMI: branch if negative
 handle_fx_bmi:
@@ -701,7 +717,7 @@ handle_fx_bmi:
         addmi   rR15, rR15, ip                           @ Handle branch
         addpl   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BCC: branch if lower (unsigned <)
 handle_fx_bcc:
@@ -713,7 +729,7 @@ handle_fx_bcc:
         addcc   rR15, rR15, ip                           @ Handle branch
         addcs   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BCS: branch if higher or same (unsigned >=)
 handle_fx_bcs:
@@ -725,7 +741,7 @@ handle_fx_bcs:
         addcs   rR15, rR15, ip                           @ Handle branch
         addcc   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BVC: branch if no overflow
 handle_fx_bvc:
@@ -737,7 +753,7 @@ handle_fx_bvc:
         addvc   rR15, rR15, ip                           @ Handle branch
         addvs   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ BVS: branch if overflow
 handle_fx_bvs:
@@ -749,49 +765,69 @@ handle_fx_bvs:
         addvs   rR15, rR15, ip                           @ Handle branch
         addvc   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #30]                        @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ TO: set register n as destination register
 @ move one register to another (if B flag is set)
+@ Cannot be called on R14 or R15.
 handle_fx_to_r:
         tst     rSTAT, #4096                             @ Test B
-        addeq   vLow, rGSU, vLow, lsl #1                 @ Compute register pointer for DREG
-        beq     .L81                                     @ If B is set, only set DREG
-        ldrh    r2, [rSREG]                              @ Load SREG
-        lsl     vLow, vLow, #1                           @ Compute register offset
-        strh    r2, [rGSU, vLow]                         @ Store to vLow
-        add     vLow, rGSU, #0                           @ CLRFLAGS: vLow = 0
-        mov     rSREG, vLow                              @ CLRFLAGS: SREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-.L81:
         add     rR15, rR15, #1                           @ R15++
-        mov     rDREG, vLow                              @ CLRFLAGS: DREG = vLow. May be 0 or a reg depending on branch.
+        beq     handle_fx_to_r.b_is_not_set              @ If B is not set, branch
+@ B is set
+        ldrh    r2, [rSREG]                              @ Load SREG
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         strh    rR15, [rGSU, #30]                        @ Store R15
-        b       loop_head                                @ 
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        strh    r2, [rGSU, vLow]                         @ Register N = SREG
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        b       loop_head
+handle_fx_to_r.b_is_not_set:
+        strh    rR15, [rGSU, #30]                        @ Store R15. vLow cannot be 15, so early store is valid
+        add     rDREG, rGSU, vLow, lsl #1                @ DREG = vLow
+        b       loop_head_flags                          @ 
 
 
 @ TO_R14: set register 14 as destination register
 @ If B flag is set, move SREG to R14, CLRFLAGS, and READR14 instead
 handle_fx_to_r14:
         tst     rSTAT, #4096                             @ Test B
-        bne     handle_fx_to_r14.b_is_set                @ If B is set, branch
-        add     rDREG, rGSU, #28                         @ Else, DREG = R14
-.L84:
         add     rR15, rR15, #1                           @ R15++
+        bne     handle_fx_to_r14.b_is_set                @ If B is set, branch
+@ B is not set
         strh    rR15, [rGSU, #30]                        @ Store R15
-        b       loop_head                                @ 
+        add     rDREG, rGSU, #28                         @ DREG = pointer to R14
+        b       loop_head_flags                          @ 
+handle_fx_to_r14.b_is_set:
+        ldrh    r2, [rSREG]                              @ Load SREG
+        ldr     r1, [rGSU, #408]                         @ READR14: Load GSU.pvRomBank
+        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
+        strh    r2, [rGSU, #28]                          @ R14 = SREG
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
+        ldrb    vLow, [r1, r2]                           @ READR14: Load GSU.pvRomBank[R14]
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strb    vLow, [rGSU, #38]                        @ READR14: Store ROMBUFFER
+        b       loop_head                                @ Branch back to main handler
 
 @ TO_R15: Set DREG to R15 and increment R15
 @ If B flag is set, move SREG to R15 instead
 handle_fx_to_r15:
         tst     rSTAT, #4096                             @ Test B
-        beq     handle_fx_to_r15.b_is_not_set            @ If B is not set, branch (no return)
+        beq     handle_fx_to_r15.b_is_not_set            @ If B is not set, branch
+@ B is set
         ldrh    rR15, [rSREG]                            @ Load SREG into rR15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
-        strh    rR15, [rGSU, #30]                        @ Store R15
+        strh    rR15, [rGSU, #30]                        @ R15 = SREG
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         b       loop_head                                @ 
+handle_fx_to_r15.b_is_not_set:
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #30]                        @ Store R15
+        add     rDREG, rGSU, #30                         @ DREG = pointer to R15
+        b       loop_head_flags                          @ 
 
 @ WITH: set register n as source and destination register
 handle_fx_with:
@@ -800,7 +836,7 @@ handle_fx_with:
         mov     rSREG, rDREG                             @ Copy register to SREG
         strh    rR15, [rGSU, #30]                        @ Store R15
         orr     rSTAT, rSTAT, #4096                      @ Set flag B
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ STW: store word (16 bits)
 handle_fx_stw_r:
@@ -847,7 +883,7 @@ handle_fx_alt1:
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #30]                        @ Store R15
         orr     rSTAT, rSTAT, #256                       @ Set ALT1 flag
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ ALT2: set ALT mode 2
 handle_fx_alt2:
@@ -855,7 +891,7 @@ handle_fx_alt2:
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #30]                        @ Store R15
         orr     rSTAT, rSTAT, #512                       @ Set ALT2 flag
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
         
 @ ALT3: set ALT mode 3
 handle_fx_alt3:
@@ -863,7 +899,7 @@ handle_fx_alt3:
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #30]                        @ Store R15
         orr     rSTAT, rSTAT, #768                       @ Set ALT1 + ALT2 flags
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ LDW: load word
 handle_fx_ldw_r:
@@ -1694,7 +1730,7 @@ handle_fx_ljmp_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #32]                        @ GSU.vCacheBaseReg = R15 & 0xfff0
         strh    r2, [rGSU, #30]                          @ Store destination to R15
-        b       loop_head                                @ 
+        b       loop_head_flags                          @ 
 
 @ LMULT: 16-bit to 32-bit signed multiplication SREG * R6, low result in R4, then high result in DREG.
 handle_fx_lmult:
@@ -2190,29 +2226,10 @@ handle_fx_romb:
 
 @ FROM: If B is not set, set SREG to register N and increment R15
 handle_fx_from_r.b_is_not_set:
-        add     rR15, rR15, #1                           @ R15++
+        add     rR15, rR15, #1                           @ R15++. WYATT_TODO this should be moved to the common handler
         strh    rR15, [rGSU, #30]                        @ Store R15
         add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
-        b       loop_head                                @ 
-
-@ If B flag is not set, set DREG to R15 and increment R15
-handle_fx_to_r15.b_is_not_set:
-        add     rR15, rR15, #1                           @ R15++
-        strh    rR15, [rGSU, #30]                        @ Store R15
-        add     rDREG, rGSU, #30                         @ DREG = R15
-        b       loop_head                                @ 
-
-@ If B flag is set, move SREG to R14, CLRFLAGS, and READR14
-handle_fx_to_r14.b_is_set:
-        ldrh    r2, [rSREG]                              @ Load SREG
-        ldr     r1, [rGSU, #408]                         @ READR14: Load GSU.pvRomBank
-        strh    r2, [rGSU, #28]                          @ R14 = SREG
-        ldrb    r2, [r1, r2]                             @ READR14: Load GSU.pvRomBank[R14]
-        add     rSREG, rGSU, #0                          @ CLRFLAGS: SREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        strb    r2, [rGSU, #38]                          @ READR14: Store ROMBUFFER
-        b       .L84                                     @ Branch back to main handler
+        b       loop_head_flags                          @ 
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
 @ Inlining this or not is a bit of a tossup
