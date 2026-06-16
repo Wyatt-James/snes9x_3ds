@@ -320,7 +320,7 @@ static inline void fx_bvs(uint8 unused) { BRA_COND( "vs", "vc" ); }
 /* 10-1f(B) - move rn - move one register to another (if B flag is set) */
 static inline void fx_to_r(uint8 reg) {
     ASSUME_REG(0, 13);
-    if(TF(B))
+    if(TF(B)) // WYATT_TODO check probability
     {
         GSU.avReg[reg] = SREG;
         CLRFLAGS;
@@ -336,7 +336,7 @@ static inline void fx_to_r(uint8 reg) {
 /* TO_R14: set register 14 as destination register */
 /* If B flag is set, move SREG to R14 and READR14 instead */
 static inline void fx_to_r14(uint8 unused) {
-    if(TF(B)) {
+    if(TF(B)) { // WYATT_TODO check probability
         R14 = SREG;
         CLRFLAGS;
         READR14;
@@ -351,7 +351,7 @@ static inline void fx_to_r14(uint8 unused) {
 /* TO_R15: Set register 15 as destination register and increment */
 /* If B flag is set, move SREG to R15 instead */
 static inline void fx_to_r15(uint8 unused) {
-    if(TF(B)) {
+    if(TF(B)) { // WYATT_TODO check probability
         R15 = SREG;
         CLRFLAGS;
     }
