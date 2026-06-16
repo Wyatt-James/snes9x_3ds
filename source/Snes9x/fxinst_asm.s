@@ -43,7 +43,6 @@
 @ - Put the GSU struct in its own over-aligned segment. This would allow us to do certain comparisons, notably the one in TESTR14, in one fewer instruction.
 @ - Look into the possibility of avoiding the UXTH instructions in IBT/IWT. Shift to top of reg and load with register lsr 16?
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
-@ - Add a separate dispatch for after instructions that ran CLRFLAGS. Would save an instruction but might not matter due to load latency.
 @ - Move vLow calculation out of dispatch and into the individual handlers. Some 41-45% of instructions don't need it.
 @ - Once R15 reloads have been fixed, remove R15 saves from handlers that are guaranteed not to use R15 via SREG/DREG. Also add an R15 store in loop_end. Don't forget to truncate to 16-bit!
 @     Maybe add alternate opcode tables for versions with R15 DREG/SREG to further save?
