@@ -162,15 +162,15 @@ handle_fx_getbs:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrsb   rR15, [rGSU, #FX_vRomBuffer]             @ R15 = SEX8(ROMBUFFER)
-        add     rSREG, rGSU, #FX_R0                      @ CLRFLAGS: SREG = R0
+        add     rSREG, rGSU, #FX_R0                      @ CLRFLAGS: SREG = 0
         strh    rR15, [rDREG]                            @ Store value to DREG
         add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
         ldrheq  rR15, [rGSU, #FX_R14]                    @  |
         ldreq   r2, [rGSU, #FX_pvRomBank]                @  |
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: clear STAT
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrbeq  rR15, [r2, rR15]                         @  |
-        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = R0
+        mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         b       loop_head
 
