@@ -2351,6 +2351,11 @@ void emulatorLoop()
 //---------------------------------------------------------
 int main()
 {
+#if PRINT_GSU_OFFSETS == 1
+    void FX_printGsuOffsets(void);
+    FX_printGsuOffsets();
+#endif
+
     emulatorInitialize();
     drawStartScreen();
     gspWaitForVBlank();

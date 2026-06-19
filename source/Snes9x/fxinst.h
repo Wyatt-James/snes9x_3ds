@@ -131,6 +131,7 @@
 /* Address checking (definately slow) */
 /* #define FX_ADDRESS_CHECK */
 
+/* If you modify anything inside this struct, you MUST update the #defines in fxinst_asm.h. */
 struct FxRegs_s
 {
     /* FxChip registers */

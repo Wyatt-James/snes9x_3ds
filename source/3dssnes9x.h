@@ -20,6 +20,10 @@
 // output will be disabled
 #define RUN_GSU_TESTS 0
 
+// If 1, FX_printGsuOffsets will be run at boot-up, to be used to create
+// assembly defines for the offsets.
+#define PRINT_GSU_OFFSETS 0
+
 #endif // RELEASE
 
 // Uncomment this to allow user to break into debug mode (for the 65816 CPU)
