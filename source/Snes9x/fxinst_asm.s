@@ -49,7 +49,7 @@
 @ - Once R15 reloads have been fixed, remove R15 saves from handlers that are guaranteed not to use R15 via SREG/DREG. Also add an R15 store in loop_end. Don't forget to truncate to 16-bit!
 @     Maybe add alternate opcode tables for versions with R15 DREG/SREG to further save?
 @ - Optimize regalloc to minimize reloads of R1 and rR15
-@ - If all handlers were the same size, we could possibly save a load in dispatch.
+@ - If all handlers were the same size, we could possibly save a load in dispatch and the entirety of rGOTO.
 
 @ Optimize TESTR14. Most TESTR14s are interleaved with CLRFLAGS; only the DREG = 0 part needs to be.
 @ Current:
