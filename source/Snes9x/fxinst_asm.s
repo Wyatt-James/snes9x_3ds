@@ -53,35 +53,6 @@
 @ We can emit based on the prior instruction setting R14 or not, and fall back to interpreter for things like
 @ jumps and resuming a session. This should have pretty substantial savings.
 
-@ Optimize TESTR14. Most TESTR14s are interleaved with CLRFLAGS; only the DREG = 0 part needs to be.
-@ Current:
-@   Most of the handler
-@   Load pointer to R14
-@   Check if DREG == that pointer
-@   DREG = 0
-@   4x conditional loads/stores
-@   RET
-
-@ Ideally:
-@   Most of the handler
-@   Load pointer to R14
-@   Check if DREG == that pointer
-@   BEQ shared_testr14 (branch forward for statically predicted)
-@   DREG = 0
-@   RET
-@
-@  shared_testr14:
-@   DREG = 0
-@   4x loads/stores
-@   RET
-
-@ The handler can be trivially shared to reduce code size with zero impact on cached cycle timings.
-@ Cycle timings:
-@   Correctly predicted not taken (static, dynamic): 2 cycles branch (folded), ret folded
-@   Correctly predicted taken: 2 cycles branch (folded) + 4 cycles handler, ret folded
-@   Incorrectly predicted, not taken: pipe flush
-@   Incorrectly predicted, taken: pipe flush
-
     .section .text.fx_run_asm,"ax",%progbits
     .align    2
     .global fx_run_asm
