@@ -46,8 +46,6 @@
 @ - Put the GSU struct in its own over-aligned segment. This would allow us to do certain comparisons, notably the one in TESTR14, in one fewer instruction.
 @ - Look into the possibility of avoiding the UXTH instructions in IBT/IWT. Shift to top of reg and load with register lsr 16?
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
-@ - Once R15 reloads have been fixed, remove R15 saves from handlers that are guaranteed not to use R15 via SREG/DREG. Also add an R15 store in loop_end. Don't forget to truncate to 16-bit!
-@     Maybe add alternate opcode tables for versions with R15 DREG/SREG to further save?
 @ - Optimize regalloc to minimize reloads of R1 and rR15
 @ - If all handlers were the same size, we could possibly save a load in dispatch and the entirety of rGOTO.
 
@@ -126,7 +124,7 @@ dispatch_flags:
         ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
 dispatch_flags.skip_1:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
-dispatch_flags.skip_2:
+dispatch_flags.skip_2:                                   @ If used, be careful to ensure that R15 is still 16-bit
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
@@ -141,7 +139,7 @@ dispatch:
         ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
 dispatch.skip_1:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
-dispatch.skip_2:
+dispatch.skip_2:                                         @ If used, be careful to ensure that R15 is still 16-bit
         ldr     ip, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         beq     loop_end                                 @ 
@@ -816,12 +814,12 @@ handle_fx_to_r15:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ R15 = SREG
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch                                 @ 
+        b       dispatch.skip_2                          @ 
 handle_fx_to_r15.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rDREG, rGSU, #FX_R15                     @ DREG = pointer to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ WITH: set register n as source and destination register
 handle_fx_with_r:
@@ -918,22 +916,22 @@ handle_fx_ldw_r:
 
 @ SWAP: swap low and high bytes of SREG, store in DREG
 handle_fx_swap:
-        add     r2, rR15, #1                             @ R15++
-        ldrh    rR15, [rSREG]                            @ Load value from SREG
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        rev16   rR15, rR15                               @ Byteswap value
+        ldrh    vLow, [rSREG]                            @ Load value from SREG
+        add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
-        strh    rR15, [rDREG]                            @ Store value into DREG
-        orr     r1, rR15, rR15, lsl #16                  @ Duplicate value into both halves of a register for flags. WYATT_TODO could technically just shift here.
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        movs    rARM, r1                                 @ Set flags
+        rev16   vLow, vLow                               @ Byteswap value
+        lsl     rARM, vLow, #16                          @ Shift for flag setting
+        movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
-        beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    vLow, [rDREG]                            @ Store value into DREG
+        beq     testr14_clrflags_dispatch                @ TESTR14: Branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ COLOR: copy SREG to color register
 handle_fx_color:
@@ -1340,7 +1338,7 @@ handle_fx_inc_r:
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       dispatch.skip_2                          @ Skip reloading r1 and rR15
+        b       dispatch.skip_1                          @ Skip reloading r1 and rR15
 
 @ INC R14: increment R14 and then READR14
 handle_fx_inc_r14:
@@ -1359,7 +1357,7 @@ handle_fx_inc_r14:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_2                          @ Skip reloading r1 and rR15
+        b       dispatch.skip_1                          @ Skip reloading r1 and rR15
 
 @ GETC: transfer ROMBUFFER to color register
 handle_fx_getc:
@@ -1396,7 +1394,7 @@ handle_fx_dec_r:
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       dispatch.skip_2                          @ Skip reloading r1 and rR15
+        b       dispatch.skip_1                          @ Skip reloading r1 and rR15
 
 @ DEC R14: decrement R14 and then READR14
 handle_fx_dec_r14:
@@ -1416,7 +1414,7 @@ handle_fx_dec_r14:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_2                          @ Skip reloading r1 and rR15
+        b       dispatch.skip_1                          @ Skip reloading r1 and rR15
 
 @ GETB: get byte from ROMBUFFER
 handle_fx_getb:
