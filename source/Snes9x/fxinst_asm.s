@@ -578,7 +578,7 @@ handle_fx_cache:
         ldrh    r1, [rGSU, #FX_vCacheBaseReg]            @ r1 = GSU.vCacheBaseReg
         bic     r2, rR15, #15                            @ r2 = R15 & 0xfff0
         cmp     r1, r2                                   @ If address range is not equal, cache needs a reload
-        beq     .cache_test_active                       @ If address range is equal, check if cache is active
+        beq     handle_fx_cache.test_active              @ If address range is equal, check if cache is active
 @ Reload cache
 .reload_cache:
         strh    r2, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
@@ -2264,7 +2264,7 @@ handle_fx_plot_4bit.L238:
 
 @ fx_cache: second half of the conditional, down here since it's UNLIKELY.
 @ Only reached if GSU.vCacheBaseReg says we need a reload
-.cache_test_active:
+handle_fx_cache.test_active:
         ldrb    r1, [rGSU, #FX_bCacheActive]             @ Load GSU.bCacheActive
         cmp     r1, #0                                   @ 
         bne     .skip_cache_reload                       @ If active, skip reloading since it's already correct
