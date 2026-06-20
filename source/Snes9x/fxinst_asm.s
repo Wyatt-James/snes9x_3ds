@@ -118,11 +118,11 @@ fx_run_asm:
       @ beq     loop_end                                 @ End if nInstructions == 0. Unreachable.
 
 @ Dispatch for after instructions that do not run CLRFLAGS
-loop_head_flags:
+dispatch_flags:
         ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
-loop_head_flags.skip_1:
+dispatch_flags.skip_1:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from loop_dispatch to reduce memory stalling
-loop_dispatch_flags:
+dispatch_flags.skip_2:
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
@@ -133,11 +133,11 @@ loop_dispatch_flags:
         bx      ip                                       @ Branch to handler
 
 @ Dispatch for after instructions that run CLRFLAGS
-loop_head:
+dispatch :
         ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
-loop_head.skip_1:
+dispatch.skip_1:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from loop_dispatch to reduce memory stalling
-loop_dispatch:
+dispatch.skip_2:
         ldr     ip, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         beq     loop_end                                 @ 
@@ -172,7 +172,7 @@ handle_fx_getbs:
         ldrbeq  rR15, [r2, rR15]                         @  |
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head
+        b       dispatch                                 @ 
 
 @ STOP: stop GSU execution
 handle_fx_stop:
@@ -250,8 +250,8 @@ handle_fx_plot_2bit:
 
 handle_fx_plot_2bit.return:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ Taken from loop_head to allow this return handler to branch fold
-        b       loop_head.skip_1                         @ 
+        ldr     r1, [rGSU, #FX_pvPrgBank]                @ Taken from dispatch to allow this return handler to branch fold
+        b       dispatch.skip_1                          @ 
 
 @ RPIX 2BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_2bit:
@@ -359,8 +359,8 @@ handle_fx_plot_4bit:
 
 handle_fx_plot_4bit.return:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ Taken from loop_head to allow this return handler to branch fold
-        b       loop_head.skip_1                         @ 
+        ldr     r1, [rGSU, #FX_pvPrgBank]                @ Taken from dispatch to allow this return handler to branch fold
+        b       dispatch.skip_1                          @ 
 
 @ RPIX 4BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_4bit:
@@ -492,8 +492,8 @@ handle_fx_plot_8bit:
 
 handle_fx_plot_8bit.return:
         bic     rSTAT, rSTAT, #4864          @           @ CLRFLAGS: STAT
-        ldr     r1, [rGSU, #FX_pvPrgBank]    @           @ Taken from loop_head to allow this return handler to branch fold
-        b       loop_head.skip_1             @           @ 
+        ldr     r1, [rGSU, #FX_pvPrgBank]    @           @ Taken from dispatch to allow this return handler to branch fold
+        b       dispatch.skip_1              @           @ 
 
 @ RPIX 8BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_8bit:
@@ -562,7 +562,7 @@ handle_fx_rpix_8bit.return_skip_1:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ NOP: Clears flags and advances R15 
 handle_fx_nop:
@@ -571,7 +571,7 @@ handle_fx_nop:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ CACHE: reintialize GSU cache
 handle_fx_cache:
@@ -592,7 +592,7 @@ handle_fx_cache:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LSR: logical shift right
 handle_fx_lsr:
@@ -613,7 +613,7 @@ handle_fx_lsr:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ROL: rotate left
 handle_fx_rol:
@@ -637,7 +637,7 @@ handle_fx_rol:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ BRA: unconditional branch
 handle_fx_bra:
@@ -647,7 +647,7 @@ handle_fx_bra:
         add     r2, rR15, r2                             @ Add PIPE to R15
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         strh    r2, [rGSU, #FX_R15]                      @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BGE: branch if greater or equal
 handle_fx_bge:
@@ -659,7 +659,7 @@ handle_fx_bge:
         addge   rR15, rR15, ip                           @ Handle branch
         addlt   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BLT: branch if less than
 handle_fx_blt:
@@ -671,7 +671,7 @@ handle_fx_blt:
         addlt   rR15, rR15, ip                           @ Handle branch
         addge   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BNE: branch if not equal
 handle_fx_bne:
@@ -683,7 +683,7 @@ handle_fx_bne:
         addne   rR15, rR15, ip                           @ Handle branch
         addeq   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BEQ: branch if equal
 handle_fx_beq:
@@ -695,7 +695,7 @@ handle_fx_beq:
         addeq   rR15, rR15, ip                           @ Handle branch
         addne   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BPL: branch if positive or zero
 handle_fx_bpl:
@@ -707,7 +707,7 @@ handle_fx_bpl:
         addpl   rR15, rR15, ip                           @ Handle branch
         addmi   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BMI: branch if negative
 handle_fx_bmi:
@@ -719,7 +719,7 @@ handle_fx_bmi:
         addmi   rR15, rR15, ip                           @ Handle branch
         addpl   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BCC: branch if lower (unsigned <)
 handle_fx_bcc:
@@ -731,7 +731,7 @@ handle_fx_bcc:
         addcc   rR15, rR15, ip                           @ Handle branch
         addcs   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BCS: branch if higher or same (unsigned >=)
 handle_fx_bcs:
@@ -743,7 +743,7 @@ handle_fx_bcs:
         addcs   rR15, rR15, ip                           @ Handle branch
         addcc   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BVC: branch if no overflow
 handle_fx_bvc:
@@ -755,7 +755,7 @@ handle_fx_bvc:
         addvc   rR15, rR15, ip                           @ Handle branch
         addvs   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ BVS: branch if overflow
 handle_fx_bvs:
@@ -767,7 +767,7 @@ handle_fx_bvs:
         addvs   rR15, rR15, ip                           @ Handle branch
         addvc   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ TO: set register n as destination register
 @ move one register to another (if B flag is set)
@@ -784,11 +784,11 @@ handle_fx_to_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    r2, [rGSU, vLow]                         @ Register N = SREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head
+        b       dispatch 
 handle_fx_to_r.b_is_not_set:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15. vLow cannot be 15, so early store is valid
         add     rDREG, rGSU, vLow, lsl #1                @ DREG = vLow
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 
 @ TO_R14: set register 14 as destination register
@@ -800,7 +800,7 @@ handle_fx_to_r14:
 @ B is not set
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rDREG, rGSU, #FX_R14                     @ DREG = pointer to R14
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 handle_fx_to_r14.b_is_set:
         ldrh    r2, [rSREG]                              @ Load SREG
         ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load GSU.pvRomBank
@@ -811,7 +811,7 @@ handle_fx_to_r14.b_is_set:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store ROMBUFFER
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ TO_R15: Set DREG to R15 and increment R15
 @ If B flag is set, move SREG to R15 instead
@@ -824,12 +824,12 @@ handle_fx_to_r15:
         add     rSREG, rGSU, #FX_R0                      @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ R15 = SREG
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 handle_fx_to_r15.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rDREG, rGSU, #FX_R15                     @ DREG = pointer to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ WITH: set register n as source and destination register
 handle_fx_with_r:
@@ -838,7 +838,7 @@ handle_fx_with_r:
         mov     rSREG, rDREG                             @ Copy register to SREG
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     rSTAT, rSTAT, #4096                      @ Set flag B
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ STW: store word (16 bits)
 handle_fx_stw_r:
@@ -857,7 +857,7 @@ handle_fx_stw_r:
         add     rR15, rR15, #1                           @ R15++
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LOOP: decrement loop counter R12 and branch to R13 on not zero
 handle_fx_loop:
@@ -877,7 +877,7 @@ handle_fx_loop:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ALT1: set ALT mode 1
 handle_fx_alt1:
@@ -885,7 +885,7 @@ handle_fx_alt1:
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     rSTAT, rSTAT, #256                       @ Set ALT1 flag
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ ALT2: set ALT mode 2
 handle_fx_alt2:
@@ -893,7 +893,7 @@ handle_fx_alt2:
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     rSTAT, rSTAT, #512                       @ Set ALT2 flag
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
         
 @ ALT3: set ALT mode 3
 handle_fx_alt3:
@@ -901,7 +901,7 @@ handle_fx_alt3:
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     rSTAT, rSTAT, #768                       @ Set ALT1 + ALT2 flags
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ LDW: load word
 handle_fx_ldw_r:
@@ -925,7 +925,7 @@ handle_fx_ldw_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ SWAP: swap low and high bytes of SREG, store in DREG
 handle_fx_swap:
@@ -947,7 +947,7 @@ handle_fx_swap:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ COLOR: copy SREG to color register
 handle_fx_color:
@@ -967,7 +967,7 @@ handle_fx_color:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ NOT: bitwise NOT of SREG, store in DREG
 handle_fx_not:
@@ -989,7 +989,7 @@ handle_fx_not:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ADD: SREG + register n, store in DREG
 handle_fx_add_r:
@@ -1013,7 +1013,7 @@ handle_fx_add_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ SUB: SREG - register n, store in DREG
 handle_fx_sub_r:
@@ -1037,7 +1037,7 @@ handle_fx_sub_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ MERGE: Top halves of R7 and R8 as upper and lower bytes respectively, store in DREG
 handle_fx_merge:
@@ -1063,7 +1063,7 @@ handle_fx_merge:
         lsl     rARM, rARM, #28                          @ Shift resultant flags into position. WYATT_TODO could use u32s, but would be more DCACHE.
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ AND: bitwise AND of SREG and register n, store in DREG
 handle_fx_and_r:
@@ -1088,7 +1088,7 @@ handle_fx_and_r:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ MULT: multiply SREG and register n as signed 8-bit ints, store in DREG
 handle_fx_mult_r:
@@ -1112,7 +1112,7 @@ handle_fx_mult_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         ldrbeq  rR15, [r2, rR15]                         @  |
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ SBK: store word to last accessed RAM address
 handle_fx_sbk:
@@ -1131,7 +1131,7 @@ handle_fx_sbk:
         add     rR15, rR15, #1                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LINK: R11 = R15 + immediate
 handle_fx_link_i:
@@ -1142,7 +1142,7 @@ handle_fx_link_i:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ SEX: sign-extend 8-bit to 16-bit, SREG to DREG
 handle_fx_sex:
@@ -1163,7 +1163,7 @@ handle_fx_sex:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ASR: arithmetic shift right, SREG to DREG
 handle_fx_asr:
@@ -1184,7 +1184,7 @@ handle_fx_asr:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ROR: rotate right, SREG to DREG
 handle_fx_ror:
@@ -1206,7 +1206,7 @@ handle_fx_ror:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ JMP: jump to address of register N. No delay slot.
 handle_fx_jmp_r:
@@ -1216,7 +1216,7 @@ handle_fx_jmp_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LOB: set upper byte to 0, SREG to DREG
 handle_fx_lob:
@@ -1238,7 +1238,7 @@ handle_fx_lob:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ Data table for fx_run_asm
 .L242:
@@ -1267,7 +1267,7 @@ handle_fx_fmult:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         ldrbeq  rR15, [r2, rR15]                         @  |
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ IBT: fetch PIPE and store to register N
 handle_fx_ibt_r:
@@ -1283,7 +1283,7 @@ handle_fx_ibt_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    ip, [rGSU, vLow]                         @ Store result
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ IBT R14: fetch PIPE and store to register N, then READR14
 handle_fx_ibt_r14:
@@ -1302,7 +1302,7 @@ handle_fx_ibt_r14:
         ldr     rR15, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
         ldrb    rR15, [rR15, ip]                         @ READR14: Load ROM(R14)
         strb    rR15, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ FROM: Set SREG to register N
 @ If B flag is set, move register N to DREG and set flags instead
@@ -1331,7 +1331,7 @@ handle_fx_from_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         ldrbeq  rR15, [r2, rR15]                         @  |
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ HIB: arithmetic right-shift register by 8, SREG to DREG
 handle_fx_hib:
@@ -1354,7 +1354,7 @@ handle_fx_hib:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ OR: logically OR SREG and register N, store in DREG
 handle_fx_or_r:
@@ -1379,7 +1379,7 @@ handle_fx_or_r:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ INC: increment a register. Cannot be called with R15.
 handle_fx_inc_r:
@@ -1396,7 +1396,7 @@ handle_fx_inc_r:
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       loop_dispatch                            @ Skip reloading r1 and rR15
+        b       dispatch.skip_2                          @ Skip reloading r1 and rR15
 
 @ INC R14: increment R14 and then READR14
 handle_fx_inc_r14:
@@ -1415,7 +1415,7 @@ handle_fx_inc_r14:
         add     rSREG, rGSU, #FX_R0                      @ CLRFLAGS: SREG = 0
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       loop_dispatch                            @ Skip reloading r1 and rR15
+        b       dispatch.skip_2                          @ Skip reloading r1 and rR15
 
 @ GETC: transfer ROMBUFFER to color register
 handle_fx_getc:
@@ -1435,7 +1435,7 @@ handle_fx_getc:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ DEC: decrement a register
 handle_fx_dec_r:
@@ -1452,7 +1452,7 @@ handle_fx_dec_r:
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       loop_dispatch                            @ Skip reloading r1 and rR15
+        b       dispatch.skip_2                          @ Skip reloading r1 and rR15
 
 @ DEC R14: decrement R14 and then READR14
 handle_fx_dec_r14:
@@ -1472,7 +1472,7 @@ handle_fx_dec_r14:
         add     rSREG, rGSU, #FX_R0                      @ CLRFLAGS: SREG = 0
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       loop_dispatch                            @ Skip reloading r1 and rR15
+        b       dispatch.skip_2                          @ Skip reloading r1 and rR15
 
 @ GETB: get byte from ROMBUFFER
 handle_fx_getb:
@@ -1489,7 +1489,7 @@ handle_fx_getb:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ IWT: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
 handle_fx_iwt_r:
@@ -1508,7 +1508,7 @@ handle_fx_iwt_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    ip, [rGSU, vLow]                         @ Store result to register N
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ IWT R14: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
 handle_fx_iwt_r14:
@@ -1529,7 +1529,7 @@ handle_fx_iwt_r14:
         ldr     rR15, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
         ldrb    rR15, [rR15, ip]                         @ READR14: Load ROM(R14)
         strb    rR15, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ STB: Store byte in SREG at the RAM location pointed to by register N
 handle_fx_stb_r:
@@ -1545,7 +1545,7 @@ handle_fx_stb_r:
         add     rR15, rR15, #1                           @ R15++
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LDB: Load byte from the RAM location pointed to by register N into DREG
 handle_fx_ldb_r:
@@ -1566,7 +1566,7 @@ handle_fx_ldb_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ CMODE: set plot option register to the value in SREG
 handle_fx_cmode:
@@ -1583,7 +1583,7 @@ handle_fx_cmode:
         add     rR15, rR15, #1                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ADC: add-with-carry, SREG + register N, store in DREG
 handle_fx_adc_r:
@@ -1610,7 +1610,7 @@ handle_fx_adc_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ SBC: subtract-with-carry, SREG - register N, store in DREG
 handle_fx_sbc_r:
@@ -1636,7 +1636,7 @@ handle_fx_sbc_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ BIC: DREG = SREG & ~register N
 handle_fx_bic_r:
@@ -1661,7 +1661,7 @@ handle_fx_bic_r:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ UMULT: 8-bit to 16-bit unsigned multiply, SREG * register N, stored in DREG
 handle_fx_umult_r:
@@ -1685,7 +1685,7 @@ handle_fx_umult_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         ldrbeq  rR15, [r2, rR15]                         @  |
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ DIV2: Divides SREG by 2 and stores in DREG
 handle_fx_div2:
@@ -1710,7 +1710,7 @@ handle_fx_div2:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LJMP: set program bank to register N and jump to SREG
 handle_fx_ljmp_r:
@@ -1732,7 +1732,7 @@ handle_fx_ljmp_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_vCacheBaseReg]          @ GSU.vCacheBaseReg = R15 & 0xfff0
         strh    r2, [rGSU, #FX_R15]                      @ Store destination to R15
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ LMULT: 16-bit to 32-bit signed multiplication SREG * R6, low result in R4, then high result in DREG.
 handle_fx_lmult:
@@ -1756,7 +1756,7 @@ handle_fx_lmult:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LMS: load word from RAM (short address), store in register N
 @ WYATT_TODO would this be better with a bespoke R15 version?
@@ -1778,7 +1778,7 @@ handle_fx_lms_r:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, vLow]                       @ Store result
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
         
 @ LMS: load word from RAM (short address), store in register 14, then READR14
 handle_fx_lms_r14:
@@ -1801,7 +1801,7 @@ handle_fx_lms_r14:
         ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
         ldrb    rR15, [r2, rR15]                         @ READR14: Load ROM(R14)
         strb    rR15, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ XOR: exclusive OR between SREG and register N, stored in DREG
 handle_fx_xor_r:
@@ -1826,7 +1826,7 @@ handle_fx_xor_r:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ GETBH: Overwrite the high byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbh:
@@ -1845,7 +1845,7 @@ handle_fx_getbh:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LM: Load word from RAM and store it in register N. The address is fetched from PIPE.
 @ WYATT_TODO validate me.
@@ -1871,7 +1871,7 @@ handle_fx_lm_r:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         add     rSREG, rGSU, #FX_R0                      @ CLRFLAGS: SREG = 0
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ LM: Load word from RAM and store it in register N, then READR14. The address is fetched from PIPE.
 @ WYATT_TODO validate me.
@@ -1899,7 +1899,7 @@ handle_fx_lm_r14:
         ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
         ldrb    ip, [r2, ip]                             @ READR14: Load ROM(R14)
         strb    ip, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ADD_I: Add SREG + 4-bit immediate, store in DREG
 handle_fx_add_i:
@@ -1921,7 +1921,7 @@ handle_fx_add_i:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ SUB_I: Subtract SREG - 4-bit immediate, store in DREG
 handle_fx_sub_i:
@@ -1943,7 +1943,7 @@ handle_fx_sub_i:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ AND_I: Logically AND SREG and 4-bit immediate, store in DREG
 handle_fx_and_i:
@@ -1964,7 +1964,7 @@ handle_fx_and_i:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ MULT: multiply SREG and 4-bit immediate as signed 8-bit ints, store in DREG
 handle_fx_mult_i:
@@ -1986,7 +1986,7 @@ handle_fx_mult_i:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ SMS: Store register N in RAM (short address). The address is fetched from PIPE.
 handle_fx_sms_r:
@@ -2012,7 +2012,7 @@ handle_fx_sms_r:
         add     rR15, rR15, #1                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ OR_I: Logically OR SREG and 4-bit immediate, store in DREG
 handle_fx_or_i:
@@ -2034,7 +2034,7 @@ handle_fx_or_i:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ RAMB: Set current RAM bank to SREG
 handle_fx_ramb:
@@ -2049,7 +2049,7 @@ handle_fx_ramb:
         str     rR15, [rGSU, #FX_pvRamBank]              @ Store to GSU.pvRamBank
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ GETBL: Overwrite the low byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbl:
@@ -2069,7 +2069,7 @@ handle_fx_getbl:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ SM: Store register N in RAM. The address is fetched from PIPE.
 handle_fx_sm_r:
@@ -2100,7 +2100,7 @@ handle_fx_sm_r:
         add     rR15, rR15, #1                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ADC_I: add-with-carry, SREG + 4-bit immediate, store in DREG
 handle_fx_adc_i:
@@ -2125,7 +2125,7 @@ handle_fx_adc_i:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ CMP: Compare SREG to register N. Effectively a subtract with no result.
 handle_fx_cmp_r:
@@ -2141,7 +2141,7 @@ handle_fx_cmp_r:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ BIC_I: DREG = SREG & ~4-bit immediate
 handle_fx_bic_i:
@@ -2164,7 +2164,7 @@ handle_fx_bic_i:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ UMULT_I: 8-bit to 16-bit unsigned multiply, SREG * 4-bit immediate, stored in DREG
 handle_fx_umult_i:
@@ -2186,7 +2186,7 @@ handle_fx_umult_i:
         ldrbeq  rR15, [r2, rR15]                         @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ XOR_I: exclusive OR between SREG and 4-bit immediate, stored in DREG
 handle_fx_xor_i:
@@ -2209,7 +2209,7 @@ handle_fx_xor_i:
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         strbeq  rR15, [rGSU, #FX_vRomBuffer]             @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ ROMB: set program bank to SREG
 handle_fx_romb:
@@ -2224,14 +2224,14 @@ handle_fx_romb:
         str     rR15, [rGSU, #FX_pvRomBank]              @ Store to GSU.pvRomBank
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       loop_head                                @ 
+        b       dispatch                                 @ 
 
 @ FROM: If B is not set, set SREG to register N and increment R15
 handle_fx_from_r.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++. WYATT_TODO this should be moved to the common handler
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
-        b       loop_head_flags                          @ 
+        b       dispatch_flags                           @ 
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
 @ Inlining this or not is a bit of a tossup
