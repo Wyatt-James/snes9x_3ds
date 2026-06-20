@@ -119,9 +119,9 @@ fx_run_asm:
 
 @ Dispatch for after instructions that do not run CLRFLAGS
 dispatch_flags:
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
+        ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
 dispatch_flags.skip_1:
-        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from loop_dispatch to reduce memory stalling
+        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
 dispatch_flags.skip_2:
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
@@ -133,10 +133,10 @@ dispatch_flags.skip_2:
         bx      ip                                       @ Branch to handler
 
 @ Dispatch for after instructions that run CLRFLAGS
-dispatch :
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from loop_dispatch to save a cycle.
+dispatch:
+        ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
 dispatch.skip_1:
-        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from loop_dispatch to reduce memory stalling
+        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
 dispatch.skip_2:
         ldr     ip, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
