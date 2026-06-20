@@ -204,7 +204,7 @@ handle_fx_plot_2bit:
         strh    r2, [rGSU, #FX_R1]                       @  |
         mov     rDREG, rSREG                             @ CLRFLAGS: DREG = 0. Prevents stall from next branch getting folded
         bcs     handle_fx_plot_2bit.return               @ If Y > screen height, return
-        ldrb    vLow, [rGSU, #FX_vPlotOptionReg]          @ Load vPlotOptionReg
+        ldrb    vLow, [rGSU, #FX_vPlotOptionReg]         @ Load vPlotOptionReg
         ldrb    r2, [rGSU, #FX_vColorReg]                @ Load vColorReg
         uxtb    r1, r1                                   @ Truncate X to 8-bit
         tst     vLow, #2                                 @ If PLOT_DITHER, potentially shift color
@@ -811,7 +811,7 @@ handle_fx_to_r14.b_is_set:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store ROMBUFFER
-        b       loop_head                                @ Branch back to main handler
+        b       loop_head                                @ 
 
 @ TO_R15: Set DREG to R15 and increment R15
 @ If B flag is set, move SREG to R15 instead
