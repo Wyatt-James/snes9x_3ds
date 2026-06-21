@@ -39,7 +39,6 @@
 @ rR15 (store and reload necessary if modified)
 
 @ WYATT_TODO various optimizations:
-@ - Optimize TESTR14. See below
 @ - Fix doubled loads and stores caused by aliasing
 @ - Fix regalloc occasionally reloading R15
 @     If CLRFLAGS is called, we can use rSREG as scratch to save a reg
