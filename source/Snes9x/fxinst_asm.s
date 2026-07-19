@@ -800,21 +800,20 @@ handle_fx_with_r:
 @ STW: store word (16 bits)
 handle_fx_stw_r:
         lsl     vLow, vLow, #1                           @ Double vLow for 16-bit offset
-        ldrh    rR15, [rGSU, vLow]                       @ Load offset into rR15. WYATT_TODO can probably just load into vLow.
-        ldr     r1, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
-        strh    rR15, [rGSU, #FX_vLastRamAdr]            @ Store offset to GSU.vLastRamAdr
+        ldrh    vLow, [rGSU, vLow]                       @ Load offset
+        ldr     ip, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        strh    vLow, [rGSU, #FX_vLastRamAdr]            @ Store offset to GSU.vLastRamAdr
         ldrh    r2, [rSREG]                              @ Load source data
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strb    r2, [r1, rR15]                           @ Store bottom byte
-        eor     rR15, rR15, #1                           @ Flip bottom bit of offset
-        lsr     r2, r2, #8                               @ Prep top byte
-        strb    r2, [r1, rR15]                           @ Store top byte
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Load R15. WYATT_TODO unnecessary.
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        strb    r2, [ip, vLow]                           @ Store bottom byte
+        eor     vLow, vLow, #1                           @ Flip bottom bit of offset
         add     rR15, rR15, #1                           @ R15++
+        lsr     r2, r2, #8                               @ Prep top byte
+        strb    r2, [ip, vLow]                           @ Store top byte
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ LOOP: decrement loop counter R12 and branch to R13 on not zero
 handle_fx_loop:
