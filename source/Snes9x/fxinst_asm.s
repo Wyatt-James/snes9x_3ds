@@ -560,17 +560,16 @@ handle_fx_cache:
         b       dispatch.skip_1                          @ 
 
 @ LSR: logical shift right
-@ WYATT_TODO fix R2 stall on clrflags
 handle_fx_lsr:
-        ldrh    r2, [rSREG]                              @ Load SREG
+        ldrh    ip, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsrs    r2, r2, #1                               @ Do the rightshift
+        lsrs    ip, ip, #1                               @ Do the rightshift
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     ip, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
-        cmp     rDREG, ip                                @ TESTR14: If DREG == 14, load rombuffer
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    r2, [rDREG]                              @ Store result to DREG
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -578,20 +577,19 @@ handle_fx_lsr:
         b       dispatch.skip_1                          @ 
 
 @ ROL: rotate left
-@ WYATT_TODO fix R2 stall on clrflags
 handle_fx_rol:
-        ldrh    r2, [rSREG]                              @ Load SREG
+        ldrh    ip, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     r2, r2, #16                              @ Shift value into upper half of reg
-        orrcs   r2, r2, #32768                           @ If carry is set, set bit 15
-        lsls    r2, r2, #1                               @ Shift left 1 to set flags
+        lsl     ip, ip, #16                              @ Shift value into upper half of reg
+        orrcs   ip, ip, #32768                           @ If carry is set, set bit 15
+        lsls    ip, ip, #1                               @ Shift left 1 to set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     ip, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
-        cmp     rDREG, ip                                @ TESTR14: If DREG == 14, load rombuffer
-        lsr     r2, r2, #16                              @ Shift down from top half of register
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        lsr     ip, ip, #16                              @ Shift down from top half of register
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    r2, [rDREG]                              @ Store result to DREG
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -985,26 +983,26 @@ handle_fx_sub_r:
 
 @ MERGE: Top halves of R7 and R8 as upper and lower bytes respectively, store in DREG
 handle_fx_merge:
-        ldrh    r1, [rGSU, #FX_R7]                       @ Load R7
+        ldrh    ip, [rGSU, #FX_R7]                       @ Load R7
         ldrh    r2, [rGSU, #FX_R8]                       @ Load R8
-        bic     r1, r1, #255                             @ Clear bottom half of R7
-        orr     r2, r1, r2, lsr #8                       @ Shift top half of R8 down and OR to create final value
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        bic     ip, ip, #255                             @ Clear bottom half of R7
+        orr     r2, ip, r2, lsr #8                       @ Shift top half of R8 down and OR to create final value
+        lsr     rARM, r2, #4                             @ Calculate merge flag LUT offset
+        orr     rARM, rARM, ip, lsr #12                  @  |
+        and     rARM, rARM, #15                          @  |
+        add     rARM, rGSU, rARM                         @  V
+        ldrb    rARM, [rARM, #FX_mergeFlagLut]           @ Load flags from LUT
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        lsr     rR15, r2, #4                             @ Calculate merge flag LUT index
-        orr     rR15, rR15, r1, lsr #12                  @  |
-        and     rR15, rR15, #15                          @  V
-        add     rR15, rGSU, rR15                         @ Calculate flag LUT offset
-        ldrb    rARM, [rR15, #FX_mergeFlagLut]           @ Load flags from LUT
         strh    r2, [rDREG]                              @ Store result to DREG
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
         lsl     rARM, rARM, #28                          @ Shift resultant flags into position. WYATT_TODO could use u32s, but would be more DCACHE.
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ AND: bitwise AND of SREG and register n, store in DREG
 handle_fx_and_r:
