@@ -111,8 +111,7 @@ void FxFlushCache()
 {
 	logFunctionCall(F_FxFlushCache);
     GSU.vCacheFlags = 0;
-    GSU.vCacheBaseReg = 0;
-    GSU.bCacheActive = FALSE;
+    GSU.vCacheBaseReg = 1; // Marked inactive
 }
 
 void fx_updateRamBank(uint8 Byte)
@@ -147,7 +146,7 @@ static void fx_readRegisterSpace()
     uint8 vPrgBankReg = GSU.vPrgBankReg = p[GSU_PBR];
 	uint8 vRomBankReg = GSU.vRomBankReg = p[GSU_ROMBR];
     uint8 vRamBankReg = GSU.vRamBankReg = p[GSU_RAMBR] & (FX_RAM_BANKS-1);
-    GSU.vCacheBaseReg = p[GSU_CBR] | (p[GSU_CBR+1] << 8);
+    GSU.vCacheBaseReg = p[GSU_CBR] | (p[GSU_CBR+1] << 8) | (GSU.vCacheBaseReg & 1); // Preserve enable flag.
 
     /* Update status register variables */
 	GSU.armFlags &= ~ARM_FLAGS;
@@ -292,7 +291,7 @@ static void fx_writeRegisterSpace()
     p[GSU_RAMBR] = GSU.vRamBankReg;
 	
 	{
-		uint16 vCacheBaseReg = GSU.vCacheBaseReg;
+		uint16 vCacheBaseReg = GSU.vCacheBaseReg & ~1;
 		p[GSU_CBR]   = (uint8) vCacheBaseReg;
 		p[GSU_CBR+1] = (uint8)(vCacheBaseReg>>8);
 	}
@@ -377,7 +376,7 @@ static uint8 fx_checkStartAddress()
 {
 	logFunctionCall(F_fx_checkStartAddress);
     /* Check if we start inside the cache */
-    if(GSU.bCacheActive && R15 >= GSU.vCacheBaseReg && R15 < (GSU.vCacheBaseReg+512U))
+    if(!(GSU.vCacheBaseReg & 1) && R15 >= GSU.vCacheBaseReg && R15 < (GSU.vCacheBaseReg+512U))
 			return TRUE;
    
     /*  Check if we're in an unused area */

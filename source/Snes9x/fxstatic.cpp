@@ -100,7 +100,6 @@ void FX_printGsuOffsets(void)
     append(pvPrgBank);
     append(apvRamBank);
     append(apvRomBank);
-    append(bCacheActive);
     append(pvCache);
     append(avCacheBackup);
     append(vCounter);
@@ -172,7 +171,6 @@ ASSERT_GSU_OFFSET(pvRomBank);
 ASSERT_GSU_OFFSET(pvPrgBank);
 ASSERT_GSU_OFFSET(apvRamBank);
 ASSERT_GSU_OFFSET(apvRomBank);
-ASSERT_GSU_OFFSET(bCacheActive);
 ASSERT_GSU_OFFSET(pvCache);
 ASSERT_GSU_OFFSET(avCacheBackup);
 ASSERT_GSU_OFFSET(vCounter);

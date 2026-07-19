@@ -58,7 +58,6 @@
 #define FX_pvPrgBank          (412)
 #define FX_apvRamBank         (416)
 #define FX_apvRomBank         (432)
-#define FX_bCacheActive       (1456)
 #define FX_pvCache            (1460)
 #define FX_avCacheBackup      (1464)
 #define FX_vCounter           (1976)

@@ -52,6 +52,8 @@
 @ We can emit based on the prior instruction setting R14 or not, and fall back to interpreter for things like
 @ jumps and resuming a session. This should have pretty substantial savings.
 
+@ WYATT_TODO fix stack alignment
+
     .section .text.fx_run_asm,"ax",%progbits
     .align    2
     .global fx_run_asm
@@ -530,35 +532,31 @@ handle_fx_rpix_8bit.return_skip_1:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
-@ NOP: Clears flags and advances R15 
+@ NOP: Clears flags and advances R15
 handle_fx_nop:
         add     rR15, rR15, #1                           @ R15++
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ CACHE: reintialize GSU cache
 handle_fx_cache:
-        ldrh    r1, [rGSU, #FX_vCacheBaseReg]            @ r1 = GSU.vCacheBaseReg
+        ldrh    ip, [rGSU, #FX_vCacheBaseReg]            @ ip = GSU.vCacheBaseReg
         bic     r2, rR15, #15                            @ r2 = R15 & 0xfff0
-        cmp     r1, r2                                   @ If address range is not equal, cache needs a reload
-        beq     handle_fx_cache.test_active              @ If address range is equal, check if cache is active
-@ Reload cache
-.reload_cache:
-        strh    r2, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
-        mov     r2, #0                                   @ 
-        str     r2, [rGSU, #FX_vCacheFlags]              @ GSU.vCacheFlags = 0
-        mov     r2, #1                                   @ 
-        strb    r2, [rGSU, #FX_bCacheActive]             @ GSU.bCacheActive = TRUE
-.skip_cache_reload:
         add     rR15, rR15, #1                           @ R15++
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        cmp     ip, r2                                   @ If cache base is incorrect or if cache is disabled, reload
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        beq     dispatch.skip_1                          @ 
+@ Reload cache
+        strh    r2, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
+        mov     ip, #0                                   @ 
+        str     ip, [rGSU, #FX_vCacheFlags]              @ GSU.vCacheFlags = 0
+        b       dispatch.skip_1                          @ 
 
 @ LSR: logical shift right
 handle_fx_lsr:
@@ -779,7 +777,7 @@ handle_fx_to_r15:
         tst     rSTAT, #4096                             @ Test B
         beq     handle_fx_to_r15.b_is_not_set            @ If B is not set, branch
 @ B is set
-        ldrh    rR15, [rSREG]                            @ Load SREG into rR15
+        ldrh    rR15, [rSREG]                            @ R15 = SREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ R15 = SREG
@@ -1617,8 +1615,6 @@ handle_fx_ljmp_r:
         mov     rR15, #0                                 @ GSU.vCacheFlags = 0
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         str     rR15, [rGSU, #FX_vCacheFlags]            @ GSU.vCacheFlags = 0
-        mov     rR15, #1                                 @ Enable cache
-        strb    rR15, [rGSU, #FX_bCacheActive]           @  |
         bic     rR15, r2, #15                            @ R15 & 0xfff0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_vCacheBaseReg]          @ GSU.vCacheBaseReg = R15 & 0xfff0
@@ -2125,14 +2121,6 @@ handle_fx_plot_4bit.L238:
         tst     rR15, #1                                 @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L25                                     @ 
-
-@ fx_cache: second half of the conditional, down here since it's UNLIKELY.
-@ Only reached if GSU.vCacheBaseReg says we need a reload
-handle_fx_cache.test_active:
-        ldrb    r1, [rGSU, #FX_bCacheActive]             @ Load GSU.bCacheActive
-        cmp     r1, #0                                   @ 
-        bne     .skip_cache_reload                       @ If active, skip reloading since it's already correct
-        b       .reload_cache                            @ Else, we need to reload cache
     .cfi_endproc
 
     .section	.rodata

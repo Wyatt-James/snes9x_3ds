@@ -180,11 +180,10 @@ static inline void fx_nop(uint8 unused) {
 static inline void fx_cache(uint8 unused)
 {
     uint32 c = R15 & 0xfff0;
-    if(GSU.vCacheBaseReg != c || !GSU.bCacheActive)
+    if(GSU.vCacheBaseReg != c)
     {
         GSU.vCacheFlags = 0;
         GSU.vCacheBaseReg = c;
-        GSU.bCacheActive = TRUE;
 #if 0
         if(c < (0x10000-512))
         {
@@ -1322,7 +1321,7 @@ static inline void fx_ljmp_r(uint8 reg) {
     GSU.vPrgBankReg = GSU.avReg[reg] & 0x7f;
     GSU.pvPrgBank = GSU.apvRomBank[GSU.vPrgBankReg];
     R15 = SREG;
-    GSU.bCacheActive = FALSE;
+    GSU.vCacheBaseReg |= 1; // Mark cache as inactive. Required to get fx_cache to behave.
     fx_cache(0);
     R15--;
     

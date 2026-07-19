@@ -136,7 +136,7 @@ struct FxRegs_s
 {
     /* FxChip registers */
     uint16  avReg[16];        /* 16 Generic registers. WYATT_TODO these should be changed back to U32s containing u16s. ARM11 eats 1 instruction + 1 register penalty for 16-bit loads/stores, while u32s would save at least some of these. */
-    uint16  vCacheBaseReg;    /* Cache base address register. Used only by the fx_cache instruction. */
+    uint16  vCacheBaseReg;    /* Cache base address register and enable flag. Bit 0 is 1 if cache is disabled or 0 if enabled. */
     uint16  vLastRamAdr;      /* Last RAM address accessed */
     uint8   vPlotOptionReg;   /* Plot option register. 5 bits. */
     uint8   vColorReg;        /* Internal color register. 8 bits. */
@@ -193,7 +193,7 @@ struct FxRegs_s
     uint8 * apvRamBank[FX_RAM_BANKS];  /* Ram bank table (max 256kb) */
     uint8 * apvRomBank[256];    /* Rom bank table */
 
-    uint8   bCacheActive;
+    uint8   bUnused;            /* Previously bCacheActive. WYATT_TODO remove this. */
     uint8 * pvCache;            /* Pointer to the GSU cache */
     uint8   avCacheBackup[512]; /* Backup of ROM when the cache has replaced it */
     uint32  vCounter;
