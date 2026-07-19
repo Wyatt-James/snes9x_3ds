@@ -741,11 +741,11 @@ handle_fx_to_r:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    r2, [rGSU, vLow]                         @ Register N = SREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 handle_fx_to_r.b_is_not_set:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15. vLow cannot be 15, so early store is valid
         add     rDREG, rGSU, vLow, lsl #1                @ DREG = vLow
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 
 @ TO_R14: set register 14 as destination register
@@ -757,18 +757,18 @@ handle_fx_to_r14:
 @ B is not set
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rDREG, rGSU, #FX_R14                     @ DREG = pointer to R14
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 handle_fx_to_r14.b_is_set:
         ldrh    r2, [rSREG]                              @ Load SREG
-        ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load GSU.pvRomBank
+        ldr     ip, [rGSU, #FX_pvRomBank]                @ READR14: Load GSU.pvRomBank
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    r2, [rGSU, #FX_R14]                      @ R14 = SREG
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        ldrb    vLow, [r1, r2]                           @ READR14: Load GSU.pvRomBank[R14]
+        ldrb    vLow, [ip, r2]                           @ READR14: Load GSU.pvRomBank[R14]
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store ROMBUFFER
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ TO_R15: Set DREG to R15 and increment R15
 @ If B flag is set, move SREG to R15 instead
@@ -795,7 +795,7 @@ handle_fx_with_r:
         mov     rSREG, rDREG                             @ Copy register to SREG
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     rSTAT, rSTAT, #4096                      @ Set flag B
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ STW: store word (16 bits)
 handle_fx_stw_r:
