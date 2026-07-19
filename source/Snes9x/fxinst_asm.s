@@ -810,30 +810,34 @@ handle_fx_stw_r:
         add     rR15, rR15, #1                           @ R15++
         lsr     r2, r2, #8                               @ Prep top byte
         strb    r2, [ip, vLow]                           @ Store top byte
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         b       dispatch.skip_1                          @ 
 
 @ LOOP: decrement loop counter R12 and branch to R13 on not zero
 handle_fx_loop:
-        ldrh    rR15, [rGSU, #FX_R12]                    @ Load counter
+        ldrh    r2, [rGSU, #FX_R12]                      @ Load counter
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        sub     rR15, rR15, #1                           @ Decrement counter
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, rR15, #16                          @ Shift counter to top half of register and test flags
-        movs    rARM, rARM                               @ 
+        sub     r2, r2, #1                               @ Decrement counter
+        strh    r2, [rGSU, #FX_R12]                      @ Store counter
+        lsl     rARM, r2, #16                            @ Shift counter to top half of register and test flags
+        movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rR15, #0                                 @ Test counter
-        strh    rR15, [rGSU, #FX_R12]                    @ Store counter
-        ldrheq  rR15, [rGSU, #FX_R15]                    @ If counter is 0, load R15. WYATT_TODO can probably use move instead of load
-        ldrhne  rR15, [rGSU, #FX_R13]                    @ If counter is nonzero, load R13
-        addeq   rR15, rR15, #1                           @ If counter is 0, increment R15
-        uxtheq  rR15, rR15                               @ Wrap R15 at 16 bits. WYATT_TODO unnecessary
+        beq     handle_fx_loop.loop_end                  @ 
+
+        ldrh    rR15, [rGSU, #FX_R13]                    @ Load destination
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        b       dispatch.skip_2                          @ 
+handle_fx_loop.loop_end:
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        b       dispatch.skip_1                          @ 
 
 @ ALT1: set ALT mode 1
 handle_fx_alt1:
