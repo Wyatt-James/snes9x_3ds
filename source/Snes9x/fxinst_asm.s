@@ -887,17 +887,17 @@ handle_fx_ldw_r:
 
 @ SWAP: swap low and high bytes of SREG, store in DREG
 handle_fx_swap:
-        ldrh    vLow, [rSREG]                            @ Load value from SREG
+        ldrh    ip, [rSREG]                              @ Load value from SREG
         add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        rev16   vLow, vLow                               @ Byteswap value
-        lsl     rARM, vLow, #16                          @ Shift for flag setting
+        rev16   ip, ip                                   @ Byteswap value
+        lsl     rARM, ip, #16                            @ Shift for flag setting
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    vLow, [rDREG]                            @ Store value into DREG
+        strh    ip, [rDREG]                              @ Store value into DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: Branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
