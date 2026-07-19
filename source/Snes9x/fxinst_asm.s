@@ -604,127 +604,127 @@ handle_fx_bra:
         add     r2, rR15, r2                             @ Add PIPE to R15
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         strh    r2, [rGSU, #FX_R15]                      @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BGE: branch if greater or equal
 handle_fx_bge:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addge   rR15, rR15, ip                           @ Handle branch
+        addge   rR15, rR15, r2                           @ Handle branch
         addlt   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BLT: branch if less than
 handle_fx_blt:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addlt   rR15, rR15, ip                           @ Handle branch
+        addlt   rR15, rR15, r2                           @ Handle branch
         addge   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BNE: branch if not equal
 handle_fx_bne:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addne   rR15, rR15, ip                           @ Handle branch
+        addne   rR15, rR15, r2                           @ Handle branch
         addeq   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BEQ: branch if equal
 handle_fx_beq:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addeq   rR15, rR15, ip                           @ Handle branch
+        addeq   rR15, rR15, r2                           @ Handle branch
         addne   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BPL: branch if positive or zero
 handle_fx_bpl:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addpl   rR15, rR15, ip                           @ Handle branch
+        addpl   rR15, rR15, r2                           @ Handle branch
         addmi   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BMI: branch if negative
 handle_fx_bmi:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addmi   rR15, rR15, ip                           @ Handle branch
+        addmi   rR15, rR15, r2                           @ Handle branch
         addpl   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BCC: branch if lower (unsigned <)
 handle_fx_bcc:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addcc   rR15, rR15, ip                           @ Handle branch
+        addcc   rR15, rR15, r2                           @ Handle branch
         addcs   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BCS: branch if higher or same (unsigned >=)
 handle_fx_bcs:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addcs   rR15, rR15, ip                           @ Handle branch
+        addcs   rR15, rR15, r2                           @ Handle branch
         addcc   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BVC: branch if no overflow
 handle_fx_bvc:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addvc   rR15, rR15, ip                           @ Handle branch
+        addvc   rR15, rR15, r2                           @ Handle branch
         addvs   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BVS: branch if overflow
 handle_fx_bvs:
         add     rR15, rR15, #1                           @ R15++
-        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        addvs   rR15, rR15, ip                           @ Handle branch
+        addvs   rR15, rR15, r2                           @ Handle branch
         addvc   rR15, rR15, #1                           @ 
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ TO: set register n as destination register
 @ move one register to another (if B flag is set)
