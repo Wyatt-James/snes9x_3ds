@@ -133,31 +133,31 @@ loop_end:
 
 @ GETBS: get sign extended byte from ROM at address R14
 handle_fx_getbs:
+        ldrsb   ip, [rGSU, #FX_vRomBuffer]               @ R15 = SEX8(ROMBUFFER)
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldrsb   rR15, [rGSU, #FX_vRomBuffer]             @ R15 = SEX8(ROMBUFFER)
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strh    rR15, [rDREG]                            @ Store result to DREG
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch                                 @ 
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        b       dispatch.skip_1                          @ 
 
 @ STOP: stop GSU execution
 handle_fx_stop:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        ldr     r2, [rGSU, #FX_pvRegisters]              @ Load pointer to pvRegisters
         mov     rR15, #0                                 @ plotOptionReg = 0
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        ldr     r2, [rGSU, #FX_pvRegisters]              @ R2 = GSU.pvRegisters[GSU_CFGR]
         bic     rSTAT, rSTAT, #32                        @ CF(G)
-        ldrsb   r2, [r2, #55]                            @ R2 = GSU_CFGR
+        ldrsb   r2, [r2, #55]                            @ Load CFGR
         mov     rPIPE, #1                                @ PIPE = 1
-        cmp     r2, #0                                   @ If GSU_CFGR == 0, Raise IRQ
-        orrge   rSTAT, rSTAT, #32768                     @  |
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        cmp     r2, #0                                   @ If (GSU_CFGR & 0x80) == 0, Raise IRQ
+        orrge   rSTAT, rSTAT, #32768                     @  |
         bic     rSTAT, rSTAT, #4864                      @  |
         strb    rR15, [rGSU, #FX_vPlotOptionReg]         @ Store plotOptionReg
         b       loop_end                                 @ 
