@@ -866,23 +866,24 @@ handle_fx_alt3:
 @ LDW: load word
 handle_fx_ldw_r:
         lsl     vLow, vLow, #1                           @ Double vLow for 16-bit offset
-        ldrh    r2, [rGSU, vLow]                         @ Load offset into r2. WYATT_TODO can probably just load into vLow. 
-        ldr     r1, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        add     rR15, rR15, #1                           @ R15++
+        ldrh    r2, [rGSU, vLow]                         @ Load RAM offset
+        ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
+        add     rSREG, rGSU, #FX_R14                     @ TESTR14: Pointer to R14
         strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store offset to GSU.vLastRamAdr
         eor     ip, r2, #1                               @ Flip bottom bit of offset, stored in a separate register
-        add     vLow, rR15, #1                           @ R15++
-        ldrb    rR15, [r1, r2]                           @ Load bottom byte
-        ldrb    r2, [r1, ip]                             @ Load top byte
-        strh    vLow, [rGSU, #FX_R15]                    @ Store R15
-        orr     rR15, rR15, r2, lsl #8                   @ Combine bytes into word
-        strh    rR15, [rDREG]                            @ Store word into DREG
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
-        beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        cmp     rDREG, rSREG                             @ TESTR14: If DREG == 14, load rombuffer
+        ldrb    ip, [vLow, ip]                           @ Load top byte
+        ldrb    rSREG, [vLow, r2]                        @ Load bottom byte
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        ldrh    vLow, [rGSU, #FX_R14]                    @ Taken from testr14_clrflags_dispatch to avoid a stall
+        orr     rSREG, rSREG, ip, lsl #8                 @ Combine bytes into word
+        strh    rSREG, [rDREG]                           @ Store word into DREG
+        beq     testr14_clrflags_dispatch.skip_1         @ TESTR14: branch
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        b       dispatch.skip_1                          @ 
 
 @ SWAP: swap low and high bytes of SREG, store in DREG
 handle_fx_swap:
@@ -2078,6 +2079,7 @@ handle_fx_romb:
 
 testr14_clrflags_dispatch:
         ldrh    vLow, [rGSU, #FX_R14]                    @ TESTR14
+testr14_clrflags_dispatch.skip_1:
         ldr     r2, [rGSU, #FX_pvRomBank]                @  |
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
