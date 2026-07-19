@@ -842,26 +842,26 @@ handle_fx_loop.loop_end:
 @ ALT1: set ALT mode 1
 handle_fx_alt1:
         add     rR15, rR15, #1                           @ R15++
-        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         orr     rSTAT, rSTAT, #256                       @ Set ALT1 flag
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ ALT2: set ALT mode 2
 handle_fx_alt2:
         add     rR15, rR15, #1                           @ R15++
-        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         orr     rSTAT, rSTAT, #512                       @ Set ALT2 flag
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
         
 @ ALT3: set ALT mode 3
 handle_fx_alt3:
         add     rR15, rR15, #1                           @ R15++
-        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         orr     rSTAT, rSTAT, #768                       @ Set ALT1 + ALT2 flags
-        b       dispatch_flags                           @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ LDW: load word
 handle_fx_ldw_r:
