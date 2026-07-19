@@ -1036,22 +1036,19 @@ handle_fx_mult_r:
 
 @ SBK: store word to last accessed RAM address
 handle_fx_sbk:
-        ldrh    rR15, [rSREG]                            @ Load value from SREG
-        ldrh    r2, [rGSU, #FX_vLastRamAdr]              @ Load vLastRamAdr
-        ldr     r1, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strb    rR15, [r1, r2]                           @ Store bottom byte
-        ldrh    r2, [rGSU, #FX_vLastRamAdr]              @ Reload vLastRamAdr WYATT_TODO unnecessary
-        ldr     r1, [rGSU, #FX_pvRamBank]                @ Reload RAM base pointer. WYATT_TODO unnecessary
-        lsr     rR15, rR15, #8                           @ Prep top byte
-        eor     r2, r2, #1                               @ Flip bottom bit of offset
-        strb    rR15, [r1, r2]                           @ Store bottom byte
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Load R15 WYATT_TODO unnecessary
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrh    r2, [rGSU, #FX_vLastRamAdr]              @ Load RAM offset
+        ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
+        ldrh    ip, [rSREG]                              @ Load value from SREG
         add     rR15, rR15, #1                           @ R15++
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch                                 @ 
+        strb    ip, [vLow, r2]                           @ Store bottom byte
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        eor     r2, r2, #1                               @ Flip bottom bit of offset
+        lsr     ip, ip, #8                               @ Shift top byte down
+        strb    ip, [vLow, r2]                           @ Store bottom byte
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_1                          @ 
 
 @ LINK: R11 = R15 + immediate
 handle_fx_link_i:
@@ -1059,10 +1056,10 @@ handle_fx_link_i:
         add     rR15, rR15, #1                           @ R15++
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    vLow, [rGSU, #FX_R11]                    @ Store R11
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ SEX: sign-extend 8-bit to 16-bit, SREG to DREG
 handle_fx_sex:
