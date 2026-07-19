@@ -867,19 +867,18 @@ handle_fx_alt3:
 handle_fx_ldw_r:
         lsl     vLow, vLow, #1                           @ Double vLow for 16-bit offset
         add     rR15, rR15, #1                           @ R15++
-        ldrh    r2, [rGSU, vLow]                         @ Load RAM offset
+        ldrh    rSREG, [rGSU, vLow]                      @ Load RAM offset
         ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        add     rSREG, rGSU, #FX_R14                     @ TESTR14: Pointer to R14
-        strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store offset to GSU.vLastRamAdr
-        eor     ip, r2, #1                               @ Flip bottom bit of offset, stored in a separate register
-        cmp     rDREG, rSREG                             @ TESTR14: If DREG == 14, load rombuffer
-        ldrb    ip, [vLow, ip]                           @ Load top byte
-        ldrb    rSREG, [vLow, r2]                        @ Load bottom byte
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldrh    vLow, [rGSU, #FX_R14]                    @ Taken from testr14_clrflags_dispatch to avoid a stall
+        eor     ip, rSREG, #1                            @ Flip bottom bit of offset, stored in a separate register
+        strh    rSREG, [rGSU, #FX_vLastRamAdr]           @ Store offset to GSU.vLastRamAdr
+        ldrb    ip, [vLow, ip]                           @ Load top byte
+        ldrb    rSREG, [vLow, rSREG]                     @ Load bottom byte
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         orr     rSREG, rSREG, ip, lsl #8                 @ Combine bytes into word
         strh    rSREG, [rDREG]                           @ Store word into DREG
-        beq     testr14_clrflags_dispatch.skip_1         @ TESTR14: branch
+        beq     testr14_clrflags_dispatch                @ TESTR14: branch
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -2079,7 +2078,6 @@ handle_fx_romb:
 
 testr14_clrflags_dispatch:
         ldrh    vLow, [rGSU, #FX_R14]                    @ TESTR14
-testr14_clrflags_dispatch.skip_1:
         ldr     r2, [rGSU, #FX_pvRomBank]                @  |
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
