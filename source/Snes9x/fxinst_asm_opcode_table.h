@@ -173,7 +173,7 @@
 .word   handle_fx_ibt_r
 .word   handle_fx_ibt_r
 .word   handle_fx_ibt_r14
-.word   handle_fx_ibt_r
+.word   handle_fx_ibt_r15
 .word   handle_fx_from_r
 .word   handle_fx_from_r
 .word   handle_fx_from_r

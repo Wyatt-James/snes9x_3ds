@@ -47,6 +47,7 @@
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
 @ - Optimize regalloc to minimize reloads of R1 and rR15
 @ - If all handlers were the same size, we could possibly save a load in dispatch and the entirety of rGOTO.
+@ - Double/triple/quadruple check for register write locks on dispatch returns
 
 @ WYATT_TODO dynarec note: TESTR14 branch prediction is unsolvable in dynarec because execution must flow forward.
 @ We can emit based on the prior instruction setting R14 or not, and fall back to interpreter for things like
@@ -1169,38 +1170,35 @@ handle_fx_fmult:
 
 @ IBT: fetch PIPE and store to register N
 handle_fx_ibt_r:
-        add     r2, rR15, #1                             @ R15 + 1 into scratch register
-        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15. WYATT_TODO unnecessary. Aliasing?
+        mov     ip, #1                                   @ Prep R15 increment value
+        sxtb    r2, rPIPE                                @ Sign-extend PIPE into temporary variable
+        sxtab16 rR15, rR15, ip                           @ R15++
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        sxtab16 rR15, rR15, ip                           @ R15++
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        add     rR15, rR15, #2                           @ R15 + 2
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE. We don't immediately use this value! This can be optimized.
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        strh    r2, [rGSU, vLow]                         @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    ip, [rGSU, vLow]                         @ Store result
-        b       dispatch                                 @ 
+        b       dispatch.skip_2                          @ 
 
-@ IBT R14: fetch PIPE and store to register N, then READR14
+@ IBT R14: fetch PIPE and store to Register 14, then READR14
 handle_fx_ibt_r14:
-        add     r2, rR15, #1                             @ R15 + 1 into scratch register
-        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15. WYATT_TODO unnecessary. Aliasing?
-        sxtb    ip, rPIPE                                @ Sign-extend PIPE
-        add     rR15, rR15, #2                           @ R15 + 2
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE. We don't immediately use this value!
+        mov     ip, #1                                   @ Prep R15 increment value
+        sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
+        sxtab16 rR15, rR15, ip                           @ R15++
+        strh    r2, [rGSU, #FX_R14]                      @ Store result
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
+        sxtab16 rR15, rR15, ip                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strh    ip, [rGSU, #FX_R14]                      @ Store result
+        ldrb    vLow, [vLow, r2]                         @ READR14: Load ROM(R14)
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        uxth    ip, ip                                   @ PIPE was sign-extended, so we need to zero-extend it for the load. WYATT_TODO could probably avoid this.
-        ldr     rR15, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        ldrb    rR15, [rR15, ip]                         @ READR14: Load ROM(R14)
-        strb    rR15, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
-        b       dispatch                                 @ 
+        strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
+        b       dispatch.skip_2                          @ 
 
 @ FROM: Set SREG to register N
 @ If B flag is set, move register N to DREG and set flags instead
@@ -2097,6 +2095,20 @@ handle_fx_plot_4bit.L238:
         tst     rR15, #1                                 @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L25                                     @ 
+
+@ IBT R15: fetch PIPE and store to Register 15
+@ Rare call, so hold it faaaar away from anything else
+handle_fx_ibt_r15:
+        mov     ip, #1                                   @ Prep R15 increment value
+        sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
+        sxtab16 rR15, rR15, ip                           @ R15++
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        strh    r2, [rGSU, #FX_R15]                      @ Store result
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        b       dispatch.skip_2                          @ Can't be skip_2 because vLow could be R15
+
     .cfi_endproc
 
     .section	.rodata
