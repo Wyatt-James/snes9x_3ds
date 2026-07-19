@@ -1027,24 +1027,23 @@ handle_fx_and_r:
 
 @ MULT: multiply SREG and register n as signed 8-bit ints, store in DREG
 handle_fx_mult_r:
+        ldrsb   ip, [rSREG]                              @ Load s8 value 1 from SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrsb   rR15, [rSREG]                            @ Load s8 value 1 from SREG
-        ldrsb   r2, [rGSU, vLow]                         @ Load s8 value 2 from register N. WYATT_TODO could this use an 8-bit load?
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        smulbb  rR15, rR15, r2                           @ Multiply to get the result
+        ldrsb   r2, [rGSU, vLow]                         @ Load s8 value 2 from register N
+        add     rR15, rR15, #1                           @ R15++
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        smulbb  ip, ip, r2                               @ Multiply to get the result
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        movs    rARM, rR15                               @ Set flags
+        movs    ip, ip                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch                                 @ 
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        b       dispatch.skip_1                          @ 
 
 @ SBK: store word to last accessed RAM address
 handle_fx_sbk:
