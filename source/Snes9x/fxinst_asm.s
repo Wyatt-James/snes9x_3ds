@@ -736,7 +736,6 @@ handle_fx_to_r.b_is_not_set:
         add     rDREG, rGSU, vLow, lsl #1                @ DREG = vLow
         b       dispatch_flags.skip_1                    @ 
 
-
 @ TO_R14: set register 14 as destination register
 @ If B flag is set, move SREG to R14, CLRFLAGS, and READR14 instead
 handle_fx_to_r14:
@@ -763,7 +762,7 @@ handle_fx_to_r14.b_is_set:
 @ If B flag is set, move SREG to R15 instead
 handle_fx_to_r15:
         tst     rSTAT, #4096                             @ Test B
-        beq     handle_fx_to_r15.b_is_not_set            @ If B is not set, branch
+        beq     handle_fx_to_r15.b_is_not_set            @ If B is not set, branch. WYATT_TODO stall 2 on mispredict
 @ B is set
         ldrh    rR15, [rSREG]                            @ R15 = SREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -779,10 +778,10 @@ handle_fx_to_r15.b_is_not_set:
 
 @ WITH: set register n as source and destination register
 handle_fx_with_r:
-        add     rDREG, rGSU, vLow, lsl #1                @ Calculate register
         add     rR15, rR15, #1                           @ R15++
-        mov     rSREG, rDREG                             @ Copy register to SREG
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        add     rDREG, rGSU, vLow, lsl #1                @ Calculate register
+        mov     rSREG, rDREG                             @ Copy register to SREG
         orr     rSTAT, rSTAT, #4096                      @ Set flag B
         b       dispatch_flags.skip_1                    @ 
 
