@@ -1062,58 +1062,55 @@ handle_fx_link_i:
 
 @ SEX: sign-extend 8-bit to 16-bit, SREG to DREG
 handle_fx_sex:
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        ldrsb   rR15, [rSREG]                            @ Load value from SREG and sign-extend
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
+        ldrsb   ip, [rSREG]                              @ Load value from SREG and sign-extend
+        add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        movs    rR15, rR15                               @ Set flags
+        movs    ip, ip                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        strh    rR15, [rDREG]                            @ Store value
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rDREG]                              @ Store value
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ ASR: arithmetic shift right, SREG to DREG
 handle_fx_asr:
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        ldrsh   rR15, [rSREG]                            @ Load value from SREG and sign-extend to 32-bit
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
+        ldrsh   ip, [rSREG]                              @ Load value from SREG and sign-extend to 32-bit
+        add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        asrs    rR15, rR15, #1                           @ ASR by 1 and set flags
+        asrs    ip, ip, #1                               @ ASR by 1 and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ ROR: rotate right, SREG to DREG
 handle_fx_ror:
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        ldrh    rR15, [rSREG]                            @ Load value from SREG and sign-extend to 32-bit
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
+        ldrh    ip, [rSREG]                              @ Load value from SREG and sign-extend to 32-bit
+        add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        orrcs   rR15, rR15, #65536                       @ If the carry flag was set, set bit 16 of value
-        rrxs    rR15, rR15                               @ Rotate right and set flags
+        orrcs   ip, ip, #65536                           @ If the carry flag was set, set bit 16 of value
+        rrxs    ip, ip                                   @ ASR by 1 and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ JMP: jump to address of register N. No delay slot.
 handle_fx_jmp_r:
