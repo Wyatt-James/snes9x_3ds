@@ -906,23 +906,23 @@ handle_fx_swap:
 
 @ COLOR: copy SREG to color register
 handle_fx_color:
-        ldrb    r1, [rGSU, #FX_vPlotOptionReg]           @ Load plotOptionReg
+        ldrb    ip, [rGSU, #FX_vPlotOptionReg]           @ Load plotOptionReg
         ldrb    r2, [rSREG]                              @ Load color from SREG
-        tst     r1, #4                                   @ If PLOT_HIGHNIBBLE, duplicate the high nibble of color to the low nibble
+        add     rR15, rR15, #1                           @ R15++
+        tst     ip, #4                                   @ If PLOT_HIGHNIBBLE, duplicate the high nibble of color to the low nibble
         andne   vLow, r2, #240                           @  |
         orrne   r2, vLow, r2, lsr #4                     @  V
-        tst     r1, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
-        ldrbne  r1, [rGSU, #FX_vColorReg]                @  |
-        andne   r2, r2, #15                              @  |
-        bicne   r1, r1, #15                              @  |
-        orrne   r2, r1, r2                               @  V
-        add     rR15, rR15, #1                           @ R15++
+        tst     ip, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
+        ldrbne  ip, [rGSU, #FX_vColorReg]                @  |
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        andne   r2, r2, #15                              @  |
+        bicne   ip, ip, #15                              @  |
+        orrne   r2, ip, r2                               @  V
         strb    r2, [rGSU, #FX_vColorReg]                @ Store result to GSU.vColorReg
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ NOT: bitwise NOT of SREG, store in DREG
 handle_fx_not:
