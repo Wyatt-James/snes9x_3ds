@@ -552,7 +552,8 @@ handle_fx_cache:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         beq     dispatch.skip_1                          @ 
-@ Reload cache
+        
+        @ Reload cache
         strh    r2, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
         mov     ip, #0                                   @ 
         str     ip, [rGSU, #FX_vCacheFlags]              @ GSU.vCacheFlags = 0
@@ -560,42 +561,40 @@ handle_fx_cache:
 
 @ LSR: logical shift right
 handle_fx_lsr:
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15 into R2 WYATT_TODO this is inefficient! Does inline ASM break regalloc?
-        ldrh    rR15, [rSREG]                            @ Load SREG
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
+        ldrh    r2, [rSREG]                              @ Load SREG
+        add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsrs    rR15, rR15, #1                           @ Do the rightshift
+        lsrs    r2, r2, #1                               @ Do the rightshift
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        strh    rR15, [rDREG]                            @ Store result into DREG
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        add     ip, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        cmp     rDREG, ip                                @ TESTR14: If DREG == 14, load rombuffer
+        strh    r2, [rDREG]                              @ Store result into DREG
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ ROL: rotate left
 handle_fx_rol:
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15 into R2 WYATT_TODO this is inefficient! Does inline ASM break regalloc?
-        ldrh    rR15, [rSREG]                            @ Load SREG
-        add     r2, r2, #1                               @ R15++
+        ldrh    r2, [rSREG]                              @ Load SREG
+        add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rR15, rR15, #16                          @ Shift value into upper half of reg
-        orrcs   rR15, rR15, #32768                       @ If carry is set, set bit 15
-        lsls    rR15, rR15, #1                           @ Shift left 1 to set carry
+        lsl     r2, r2, #16                              @ Shift value into upper half of reg
+        orrcs   r2, r2, #32768                           @ If carry is set, set bit 15
+        lsls    r2, r2, #1                               @ Shift left 1 to set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        lsr     rR15, rR15, #16                          @ Shift down from top half of register
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        add     ip, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        cmp     rDREG, ip                                @ TESTR14: If DREG == 14, load rombuffer
+        lsr     r2, r2, #16                              @ Shift down from top half of register
+        strh    r2, [rDREG]                              @ Store result
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ BRA: unconditional branch
 handle_fx_bra:
