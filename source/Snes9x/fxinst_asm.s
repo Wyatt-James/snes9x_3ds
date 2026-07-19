@@ -1020,17 +1020,18 @@ handle_fx_mult_r:
         ldrsb   r2, [rGSU, vLow]                         @ Load s8 value 2 from register N
         add     rR15, rR15, #1                           @ R15++
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         smulbb  ip, ip, r2                               @ Multiply to get the result
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         movs    ip, ip                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    ip, [rDREG]                              @ Store result
-        beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        uxth    rR15, rR15                               @ Taken from dispatch to enable branch folding
         b       dispatch.skip_1                          @ 
 
 @ SBK: store word to last accessed RAM address
@@ -1148,23 +1149,23 @@ handle_fx_lob:
 
 @ FMULT: 16 to 32 bit signed multiply, keep top 16. SREG * R6, store to DREG
 handle_fx_fmult:
-        ldrh    rR15, [rSREG]                            @ Load value 1 from SREG
+        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, #FX_R6]                       @ Load value 2 from R6
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        smulbb  rR15, rR15, r2                           @ Signed multiply
-        msr     cpsr_f, rARM                             @ Load flags into CPSR
-        asrs    rR15, rR15, #16                          @ Shift top half down and set flags
-        mrs     rARM, cpsr                               @ Read flags from CPSR
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        smulbb  ip, ip, r2                               @ Signed multiply
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        asrs    ip, ip, #16                              @ Shift top half down and set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch                                 @ 
+        uxth    rR15, rR15                               @ Taken from dispatch to enable branch folding
+        b       dispatch.skip_2                          @ 
 
 @ IBT: fetch PIPE and store to register N
 handle_fx_ibt_r:
