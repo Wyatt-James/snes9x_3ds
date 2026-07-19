@@ -939,7 +939,7 @@ handle_fx_not:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ ADD: SREG + register n, store in DREG
 handle_fx_add_r:
@@ -959,7 +959,7 @@ handle_fx_add_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ SUB: SREG - register n, store in DREG
 handle_fx_sub_r:
@@ -979,7 +979,7 @@ handle_fx_sub_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ MERGE: Top halves of R7 and R8 as upper and lower bytes respectively, store in DREG
 handle_fx_merge:
