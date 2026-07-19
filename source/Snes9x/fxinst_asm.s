@@ -953,8 +953,8 @@ handle_fx_add_r:
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         lsr     ip, ip, #16                              @ Shift result down from top half of register
-        strh    ip, [rDREG]                              @ Store result to DREG
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -973,8 +973,8 @@ handle_fx_sub_r:
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         lsr     ip, ip, #16                              @ Shift result down from top half of register
-        strh    ip, [rDREG]                              @ Store result to DREG
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
