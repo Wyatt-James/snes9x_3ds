@@ -1202,31 +1202,35 @@ handle_fx_ibt_r14:
 
 @ FROM: Set SREG to register N
 @ If B flag is set, move register N to DREG and set flags instead
-@ B is unlikely. WYATT_TODO invert the branch.
+@ If B flag is not set, set SREG to register N and increment R15
 handle_fx_from_r:
         tst     rSTAT, #4096                             @ Test B flag
-        beq     handle_fx_from_r.b_is_not_set            @ If B is not set, just set SREG and increment R15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        add     rR15, rR15, #1                           @ R15++
+        bne     handle_fx_from_r.b_is_set                @ 
+@ B is not set
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
+        b       dispatch_flags.skip_1                    @ 
+handle_fx_from_r.b_is_set:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    rR15, [rGSU, vLow]                       @ Load result
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrh    ip, [rGSU, vLow]                         @ Load result
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         bic     rARM, rARM, #-805306368                  @ Clear NZO flags
-        lsls    r2, rR15, #24                            @ Set the flags we need
+        lsls    r2, ip, #24                              @ Set the flags we need
         orrmi   rARM, rARM, #268435456                   @  |
-        lsls    r2, rR15, #16                            @  |
+        lsls    r2, ip, #16                              @  |
         orrmi   rARM, rARM, #-2147483648                 @  |
         orreq   rARM, rARM, #1073741824                  @  V
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
-@ HIB: arithmetic right-shift register by 8, SREG to DREG
+@ HIB: logical right-shift register by 8, SREG to DREG
 handle_fx_hib:
         ldrh    ip, [rSREG]                              @ Load result from SREG
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
@@ -1234,7 +1238,7 @@ handle_fx_hib:
         lsr     ip, ip, #8                               @ Prep high byte
         strh    ip, [rDREG]                              @ Store result
         sxtb    r2, ip                                   @ Sign-extend result into scratch register
-        movs    rARM, r2                                 @ Set flags
+        movs    r2, r2                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         add     rR15, rR15, #1                           @ R15++
@@ -1269,7 +1273,7 @@ handle_fx_or_r:
 @ INC: increment a register. Cannot be called with R15.
 handle_fx_inc_r:
         add     rR15, rR15, #1                           @ R15++
-        strh    rR15, [rGSU, #FX_R15]                    @  |
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrh    r2, [rGSU, vLow]                         @ Load value
@@ -1283,21 +1287,21 @@ handle_fx_inc_r:
         mrs     rARM, cpsr                               @ Read flags from CPSR
         b       dispatch.skip_1                          @ Skip reloading r1 and rR15
 
-@ INC R14: increment R14 and then READR14
+@ INC R14: increment R14 and READR14
 handle_fx_inc_r14:
         ldrh    r2, [rGSU, #FX_R14]                      @ Load value from R14
         add     rR15, rR15, #1                           @ R15++
-        strh    rR15, [rGSU, #FX_R15]                    @  |
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     r2, r2, #1                               @ Increment value
         strh    r2, [rGSU, #FX_R14]                      @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         ldr     ip, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
         lsl     r2, r2, #16                              @ Set flags
-        movs    r2, r2                                   @  |
+        movs    vLow, r2                                 @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldrb    r2, [ip, r2, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
         b       dispatch.skip_1                          @ Skip reloading r1 and rR15
@@ -2059,13 +2063,6 @@ testr14_clrflags_dispatch:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @  |
         b       dispatch.skip_2                          @ 
-
-@ FROM: If B is not set, set SREG to register N and increment R15
-handle_fx_from_r.b_is_not_set:
-        add     rR15, rR15, #1                           @ R15++. WYATT_TODO this should be moved to the common handler
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
-        b       dispatch_flags                           @ 
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
 @ Inlining this or not is a bit of a tossup
