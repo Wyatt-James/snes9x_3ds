@@ -1545,24 +1545,23 @@ handle_fx_bic_r:
 
 @ UMULT: 8-bit to 16-bit unsigned multiply, SREG * register N, stored in DREG
 handle_fx_umult_r:
-        ldrb    rR15, [rSREG]                            @ Load value 1
         ldrb    r2, [rGSU, vLow, lsl #1]                 @ Load value 2
+        add     rR15, rR15, #1                           @ R15++
+        ldrb    ip, [rSREG]                              @ Load value 1
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        smulbb  rR15, rR15, r2                           @ Multiply
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, rR15, #16                          @ Shift result to top of register
+        smulbb  ip, ip, r2                               @ Multiply
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        lsl     rARM, ip, #16                            @ Shift result to top of register
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ DIV2: Divides SREG by 2 and stores in DREG
 handle_fx_div2:
@@ -1586,22 +1585,22 @@ handle_fx_div2:
 @ LJMP: set program bank to register N and jump to SREG
 handle_fx_ljmp_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    rR15, [rGSU, vLow]                       @ Load bank
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        and     rR15, rR15, #127                         @ AND bank to 7-bit
-        strb    rR15, [rGSU, #FX_vPrgBankReg]            @ Store bank to GSU.vPrgBankReg 
-        add     rR15, rR15, #FX_apvRomBank >> 2          @ Offset magic for apvRomBank, pre-shifted down
-        ldr     rR15, [rGSU, rR15, lsl #2]               @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
-        ldrh    r2, [rSREG]                              @ Load destination
-        str     rR15, [rGSU, #FX_pvPrgBank]              @ Store GSU.pvPrgBank pointer
-        mov     rR15, #0                                 @ GSU.vCacheFlags = 0
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        str     rR15, [rGSU, #FX_vCacheFlags]            @ GSU.vCacheFlags = 0
-        bic     rR15, r2, #15                            @ R15 & 0xfff0
+        ldrh    r2, [rGSU, vLow]                         @ Load destination ROM bank
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        strh    rR15, [rGSU, #FX_vCacheBaseReg]          @ GSU.vCacheBaseReg = R15 & 0xfff0
-        strh    r2, [rGSU, #FX_R15]                      @ Store destination to R15
-        b       dispatch_flags                           @ 
+        mov     vLow, #0                                 @ GSU.vCacheFlags = 0
+        ldrh    rR15, [rSREG]                            @ Load destination R15
+        and     r2, r2, #127                             @ AND bank to 7-bit
+        strb    r2, [rGSU, #FX_vPrgBankReg]              @ Store bank to GSU.vPrgBankReg
+        bic     ip, rR15, #15                            @ R15 & 0xfff0
+        strh    ip, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
+        add     r2, r2, #FX_apvRomBank >> 2              @ Offset magic for apvRomBank, pre-shifted down
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        ldr     r1, [rGSU, r2, lsl #2]                   @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
+        str     vLow, [rGSU, #FX_vCacheFlags]            @ Store GSU.vCacheFlags
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        str     r1, [rGSU, #FX_pvPrgBank]                @ Store GSU.pvPrgBank pointer
+        b       dispatch_flags.skip_2                    @ 
 
 @ LMULT: 16-bit to 32-bit signed multiplication SREG * R6, low result in R4, then high result in DREG.
 handle_fx_lmult:
