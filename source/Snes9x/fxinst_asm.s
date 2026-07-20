@@ -1172,9 +1172,9 @@ handle_fx_fmult:
 handle_fx_ibt_r:
         mov     ip, #1                                   @ Prep R15 increment value
         sxtb    r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        sxtab16 rR15, rR15, ip                           @ R15++
+        uxtab16 rR15, rR15, ip                           @ R15++
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
-        sxtab16 rR15, rR15, ip                           @ R15++
+        uxtab16 rR15, rR15, ip                           @ R15++
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
@@ -1187,11 +1187,11 @@ handle_fx_ibt_r:
 handle_fx_ibt_r14:
         mov     ip, #1                                   @ Prep R15 increment value
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        sxtab16 rR15, rR15, ip                           @ R15++
+        uxtab16 rR15, rR15, ip                           @ R15++
         strh    r2, [rGSU, #FX_R14]                      @ Store result
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        sxtab16 rR15, rR15, ip                           @ R15++
+        uxtab16 rR15, rR15, ip                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldrb    vLow, [vLow, r2]                         @ READR14: Load ROM(R14)
@@ -2097,7 +2097,7 @@ handle_fx_plot_4bit.L238:
 handle_fx_ibt_r15:
         mov     ip, #1                                   @ Prep R15 increment value
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        sxtab16 rR15, rR15, ip                           @ R15++
+        uxtab16 rR15, rR15, ip                           @ R15++
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
