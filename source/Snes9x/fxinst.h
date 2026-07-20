@@ -147,10 +147,7 @@ struct FxRegs_s
 
     /* A LUT of flags for fx_merge */
     uint8 mergeFlagLut[16];
-
-    /* Constants used in GSU code */
-    /* Avoids loading the values from elsewhere*/
-    uint16  const_u16Max;          /* Initialize to UINT16_MAX. Do not touch! */
+    uint16  unused;          /* Previously contained UINT16_MAX, now unused. WYATT_TODO remove me! */
 
     /* Values with local fast copies */
     uint8   pvDreg;           /* Index of current destination register */

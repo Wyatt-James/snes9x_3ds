@@ -1566,25 +1566,22 @@ handle_fx_umult_r:
 
 @ DIV2: Divides SREG by 2 and stores in DREG
 handle_fx_div2:
-        ldrh    rR15, [rSREG]                            @ Load value
-        ldrh    r2, [rGSU, #FX_const_u16Max]             @ Load 0xFFFF
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        cmp     r2, rR15                                 @ Compare value to 0xFFFF
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        moveq   rR15, #1                                 @ If value == 0xFFFF, set value to 1
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        sxthne  rR15, rR15                               @ Sign-extend value
+        ldrsh   ip, [rSREG]                              @ Load value
+        add     rR15, rR15, #1                           @ R15++
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmn     ip, #1                                   @ If value == -1, set value to 1
+        moveq   ip, #1                                   @  |
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        asrs    rR15, rR15, #1                           @ Divide value by 2 with ASR
+        asrs    ip, ip, #1                               @ Divide value by 2 with ASR
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ LJMP: set program bank to register N and jump to SREG
 handle_fx_ljmp_r:

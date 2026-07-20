@@ -26,7 +26,6 @@
 #define FX_vRomBankReg        (40)
 #define FX_vRamBankReg        (41)
 #define FX_mergeFlagLut       (42)
-#define FX_const_u16Max       (58)
 #define FX_pvDreg             (60)
 #define FX_pvSreg             (61)
 #define FX_vPipe              (62)

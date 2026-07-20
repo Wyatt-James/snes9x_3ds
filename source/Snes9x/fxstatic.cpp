@@ -68,7 +68,6 @@ void FX_printGsuOffsets(void)
     append(vRomBankReg);
     append(vRamBankReg);
     append(mergeFlagLut);
-    append(const_u16Max);
     append(pvDreg);
     append(pvSreg);
     append(vPipe);
@@ -139,7 +138,6 @@ ASSERT_GSU_OFFSET(vPrgBankReg);
 ASSERT_GSU_OFFSET(vRomBankReg);
 ASSERT_GSU_OFFSET(vRamBankReg);
 ASSERT_GSU_OFFSET(mergeFlagLut);
-ASSERT_GSU_OFFSET(const_u16Max);
 ASSERT_GSU_OFFSET(pvDreg);
 ASSERT_GSU_OFFSET(pvSreg);
 ASSERT_GSU_OFFSET(vPipe);

@@ -311,7 +311,6 @@ void FxReset(struct FxInit_s *psFxInfo)
 			0xf, 0xf, 0xf, 0xf,
 			0xf, 0xf, 0xf, 0xf
     	},
-		.const_u16Max = UINT16_MAX,
 	};
 
     /* Set default registers */
