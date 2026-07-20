@@ -1479,50 +1479,48 @@ handle_fx_cmode:
 
 @ ADC: add-with-carry, SREG + register N, store in DREG
 handle_fx_adc_r:
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
+        ldrh    r2, [rSREG]                              @ Load value 1 from SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
-        ldrh    rR15, [rGSU, vLow]                       @ Load value 2 from register N
-        add     r2, r2, #1                               @ R15++
+        add     rR15, rR15, #1                           @ R15++
+        ldrh    ip, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, r1, #16                            @ Shift value 1 into the upper half of the register
-        orrcs   rARM, rARM, #32768                       @ Move carry flag into value 1
-        orrcs   rR15, rR15, #-2147483648                 @ Move carry flag into value 2
-        adds    rR15, rARM, rR15, ror #16                @ Add the values and set flags
+        lsl     r2, r2, #16                              @ Shift value 1 into the upper half of the register
+        orrcs   ip, ip, #-2147483648                     @ Move carry flag into value 2
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        orrcs   r2, r2, #32768                           @ Move carry flag into value 1
+        adds    ip, r2, ip, ror #16                      @ Add the values and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        lsr     rR15, rR15, #16                          @ Shift result into bottom half of register
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        lsr     ip, ip, #16                              @ Shift result into bottom half of register
+        strh    ip, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ SBC: subtract-with-carry, SREG - register N, store in DREG
 handle_fx_sbc_r:
-        ldrh    rR15, [rSREG]                            @ Load value 1
+        ldrh    ip, [rSREG]                              @ Load value 1 frpm SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    r2, [rGSU, vLow]                         @ Load value 2
-        lsl     rR15, rR15, #16                          @ Shift value 1 into top half of register
+        add     rR15, rR15, #1                           @ R15++
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        sbcs    rR15, rR15, r2, lsl #16                  @ Do the subtract-with-carry
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        lsl     ip, ip, #16                              @ Shift value 1 into top half of register
+        sbcs    ip, ip, r2, lsl #16                      @ Do the subtract-with-carry
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        lsrs    rR15, rR15, #16                          @ Shift result into bottom half of register and set flags
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
+        lsrs    ip, ip, #16                              @ Shift result into bottom half of register and set flags
         orreq   rARM, rARM, #1073741824                  @ If the result is 0, set the Z flag
-        strh    rR15, [rDREG]                            @ Store the result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ BIC: DREG = SREG & ~register N
 handle_fx_bic_r:
