@@ -1285,7 +1285,7 @@ handle_fx_inc_r:
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       dispatch.skip_1                          @ Skip reloading r1 and rR15
+        b       dispatch.skip_1                          @ 
 
 @ INC R14: increment R14 and READR14
 handle_fx_inc_r14:
@@ -1304,32 +1304,32 @@ handle_fx_inc_r14:
         mrs     rARM, cpsr                               @ Read flags from CPSR
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_1                          @ Skip reloading r1 and rR15
+        b       dispatch.skip_1                          @ 
 
 @ GETC: transfer ROMBUFFER to color register
 handle_fx_getc:
-        ldrb    r1, [rGSU, #FX_vPlotOptionReg]           @ Load plotOptionReg
+        ldrb    ip, [rGSU, #FX_vPlotOptionReg]           @ Load plotOptionReg
         ldrb    r2, [rGSU, #FX_vRomBuffer]               @ Load ROMBUFFER
-        tst     r1, #4                                   @ If PLOT_HIGHNIBBLE, duplicate the high nibble of color to the low nibble
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        tst     ip, #4                                   @ If PLOT_HIGHNIBBLE, duplicate the high nibble of color to the low nibble
         andne   vLow, r2, #240                           @  |
         orrne   r2, vLow, r2, lsr #4                     @  V
-        tst     r1, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
-        ldrbne  r1, [rGSU, #FX_vColorReg]                @  |
+        tst     ip, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
+        ldrbne  ip, [rGSU, #FX_vColorReg]                @  |
         andne   r2, r2, #15                              @  |
-        bicne   r1, r1, #15                              @  |
-        orrne   r2, r1, r2                               @  V
+        bicne   ip, ip, #15                              @  |
+        orrne   r2, ip, r2                               @  V
         add     rR15, rR15, #1                           @ R15++
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strb    r2, [rGSU, #FX_vColorReg]                @ Store result to GSU.vColorReg
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        strb    r2, [rGSU, #FX_vColorReg]                @ Store result to GSU.vColorReg
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_1                          @ 
 
 @ DEC: decrement a register
 handle_fx_dec_r:
         add     rR15, rR15, #1                           @ R15++
-        strh    rR15, [rGSU, #FX_R15]                    @  |
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrh    r2, [rGSU, vLow]                         @ Load value
@@ -1341,27 +1341,26 @@ handle_fx_dec_r:
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       dispatch.skip_1                          @ Skip reloading r1 and rR15
+        b       dispatch.skip_1                          @ 
 
 @ DEC R14: decrement R14 and then READR14
 handle_fx_dec_r14:
         ldrh    r2, [rGSU, #FX_R14]                      @ Load value from R14
-        add     rR15, rR15, #1                 
-                  @ R15++
-        strh    rR15, [rGSU, #FX_R15]                    @  |
-        sub     r2, r2, #1                               @ Decrement value
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        sub     r2, r2, #1                               @ Increment value
         strh    r2, [rGSU, #FX_R14]                      @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         ldr     ip, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
         lsl     r2, r2, #16                              @ Set flags
-        movs    r2, r2                                   @  |
+        movs    vLow, r2                                 @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldrb    r2, [ip, r2, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_1                          @ Skip reloading r1 and rR15
+        b       dispatch.skip_1                          @ 
 
 @ GETB: get byte from ROMBUFFER
 handle_fx_getb:
