@@ -610,9 +610,9 @@ handle_fx_bra:
 handle_fx_bge:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16ge  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16lt  rR15, r2, vLow                        @ 
+        uadd16lt   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -621,9 +621,9 @@ handle_fx_bge:
 handle_fx_blt:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16lt  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16ge  rR15, r2, vLow                        @ 
+        uadd16ge   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -632,9 +632,9 @@ handle_fx_blt:
 handle_fx_bne:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16ne  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16eq  rR15, r2, vLow                        @ 
+        uadd16eq   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -643,9 +643,9 @@ handle_fx_bne:
 handle_fx_beq:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16eq  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16ne  rR15, r2, vLow                        @ 
+        uadd16ne   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -654,9 +654,9 @@ handle_fx_beq:
 handle_fx_bpl:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16pl  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16mi  rR15, r2, vLow                        @ 
+        uadd16mi   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -665,9 +665,9 @@ handle_fx_bpl:
 handle_fx_bmi:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16mi  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16pl  rR15, r2, vLow                        @ 
+        uadd16pl   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -676,9 +676,9 @@ handle_fx_bmi:
 handle_fx_bcc:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16cc  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16cs  rR15, r2, vLow                        @ 
+        uadd16cs   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -687,9 +687,9 @@ handle_fx_bcc:
 handle_fx_bcs:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16cs  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16cc  rR15, r2, vLow                        @ 
+        uadd16cc   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -698,9 +698,9 @@ handle_fx_bcs:
 handle_fx_bvc:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16vc  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16vs  rR15, r2, vLow                        @ 
+        uadd16vs   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -709,9 +709,9 @@ handle_fx_bvc:
 handle_fx_bvs:
         mov        vLow, #1                              @ Needed for SXTAB
         msr        cpsr_f, rARM                          @ Load flags into CPSR
-        sxtab16    r2, rR15, vLow                        @ R15++
+        uadd16     r2, rR15, vLow                        @ R15++
         sxtab16vs  rR15, r2, rPIPE                       @ Handle branch
-        sxtab16vc  rR15, r2, vLow                        @ 
+        uadd16vc   rR15, r2, vLow                        @ 
         ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_2                 @ 
@@ -1171,10 +1171,10 @@ handle_fx_fmult:
 @ IBT: fetch PIPE and store to register N
 handle_fx_ibt_r:
         mov     ip, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, ip                           @ R15++
         sxtb    r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        uxtab16 rR15, rR15, ip                           @ R15++
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
-        uxtab16 rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, ip                           @ R15++
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
@@ -1187,11 +1187,11 @@ handle_fx_ibt_r:
 handle_fx_ibt_r14:
         mov     ip, #1                                   @ Prep R15 increment value
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        uxtab16 rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, ip                           @ R15++
         strh    r2, [rGSU, #FX_R14]                      @ Store result
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        uxtab16 rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, ip                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldrb    vLow, [vLow, r2]                         @ READR14: Load ROM(R14)
@@ -2096,8 +2096,8 @@ handle_fx_plot_4bit.L238:
 @ Rare call, so hold it faaaar away from anything else
 handle_fx_ibt_r15:
         mov     ip, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, ip                           @ R15++
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        uxtab16 rR15, rR15, ip                           @ R15++
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
