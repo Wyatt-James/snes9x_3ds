@@ -12,7 +12,7 @@
 
 #define appendInternal(f_, d_)                                                                                      \
 do {                                                                                                                \
-    if (error == NULL) {                                                                                            \
+    if (error == errorOk) {                                                                                            \
         int result = snprintf(worker, sizeof(worker), "#define FX_" d_ " (%u)\n", offsetof(struct FxRegs_s, f_));   \
         if (result < 0) {                                                                                           \
             error = #d_;                                                                                            \
@@ -36,7 +36,7 @@ do {                                                                            
 
 void FX_printGsuOffsets(void)
 {
-    const char* error = "OK"; // If an error occurs, this is set to the field's name
+    const char *error = "OK", *errorOk = error; // If an error occurs, this is set to the field's name
     char str[8192];
     char worker[50];
     str[0] = worker[0] = '\0';
@@ -106,7 +106,7 @@ void FX_printGsuOffsets(void)
     append(vSCBRDirty);
 
     str[sizeof(str) - 1] = '\0';
-    asm volatile ("nop" :: "r" (str), "r" (error)); // Breakpoint
+    asm volatile ("nop" :: "r" (str), "r" (error)); // Breakpoint. printf "%s\n", str
 }
 
 #else // PRINT_GSU_OFFSETS
