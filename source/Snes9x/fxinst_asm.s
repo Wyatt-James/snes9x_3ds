@@ -1364,17 +1364,17 @@ handle_fx_dec_r14:
 
 @ GETB: get byte from ROMBUFFER
 handle_fx_getb:
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrb    ip, [rGSU, #FX_vRomBuffer]               @ Load value from ROMBUFFER
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldrb    rR15, [rGSU, #FX_vRomBuffer]             @ Load value from ROMBUFFER
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strh    rR15, [rDREG]                            @ Store value to DREG
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store value to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ IWT: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
 handle_fx_iwt_r:
