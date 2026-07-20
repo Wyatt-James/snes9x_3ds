@@ -1266,12 +1266,14 @@ static inline void fx_div2(uint8 unused)
 {
     uint32 v;
     asm (
+        "cmn %2, #1\n\t"
+        "moveq %2, #1\n\t"
         "msr cpsr_f, %0\n\t"
         "asrs %1, %2, #1\n\t" // Shift (sets NZC)
         "mrs %0, cpsr\n\t"
         : "+r" (ARMFLAGS),
           "=r" (v)
-        : "r" (SREG == GSU.const_u16Max ? 1 : SEX16(SREG))
+        : "r" (SEX16(SREG))
         : "cc"
     );
 
