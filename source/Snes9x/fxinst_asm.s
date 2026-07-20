@@ -1604,24 +1604,24 @@ handle_fx_ljmp_r:
 
 @ LMULT: 16-bit to 32-bit signed multiplication SREG * R6, low result in R4, then high result in DREG.
 handle_fx_lmult:
-        ldrh    rR15, [rSREG]                            @ Load value 1
+        ldrh    ip, [rSREG]                              @ Load value 1
         ldrh    r2, [rGSU, #FX_R6]                       @ Load value 2
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        smulbb  rR15, rR15, r2                           @ Multiply
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        strh    rR15, [rGSU, #FX_R4]                     @ Store low result
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        smulbb  r2, ip, r2                               @ Signed multiply
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        asrs    rR15, rR15, #16                          @ Set flags and shift high result down
+        strh    r2, [rGSU, #FX_R4]                       @ Store low result
+        asrs    ip, r2, #16                              @ Shift top half down and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        strh    rR15, [rDREG]                            @ Store high result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store high result
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        uxth    rR15, rR15                               @ Taken from dispatch to enable branch folding
+        b       dispatch.skip_2                          @ 
 
 @ LMS: load word from RAM (short address), store in register N
 @ WYATT_TODO would this be better with a bespoke R15 version?
