@@ -1378,43 +1378,54 @@ handle_fx_getb:
 
 @ IWT: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
 handle_fx_iwt_r:
-        add     r2, rR15, #1                             @ R15 + 1 into scratch register
-        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
-        mov     ip, rPIPE                                @ We need a copy of PIPE. WYATT_TODO could save here since PIPE is fetched again.
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
-        add     r2, rR15, #2                             @ R15 + 2 into scratch register
-        orr     ip, ip, rPIPE, lsl #8                    @ Combine both PIPEs into result
+        mov     ip, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, ip                           @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
-        add     rR15, rR15, #3                           @ R15 += 3
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE. Value not immediately used.
+        ldrb    r2, [r1, rR15]                           @ FETCHPIPE
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        uadd16  rR15, rR15, ip                           @ R15++
+        orr     r2, rPIPE, r2, lsl #8                    @ Combine both PIPEs into result
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        strh    r2, [rGSU, vLow]                         @ Store result to register N
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    ip, [rGSU, vLow]                         @ Store result to register N
-        b       dispatch                                 @ 
+        uadd16  rR15, rR15, ip                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        b       dispatch.skip_2                          @ 
 
-@ IWT R14: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
+@ IWT R14: Combine existing PIPE and next PIPE into register 14, then FETCHPIPE again and READR14
 handle_fx_iwt_r14:
-        add     r2, rR15, #1                             @ R15 + 1 into scratch register
-        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
-        mov     ip, rPIPE                                @ We need a copy of PIPE. WYATT_TODO could save here since PIPE is fetched again.
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
-        add     r2, rR15, #2                             @ R15 + 2 into scratch register
-        orr     ip, ip, rPIPE, lsl #8                    @ Combine both PIPEs into result
-        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
-        add     rR15, rR15, #3                           @ R15 += 3
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE. Value not immediately used.
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     ip, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, ip                           @ R15++
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrb    r2, [r1, rR15]                           @ FETCHPIPE
+        ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        uadd16  rR15, rR15, ip                           @ R15++
+        orr     r2, rPIPE, r2, lsl #8                    @ Combine both PIPEs into result
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        uadd16  rR15, rR15, ip                           @ R15++
+        strh    r2, [rGSU, #FX_R14]                      @ Store result to R14
+        ldrb    vLow, [vLow, r2]                         @ READR14: Load ROM(R14)
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rGSU, #FX_R14]                      @ Store result to R14
-        ldr     rR15, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        ldrb    rR15, [rR15, ip]                         @ READR14: Load ROM(R14)
-        strb    rR15, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
-        b       dispatch                                 @ 
+        strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
+        b       dispatch.skip_2                          @ 
+
+@ IWT: Combine existing PIPE and next PIPE into register 15, then FETCHPIPE again
+handle_fx_iwt_r15:
+        mov     ip, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, ip                           @ R15++
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrb    r2, [r1, rR15]                           @ FETCHPIPE
+        uadd16  ip, rR15, ip                             @ R15++
+        mov     vLow, rPIPE                              @ Sacrifice 1cyc here to save 2cyc in dispatch
+        ldrb    rPIPE, [r1, ip]                          @ FETCHPIPE
+        orr     rR15, vLow, r2, lsl #8                   @ Combine both PIPEs into result
+        strh    rR15, [rGSU, #FX_R15]                    @ Store result to register 15
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_2                          @ 
 
 @ STB: Store byte in SREG at the RAM location pointed to by register N
 handle_fx_stb_r:

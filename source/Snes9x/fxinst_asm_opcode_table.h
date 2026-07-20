@@ -253,7 +253,7 @@
 .word   handle_fx_iwt_r
 .word   handle_fx_iwt_r
 .word   handle_fx_iwt_r14
-.word   handle_fx_iwt_r
+.word   handle_fx_iwt_r15
 .word   handle_fx_stop
 .word   handle_fx_nop
 .word   handle_fx_cache
