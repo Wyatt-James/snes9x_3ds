@@ -995,10 +995,10 @@ handle_fx_merge:
 
 @ AND: bitwise AND of SREG and register n, store in DREG
 handle_fx_and_r:
-        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrh    ip, [rSREG]                              @ Load value 1 from SREG
-        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         add     rR15, rR15, #1                           @ R15++
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     ip, ip, ip, lsl #16                      @ Duplicate values into both halves of their registers
@@ -1251,10 +1251,10 @@ handle_fx_hib:
 
 @ OR: logically OR SREG and register N, store in DREG
 handle_fx_or_r:
-        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrh    ip, [rSREG]                              @ Load value 1 from SREG
-        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         add     rR15, rR15, #1                           @ R15++
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     ip, ip, ip, lsl #16                      @ Duplicate values into both halves of their registers
@@ -1526,25 +1526,24 @@ handle_fx_sbc_r:
 
 @ BIC: DREG = SREG & ~register N
 handle_fx_bic_r:
+        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    rR15, [rSREG]                            @ Load value 1
-        ldrh    r2, [rGSU, vLow]                         @ Load value 2
-        add     rR15, rR15, rR15, lsl #16                @ Duplicate value 1 into both halves of a register for flags.
-        add     r2, r2, r2, lsl #16                      @ Duplicate value 2 into both halves of a register for flags.
+        add     rR15, rR15, #1                           @ R15++
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        bics    rR15, rR15, r2                           @ Bit clear and set flags
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        orr     ip, ip, ip, lsl #16                      @ Duplicate values into both halves of their registers
+        orr     r2, r2, r2, lsl #16                      @  |
+        bics    ip, ip, r2                               @ Bit clear and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result to DREG
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ UMULT: 8-bit to 16-bit unsigned multiply, SREG * register N, stored in DREG
 handle_fx_umult_r:
@@ -1677,10 +1676,10 @@ handle_fx_lms_r14:
 
 @ XOR: exclusive OR between SREG and register N, stored in DREG
 handle_fx_xor_r:
-        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrh    ip, [rSREG]                              @ Load value 1 from SREG
-        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         add     rR15, rR15, #1                           @ R15++
+        ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     ip, ip, ip, lsl #16                      @ Duplicate values into both halves of their registers
