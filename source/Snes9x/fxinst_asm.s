@@ -1430,53 +1430,52 @@ handle_fx_iwt_r15:
 @ STB: Store byte in SREG at the RAM location pointed to by register N
 handle_fx_stb_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    rR15, [rGSU, vLow]                       @ Load destination pointer
-        ldr     r2, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
-        strh    rR15, [rGSU, #FX_vLastRamAdr]            @ Store destination pointer to GSU.vLastRamAdr
-        ldrh    r1, [rSREG]                              @ Load value from SREG
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strb    r1, [r2, rR15]                           @ Store value to RAM(register N)
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Load R15. WYATT_TODO unnecessary
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         add     rR15, rR15, #1                           @ R15++
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrh    ip, [rGSU, vLow]                         @ Load destination pointer
+        ldr     r2, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch                                 @ 
+        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination pointer to GSU.vLastRamAdr
+        ldrh    vLow, [rSREG]                            @ Load value from SREG
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        strb    vLow, [r2, ip]                           @ Store value to RAM(register N)
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        b       dispatch.skip_1                          @ 
 
 @ LDB: Load byte from the RAM location pointed to by register N into DREG
 handle_fx_ldb_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        add     ip, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         ldrh    r2, [rGSU, vLow]                         @ Load source pointer
-        ldr     r1, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
+        cmp     rDREG, ip                                @ TESTR14: If DREG == 14, load rombuffer
         strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store source pointer to GSU.vLastRamAdr
-        ldrb    r2, [r1, r2]                             @ Load result
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrb    ip, [vLow, r2]                           @ Load result
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    r2, [rDREG]                              @ Store result to DREG
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ CMODE: set plot option register to the value in SREG
+@ Call clobbers r0-r3, r12, lr (vLow, pvPrgBank, r2, rR15, ip, reserved)
 handle_fx_cmode:
-        ldrb    rR15, [rSREG]                            @ Load result in SREG
-        tst     rR15, #16                                @ Test plotOptionReg for screenHeight
-        strb    rR15, [rGSU, #FX_vPlotOptionReg]         @ Store result
-        movne   rR15, #256                               @ If PLOT_OBJECT, fake screenHeight as 256
-        ldreq   rR15, [rGSU, #FX_vScreenRealHeight]      @ Else, set screenHeight to its real height
-        str     rR15, [rGSU, #FX_vScreenHeight]          @ Store screenHeight
+        ldrb    ip, [rSREG]                              @ Load result in SREG
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        tst     ip, #16                                  @ Test plotOptionReg for screenHeight
+        strb    ip, [rGSU, #FX_vPlotOptionReg]           @ Store result
+        ldreq   r2, [rGSU, #FX_vScreenRealHeight]        @ Else, set screenHeight to its real height
+        movne   r2, #256                                 @ If PLOT_OBJECT, fake screenHeight as 256
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        str     r2, [rGSU, #FX_vScreenHeight]            @ Store screenHeight
         bl      fx_computeScreenPointers                 @ Recompute screen ptrs. WYATT_TODO if regs are changed, be careful!
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Load R15. WYATT_TODO can be moved above computeScreenPointers
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        add     rR15, rR15, #1                           @ R15++
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch                                 @ 
+        b       dispatch                                 @ R1 and rR15 may be corrupted and need a reload, so full branch
 
 @ ADC: add-with-carry, SREG + register N, store in DREG
 handle_fx_adc_r:
