@@ -1873,32 +1873,31 @@ handle_fx_ramb:
         ldrh    r2, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        and     rR15, r2, #3                             @ SREG & (FX_RAM_BANKS - 1)
-        strb    rR15, [rGSU, #FX_vRamBankReg]            @ Store to GSU.vRamBankReg
-        add     rR15, rR15, #FX_apvRamBank >> 2          @ Add apvRamBank table offset, pre-shifted down
-        ldr     rR15, [rGSU, rR15, lsl #2]               @ Load pointer at GSU.apvRamBank[GSU.vRamBankReg]
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        str     rR15, [rGSU, #FX_pvRamBank]              @ Store to GSU.pvRamBank
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        and     r2, r2, #3                               @ SREG & (FX_RAM_BANKS - 1)
+        strb    r2, [rGSU, #FX_vRamBankReg]              @ Store to GSU.vRamBankReg
+        add     ip, r2, #FX_apvRamBank >> 2              @ Add apvRamBank table offset, pre-shifted down
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        ldr     ip, [rGSU, ip, lsl #2]                   @ Load pointer at GSU.apvRamBank[GSU.vRamBankReg]
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        str     ip, [rGSU, #FX_pvRamBank]                @ Store to GSU.pvRamBank
+        b       dispatch.skip_1                          @ 
 
 @ GETBL: Overwrite the low byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbl:
-        add     r2, rR15, #1                             @ R15++
-        ldrh    rR15, [rSREG]                            @ Load SREG
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
+        ldrb    ip, [rSREG, #1]                          @ Load SREG top byte
         ldrb    r2, [rGSU, #FX_vRomBuffer]               @ Load ROMBUFFER
-        and     rR15, rR15, #65280                       @ Clear SREG bottom byte
-        orr     rR15, rR15, r2                           @ Combine both sources
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        orr     ip, r2, ip, lsl #8                       @ Combine both sources
+        strh    ip, [rDREG]                              @ Store result
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ SM: Store register N in RAM. The address is fetched from PIPE.
 handle_fx_sm_r:
@@ -2020,15 +2019,15 @@ handle_fx_romb:
         ldrh    r2, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        and     rR15, r2, #127                           @ Clear top bit of SREG
-        strb    rR15, [rGSU, #FX_vRomBankReg]            @ Store SREG to GSU.vRomBankReg
-        add     rR15, rR15, #FX_apvRomBank >> 2          @ Offset magic for apvRomBank, pre-shifted down
-        ldr     rR15, [rGSU, rR15, lsl #2]               @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        str     rR15, [rGSU, #FX_pvRomBank]              @ Store to GSU.pvRomBank
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        and     r2, r2, #127                             @ SREG & (FX_ROM_BANKS - 1)
+        strb    r2, [rGSU, #FX_vRomBankReg]              @ Store to GSU.vRomBankReg
+        add     ip, r2, #FX_apvRomBank >> 2              @ Add apvRomBank table offset, pre-shifted down
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        ldr     ip, [rGSU, ip, lsl #2]                   @ Load pointer at GSU.apvRomBank[GSU.vRomBankReg]
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        str     ip, [rGSU, #FX_pvRomBank]                @ Store to GSU.pvRomBank
+        b       dispatch.skip_1                          @ 
 
 testr14_clrflags_dispatch:
         ldrh    vLow, [rGSU, #FX_R14]                    @ TESTR14
