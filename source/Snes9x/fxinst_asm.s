@@ -1722,8 +1722,8 @@ handle_fx_lm_r:
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of destination
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination to vLastRamAdr
+        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of address
+        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
         tst     ip, #1                                   @ If low bit of address is set, swap the bytes
         bic     ip, ip, #1                               @ Zero low bit of address
@@ -1745,8 +1745,8 @@ handle_fx_lm_r14:
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of destination
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination to vLastRamAdr
+        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of address
+        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
         tst     ip, #1                                   @ If low bit of address is set, swap the bytes
         bic     ip, ip, #1                               @ Zero low bit of address
@@ -1911,34 +1911,26 @@ handle_fx_getbl:
 
 @ SM: Store register N in RAM. The address is fetched from PIPE.
 handle_fx_sm_r:
+        mov     rDREG, #1                                @ Prep R15 increment value
+        uadd16  rR15, rR15, rDREG                        @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    r2, [rGSU, vLow]                         @ Load register N
-        add     vLow, rR15, #1                           @ R15 + 1 into scratch register
-        uxth    vLow, vLow                               @ Wrap R15 at 16 bits
-        mov     ip, rPIPE                                @ WYATT_TODO fix this. Temporary hack while removing IP from dispatch.
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store bottom byte of PIPE at GSU.vLastRamAdr. WYATT_TODO unnecessary
-        strh    vLow, [rGSU, #FX_R15]                    @ Store R15. WYATT_TODO unnecessary
-        ldrb    rPIPE, [r1, vLow]                        @ FETCHPIPE
-        add     rR15, rR15, #2                           @ R15 + 2
-        orr     ip, ip, rPIPE, lsl #8                    @ Combine both bytes of destination
-        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15. WYATT_TODO unnecessary
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store PIPE at GSU.vLastRamAdr
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
-        ldr     rR15, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strb    r2, [rR15, ip]                           @ Store lower byte
-        ldrh    rR15, [rGSU, #FX_vLastRamAdr]            @ Reload GSU.vLastRamAdr. WYATT_TODO unnecessary
-        ldr     r1, [rGSU, #FX_pvRamBank]                @ Reload RAM base pointer. WYATT_TODO unnecessary
-        lsr     r2, r2, #8                               @ Prep upper byte
-        eor     rR15, rR15, #1                           @ Flip bottom bit of offset
-        strb    r2, [r1, rR15]                           @ Store upper byte
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Reload R15. WYATT_TODO unnecessary
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        add     rR15, rR15, #1                           @ R15++
+        ldrb    r2, [r1, rR15]                           @ FETCHPIPE
+        ldrh    ip, [rGSU, vLow]                         @ Load register N
+        uadd16  rR15, rR15, rDREG                        @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        orr     r2, rPIPE, r2, lsl #8                    @ Combine both bytes of address
+        strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
+        ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
+        tst     r2, #1                                   @ If low bit of address is set, swap the bytes
+        rev16ne ip, ip                                   @ Swap the bytes
+        bic     r2, r2, #1                               @ Zero low bit of address
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        strh    ip, [rSREG, r2]                          @ Store the value
+        uadd16  rR15, rR15, rDREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch                                 @ 
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_2                          @ 
 
 @ ADC_I: add-with-carry, SREG + 4-bit immediate, store in DREG
 handle_fx_adc_i:
@@ -2114,8 +2106,8 @@ handle_fx_lm_r15:
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of destination
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination to vLastRamAdr
+        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of address
+        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
         bic     ip, ip, #1                               @ Zero low bit of address
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
