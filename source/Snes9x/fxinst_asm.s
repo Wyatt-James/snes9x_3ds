@@ -1624,49 +1624,57 @@ handle_fx_lmult:
         b       dispatch.skip_2                          @ 
 
 @ LMS: load word from RAM (short address), store in register N
-@ WYATT_TODO would this be better with a bespoke R15 version?
 handle_fx_lms_r:
-        lsl     ip, rPIPE, #1                            @ Shift PIPE left 1
-        add     r2, rR15, #1                             @ R15 + 1 into scratch register
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe GSU.vLastRamAdr
-        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
-        add     rR15, rR15, #2                           @ R15 + 2
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldr     rR15, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        add     r2, ip, #1                               @ GSU.vLastRamAdr + 1
-        ldrb    r2, [rR15, r2]                           @ Load upper byte
-        ldrb    rR15, [rR15, ip]                         @ Load lower byte
+        ldr     ip, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        lsl     r2, rPIPE, #1                            @ Shift source address left 1
+        strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
+        mov     rSREG, #1                                @ Prep R15 increment value
+        ldrh    ip, [ip, r2]                             @ Load the halfword
+        uadd16  rR15, rR15, rSREG                        @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        orr     rR15, rR15, r2, lsl #8                   @ Combine both bytes
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        uadd16  rR15, rR15, rSREG                        @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rGSU, vLow]                         @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        strh    rR15, [rGSU, vLow]                       @ Store result
-        b       dispatch                                 @ 
+        b       dispatch.skip_2                          @ 
         
 @ LMS: load word from RAM (short address), store in register 14, then READR14
 handle_fx_lms_r14:
-        lsl     ip, rPIPE, #1                            @ Shift PIPE left 1
-        add     r2, rR15, #1                             @ R15 + 1 into scratch register
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe GSU.vLastRamAdr
-        uxth    r2, r2                                   @ Wrap scratch R15 at 16 bits
-        add     rR15, rR15, #2                           @ R15 + 2
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15 + 2
-        ldr     rR15, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        add     r2, ip, #1                               @ GSU.vLastRamAdr + 1
-        ldrb    r2, [rR15, r2]                           @ Load upper byte
-        ldrb    rR15, [rR15, ip]                         @ Load lower byte
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        orr     rR15, rR15, r2, lsl #8                   @ Combine both bytes
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
+        ldr     ip, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        lsl     r2, rPIPE, #1                            @ Shift source address left 1
+        strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
+        mov     rSREG, #1                                @ Prep R15 increment value
+        ldrh    ip, [ip, r2]                             @ Load the halfword
+        uadd16  rR15, rR15, rSREG                        @ R15++
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        uadd16  rR15, rR15, rSREG                        @ R15++
+        ldrb    r2, [vLow, ip]                           @ READR14: Load ROM(R14)
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        strh    ip, [rGSU, $FX_R14]                      @ Store result
+        strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    rR15, [rGSU, #FX_R14]                    @ Store result in R14
-        ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
-        ldrb    rR15, [r2, rR15]                         @ READR14: Load ROM(R14)
-        strb    rR15, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
-        b       dispatch                                 @ 
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_2                          @ 
+
+@ LMS: load word from RAM (short address), store in register 15
+handle_fx_lms_r15:
+        ldr     r2, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        lsl     ip, rPIPE, #1                            @ Shift source address left 1
+        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
+        add     rPIPE, rR15, #1                          @ R15++
+        ldrh    rR15, [r2, ip]                           @ Load the halfword
+        uxth    rPIPE, rPIPE                             @ Zero-extend R15
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrb    rPIPE, [r1, rPIPE]                       @ FETCHPIPE
+        strh    rR15, [rGSU, #FX_R15]                    @ Store result
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_2                          @ 
 
 @ XOR: exclusive OR between SREG and register N, stored in DREG
 handle_fx_xor_r:

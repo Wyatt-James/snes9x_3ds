@@ -429,7 +429,7 @@
 .word   handle_fx_lms_r
 .word   handle_fx_lms_r
 .word   handle_fx_lms_r14
-.word   handle_fx_lms_r
+.word   handle_fx_lms_r15
 .word   handle_fx_from_r
 .word   handle_fx_from_r
 .word   handle_fx_from_r
@@ -941,7 +941,7 @@
 .word   handle_fx_lms_r
 .word   handle_fx_lms_r
 .word   handle_fx_lms_r14
-.word   handle_fx_lms_r
+.word   handle_fx_lms_r15
 .word   handle_fx_from_r
 .word   handle_fx_from_r
 .word   handle_fx_from_r
