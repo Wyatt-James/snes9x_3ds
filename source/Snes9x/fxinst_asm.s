@@ -1834,29 +1834,21 @@ handle_fx_mult_i:
 
 @ SMS: Store register N in RAM (short address). The address is fetched from PIPE.
 handle_fx_sms_r:
-        add     rR15, rR15, #1                           @ R15++
-        lsl     ip, rPIPE, #1                            @ Shift PIPE left 1
-        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
+        ldr     ip, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    r2, [rGSU, vLow]                         @ Load value from register N
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe GSU.vLastRamAdr
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15. WYATT_TODO unnecessary
+        lsl     r2, rPIPE, #1                            @ Shift source address left 1
+        ldrh    vLow, [rGSU, vLow]                       @ Load the value
+        strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
+        mov     rSREG, #1                                @ Prep R15 increment value
+        uadd16  rR15, rR15, rSREG                        @ R15++
         ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
-        ldr     rR15, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        strb    r2, [rR15, ip]                           @ Store bottom byte of result
-        ldrh    rR15, [rGSU, #FX_vLastRamAdr]            @ Reload GSU.vLastRamAdr. WYATT_TODO unnecessary
-        ldr     r1, [rGSU, #FX_pvRamBank]                @ Reload RAM base pointer. WYATT_TODO unnecessary
-        add     rR15, rR15, #1                           @ R15++
-        lsr     r2, r2, #8                               @ Prep top byte of result
-        uxth    rR15, rR15                               @ Wrap R15 at 16 bits
-        strb    r2, [r1, rR15]                           @ Store top byte of result
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Reload R15. WYATT_TODO unnecessary
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        add     rR15, rR15, #1                           @ R15++
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        uadd16  rR15, rR15, rSREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch                                 @ 
+        strh    vLow, [ip, r2]                           @ Store result
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_2                          @ 
 
 @ OR_I: Logically OR SREG and 4-bit immediate, store in DREG
 handle_fx_or_i:
