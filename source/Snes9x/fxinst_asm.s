@@ -1015,9 +1015,10 @@ handle_fx_and_r:
         b       dispatch.skip_1                          @ 
 
 @ MULT: multiply SREG and register n as signed 8-bit ints, store in DREG
+@ WYATT_TODO check that vLow early reg stall
 handle_fx_mult_r:
-        ldrsb   ip, [rSREG]                              @ Load s8 value 1 from SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        ldrsb   ip, [rSREG]                              @ Load s8 value 1 from SREG
         ldrsb   r2, [rGSU, vLow]                         @ Load s8 value 2 from register N
         add     rR15, rR15, #1                           @ R15++
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
@@ -1029,10 +1030,9 @@ handle_fx_mult_r:
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    ip, [rDREG]                              @ Store result
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        uxth    rR15, rR15                               @ Taken from dispatch to enable branch folding
         b       dispatch.skip_1                          @ 
 
 @ SBK: store word to last accessed RAM address
@@ -1814,24 +1814,23 @@ handle_fx_and_i:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch.skip_1                          @ 
 
-@ MULT: multiply SREG and 4-bit immediate as signed 8-bit ints, store in DREG
+@ MULT_I: multiply SREG and 4-bit immediate as signed 8-bit ints, store in DREG
 handle_fx_mult_i:
-        ldrsb   rR15, [rSREG]                            @ Load SREG as s8
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        smulbb  rR15, rR15, vLow                         @ Multiply SREG and immediate
-        msr     cpsr_f, rARM                             @ Load flags into CPSR
-        movs    rARM, rR15                               @ Set flags
-        mrs     rARM, cpsr                               @ Read flags from CPSR
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
-        beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrsb   ip, [rSREG]                              @ Load SREG as s8
+        add     rR15, rR15, #1                           @ R15++
+        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        smulbb  ip, ip, vLow                             @ Multiply to get the result
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        movs    ip, ip                                   @ Set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result
+        beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_1                          @ 
 
 @ SMS: Store register N in RAM (short address). The address is fetched from PIPE.
 handle_fx_sms_r:
@@ -1989,22 +1988,21 @@ handle_fx_bic_i:
 
 @ UMULT_I: 8-bit to 16-bit unsigned multiply, SREG * 4-bit immediate, stored in DREG
 handle_fx_umult_i:
-        ldrb    rR15, [rSREG]                            @ Load SREG
-        ldrh    r2, [rGSU, #FX_R15]                      @ Load R15. WYATT_TODO unnecessary
-        smulbb  rR15, rR15, vLow                         @ Multiply SREG * immediate
-        msr     cpsr_f, rARM                             @ Move flags into CPSR
-        movs    rARM, rR15                               @ Set flags
-        mrs     rARM, cpsr                               @ Read flags from CPSR
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        add     r2, r2, #1                               @ R15++
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
-        beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrb    ip, [rSREG]                              @ Load SREG as u8
+        add     rR15, rR15, #1                           @ R15++
+        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        smulbb  ip, ip, vLow                             @ Multiply to get the result
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
+        movs    ip, ip                                   @ Set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result
+        beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch.skip_1                          @ 
 
 @ XOR_I: exclusive OR between SREG and 4-bit immediate, stored in DREG
 handle_fx_xor_i:
