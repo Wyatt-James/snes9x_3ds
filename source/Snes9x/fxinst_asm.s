@@ -1699,19 +1699,19 @@ handle_fx_xor_r:
 
 @ GETBH: Overwrite the high byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbh:
-        add     r2, rR15, #1                             @ R15++
-        ldrb    rR15, [rSREG]                            @ Load SREG bottom byte
-        strh    r2, [rGSU, #FX_R15]                      @ Store R15
         ldrb    r2, [rGSU, #FX_vRomBuffer]               @ Load ROMBUFFER
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        orr     rR15, rR15, r2, lsl #8                   @ Combine both sources
-        strh    rR15, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldrb    ip, [rSREG]                              @ Load SREG bottom byte
+        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        orr     ip, ip, r2, lsl #8                       @ Combine both sources
+        strh    ip, [rDREG]                              @ Store result
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ LM: Load word from RAM and store it in register N. The address is fetched from PIPE.
 @ WYATT_TODO validate me.
