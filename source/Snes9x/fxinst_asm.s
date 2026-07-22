@@ -1942,41 +1942,39 @@ handle_fx_sm_r:
 
 @ ADC_I: add-with-carry, SREG + 4-bit immediate, store in DREG
 handle_fx_adc_i:
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Load R15. WYATT_TODO unnecessary
-        ldrh    r2, [rSREG]                              @ Load SREG
+        ldrh    ip, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, r2, #16                            @ Shift SREG into the upper half of the register
-        orrcs   rARM, rARM, #32768                       @ Move carry flag into SREG
         orrcs   vLow, vLow, #-2147483648                 @ Move carry flag into immediate
-        adds    vLow, rARM, vLow, ror #16                @ Add the values and set flags
+        lsl     ip, ip, #16                              @ Shift SREG into the upper half of the register
+        orrcs   ip, ip, #32768                           @ Move carry flag into SREG
+        adds    ip, ip, vLow, ror #16                    @ Add the values and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        lsr     vLow, vLow, #16                          @ Shift result into bottom half of register
+        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        lsr     ip, ip, #16                              @ Shift result into bottom half of register
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    vLow, [rDREG]                            @ Store result
-        add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        strh    ip, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch                                 @ 
+        b       dispatch.skip_1                          @ 
 
 @ CMP: Compare SREG to register N. Effectively a subtract with no result.
 handle_fx_cmp_r:
-        ldrh    rR15, [rSREG]                            @ Load SREG
+        ldrh    ip, [rSREG]                              @ Load SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    rARM, [rGSU, vLow]                       @ Load register N
-        lsl     rR15, rR15, #16                          @ Shift SREG into the upper half of the register
-        cmp     rR15, rARM, lsl #16                      @ Compare to set flags
-        mrs     rARM, cpsr                               @ Read flags from CPSR
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Load R15. WYATT_TODO unnecessary
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         add     rR15, rR15, #1                           @ R15++
+        ldrh    r2, [rGSU, vLow]                         @ Load register N
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch                                 @ 
+        lsl     ip, ip, #16                              @ Shift SREG into the upper half of the register
+        cmp     ip, r2, lsl #16                          @ Compare to set flags
+        mrs     rARM, cpsr                               @ Read flags from CPSR
+        b       dispatch.skip_1                          @ 
 
 @ BIC_I: DREG = SREG & ~4-bit immediate
 handle_fx_bic_i:
