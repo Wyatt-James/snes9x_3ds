@@ -36,19 +36,12 @@
 @ R2, IP, vLow
 @ rSREG, rDREG (if overwritten later)
 @ rARM (if overwritten later)
-@ R1 (reload necessary if modified)
-@ rR15 (store and reload necessary if modified)
+@ R1, rR15 (reload necessary if modified)
 
 @ WYATT_TODO various optimizations:
-@ - Fix doubled loads and stores caused by aliasing
-@ - Fix regalloc occasionally reloading R15
-@     If CLRFLAGS is called, we can use rSREG as scratch to save a reg
 @ - Put the GSU struct in its own over-aligned segment. This would allow us to do certain comparisons, notably the one in TESTR14, in one fewer instruction.
-@ - Look into the possibility of avoiding the UXTH instructions in IBT/IWT. Shift to top of reg and load with register lsr 16?
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
-@ - Optimize regalloc to minimize reloads of R1 and rR15
 @ - If all handlers were the same size, we could possibly save a load in dispatch and the entirety of rGOTO.
-@ - Double/triple/quadruple check for register write locks on dispatch returns
 
 @ WYATT_TODO dynarec note: TESTR14 branch prediction is unsolvable in dynarec because execution must flow forward.
 @ We can emit based on the prior instruction setting R14 or not, and fall back to interpreter for things like
