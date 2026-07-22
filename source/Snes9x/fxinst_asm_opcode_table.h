@@ -509,7 +509,7 @@
 .word   handle_fx_lm_r
 .word   handle_fx_lm_r
 .word   handle_fx_lm_r14
-.word   handle_fx_lm_r
+.word   handle_fx_lm_r15
 .word   handle_fx_stop
 .word   handle_fx_nop
 .word   handle_fx_cache
@@ -1021,4 +1021,4 @@
 .word   handle_fx_lm_r
 .word   handle_fx_lm_r
 .word   handle_fx_lm_r14
-.word   handle_fx_lm_r
+.word   handle_fx_lm_r15

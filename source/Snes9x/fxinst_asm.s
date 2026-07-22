@@ -1714,58 +1714,52 @@ handle_fx_getbh:
         b       dispatch.skip_1                          @ 
 
 @ LM: Load word from RAM and store it in register N. The address is fetched from PIPE.
-@ WYATT_TODO validate me.
 handle_fx_lm_r:
+        mov     r2, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, r2                           @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        add     r2, rR15, #1                             @ R15 + 1 into scratch register
-        uxth    r2, r2                                   @ Wrap R15 at 16 bits
-        mov     ip, rPIPE                                @ We need a copy of PIPE. WYATT_TODO could save here since PIPE is fetched again.
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
-        add     r2, rR15, #2                             @ R15 + 2 into scratch register
-        orr     ip, ip, rPIPE, lsl #8                    @ Combine both bytes of destination
+        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
+        uadd16  rR15, rR15, r2                           @ R15++
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of destination
         strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination to vLastRamAdr
-        uxth    r2, r2                                   @ Wrap R15 at 16 bits
-        add     rR15, rR15, #3                           @ R15 + 3
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
+        tst     ip, #1                                   @ If low bit of address is set, swap the bytes
+        bic     ip, ip, #1                               @ Zero low bit of address
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrh    ip, [rSREG, ip]                          @ Load the value
+        uadd16  rR15, rR15, r2                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldr     rR15, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        eor     r2, ip, #1                               @ Flip bottom bit of offset
-        ldrb    r2, [rR15, r2]                           @ Load top half of result
-        ldrb    ip, [rR15, ip]                           @ Load bottom half of result
-        orr     ip, ip, r2, lsl #8                       @ Combine result
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        rev16ne ip, ip                                   @ Swap the bytes
         strh    ip, [rGSU, vLow]                         @ Store result
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch                                 @ 
+        b       dispatch.skip_2                          @ 
 
-@ LM: Load word from RAM and store it in register N, then READR14. The address is fetched from PIPE.
-@ WYATT_TODO validate me.
+@ LM: Load word from RAM and store it in register 14, then READR14. The address is fetched from PIPE.
 handle_fx_lm_r14:
-        add     r2, rR15, #1                             @ R15 + 1 into scratch register
-        uxth    r2, r2                                   @ Wrap R15 at 16 bits
-        mov     ip, rPIPE                                @ We need a copy of PIPE. WYATT_TODO could save here since PIPE is fetched again.
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
-        add     r2, rR15, #2                             @ R15 + 2 into scratch register
-        orr     ip, ip, rPIPE, lsl #8                    @ Combine both bytes of destination
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination to vLastRamAdr
-        uxth    r2, r2                                   @ Wrap R15 at 16 bits
-        add     rR15, rR15, #3                           @ R15 + 3
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldr     rR15, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        eor     r2, ip, #1                               @ Flip bottom bit of offset
-        ldrb    r2, [rR15, r2]                           @ Load top half of result
-        ldrb    ip, [rR15, ip]                           @ Load bottom half of result
-        orr     ip, ip, r2, lsl #8                       @ Combine result
-        strh    ip, [rGSU, #FX_R14]                      @ Store result
+        mov     r2, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, r2                           @ R15++
+        ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
+        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
+        uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
-        ldrb    ip, [r2, ip]                             @ READR14: Load ROM(R14)
-        strb    ip, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       dispatch                                 @ 
+        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of destination
+        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination to vLastRamAdr
+        ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
+        tst     ip, #1                                   @ If low bit of address is set, swap the bytes
+        bic     ip, ip, #1                               @ Zero low bit of address
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrh    ip, [rSREG, ip]                          @ Load the value
+        uadd16  rR15, rR15, r2                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        rev16ne ip, ip                                   @ Swap the bytes
+        strh    ip, [rGSU, #FX_R14]                      @ Store result
+        ldrb    vLow, [vLow, ip]                         @ READR14: Load ROM(R14)
+        strb    vLow, [rGSU, #FX_vRomBuffer]   @ stall 2 @ READR14: Store to ROMBUFFER
+        b       dispatch.skip_2                          @ 
 
 @ ADD_I: Add SREG + 4-bit immediate, store in DREG
 handle_fx_add_i:
@@ -2103,8 +2097,10 @@ handle_fx_plot_4bit.L238:
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L25                                     @ 
 
+@ ---------- Rare Calls ----------
+@ Down here to keep icache happier
+
 @ IBT R15: fetch PIPE and store to Register 15
-@ Rare call, so hold it faaaar away from anything else
 handle_fx_ibt_r15:
         mov     ip, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, ip                           @ R15++
@@ -2114,7 +2110,28 @@ handle_fx_ibt_r15:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    r2, [rGSU, #FX_R15]                      @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_2                          @ Can't be skip_2 because vLow could be R15
+        b       dispatch.skip_2                          @ 
+
+@ LM: Load word from RAM and store it in register 15. The address is fetched from PIPE.
+@ WYATT_TODO untested
+handle_fx_lm_r15:
+        mov     r2, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, r2                           @ R15++
+        tst     rPIPE, #1                                @ If low bit of address is set, swap the bytes
+        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
+        uadd16  rR15, rR15, r2                           @ R15++
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of destination
+        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination to vLastRamAdr
+        ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
+        bic     ip, ip, #1                               @ Zero low bit of address
+        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrh    rR15, [rSREG, ip]              @ stall 1 @ Load the value
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        rev16ne rR15, rR15                     @ stall 2 @ Swap the bytes
+        strh    rR15, [rGSU, #FX_R15]                    @ Store result
+        b       dispatch.skip_2                          @ 
 
     .cfi_endproc
 
