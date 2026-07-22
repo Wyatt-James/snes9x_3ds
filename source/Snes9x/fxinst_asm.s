@@ -2,6 +2,7 @@
 #include "fxinst_asm.h"
 
 #define vLow   r0
+#define rPRG   r1
 #define rR15   r3
 #define rGSU   r4
 #define rVCNT  r5
@@ -71,13 +72,13 @@ fx_run_asm:
       @ cmp     rR15, #3                                 @ If vMode > 3, vMode = 0.  Unreachable.
       @ movhi   r3, #0                                   @  |
         ldr     r2, .L242+8                              @ Load plot/rpix table
-        add     r1, r2, rR15, lsl #3                     @ Compute target address
+        add     rPRG, r2, rR15, lsl #3                   @ Compute target address
         ldr     r2, [r2, rR15, lsl #3]                   @ Load plot from the table 
-        ldr     rR15, [r1, #4]                           @ Load rpix from the table
-        ldrh    r1, [rGSU, #FX_R14]                      @ READR14: Load R14
+        ldr     rR15, [rPRG, #4]                         @ Load rpix from the table
+        ldrh    rPRG, [rGSU, #FX_R14]                    @ READR14: Load R14
       @ cmp     vLow, #0                                 @ If nInstructions == 0, end. Unreachable.
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        ldrb    r1, [vLow, r1]                           @ READR14: Load ROM(R14)
+        ldrb    rPRG, [vLow, rPRG]                       @ READR14: Load ROM(R14)
         ldrb    rSREG, [rGSU, #FX_pvSreg]                @ Load reserved regs
         ldrb    rDREG, [rGSU, #FX_pvDreg]                @  |
         ldrh    rSTAT, [rGSU, #FX_vStatusReg]            @  |
@@ -85,39 +86,37 @@ fx_run_asm:
         ldrb    rPIPE, [rGSU, #FX_vPipe]                 @  |
         add     rSREG, rGSU, rSREG, lsl #1               @  |
         add     rDREG, rGSU, rDREG, lsl #1               @  V
-        strb    r1, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
+        strb    rPRG, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
         str     rR15, [rGOTO, #3376]                     @ Populate GOTO table
         str     rR15, [rGOTO, #1328]                     @  |
         str     r2, [rGOTO, #2352]                       @  |
         str     r2, [rGOTO, #304]                        @  V
       @ beq     loop_end                                 @ End if nInstructions == 0. Unreachable.
+        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
 
 @ Dispatch for after instructions that do not run CLRFLAGS
 dispatch_flags:
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
-dispatch_flags.skip_1:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
-dispatch_flags.skip_2:                                   @ If used, be careful to ensure that R15 is still 16-bit
+dispatch_flags.skip_1:                                   @ If used, be careful to ensure that R15 is still 16-bit
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         ldr     ip, [rGOTO, r2, lsl #2]                  @ Load destination handler
         beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      ip                                       @ Branch to handler
 
 @ Dispatch for after instructions that run CLRFLAGS
 dispatch:
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
-dispatch.skip_1:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
-dispatch.skip_2:                                         @ If used, be careful to ensure that R15 is still 16-bit
+dispatch.skip_1:                                         @ If used, be careful to ensure that R15 is still 16-bit
         ldr     ip, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
+dispatch.skip_2:
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      ip                                       @ Branch to handler
 
 loop_end:
@@ -144,7 +143,7 @@ handle_fx_getbs:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ STOP: stop GSU execution
 handle_fx_stop:
@@ -169,16 +168,16 @@ handle_fx_plot_2bit:
         add     rR15, rR15, #1                           @ R15++
         ldr     rSREG, [rGSU, #FX_vScreenHeight]         @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldrh    r1, [rGSU, #FX_R1]                       @ Load X
+        ldrh    rPRG, [rGSU, #FX_R1]                     @ Load X
         cmp     ip, rSREG                                @ Test Y > screen height
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        add     r2, r1, #1                               @ X++
+        add     r2, rPRG, #1                             @ X++
         strh    r2, [rGSU, #FX_R1]                       @  |
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0. Prevents stall from next branch getting folded
         bcs     handle_fx_plot_2bit.return               @ If Y > screen height, return
         ldrb    vLow, [rGSU, #FX_vPlotOptionReg]         @ Load vPlotOptionReg
         ldrb    r2, [rGSU, #FX_vColorReg]                @ Load vColorReg
-        uxtb    r1, r1                                   @ Truncate X to 8-bit
+        uxtb    rPRG, rPRG                               @ Truncate X to 8-bit
         tst     vLow, #2                                 @ If PLOT_DITHER, potentially shift color
         bne     handle_fx_plot_2bit.L237                 @  |
 
@@ -191,18 +190,18 @@ handle_fx_plot_2bit:
         and     vLow, vLow, #1                           @ If the color is transparent and PLOT_TRANSPARENT is disabled, return
         orrs    vLow, vLow, r2, lsl #28                  @  |
         beq     handle_fx_plot_2bit.return               @  |
-        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        lsr     vLow, rPRG, #3                           @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
         mov     rR15, #128                               @ IP = BIT(7) >> (X & 7)
-        and     r1, r1, #7                               @  |
-        lsr     rR15, rR15, r1                           @  |
-        lsr     r1, ip, #3                               @ R1 = GSU.apvScreen[Y >> 3]
-        add     r1, rGSU, r1, lsl #2                     @  |
-        ldr     r1, [r1, #FX_apvScreen]                  @  |
+        and     rPRG, rPRG, #7                           @  |
+        lsr     rR15, rR15, rPRG                         @  |
+        lsr     rPRG, ip, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        add     rPRG, rGSU, rPRG, lsl #2                 @  |
+        ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
         lsl     ip, ip, #29                              @ R15 = pixel 0 pointer
         add     ip, vLow, ip, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     ip, ip, r1                               @  |
+        add     ip, ip, rPRG                             @  |
 
         @ vLow is free
         @ R1 is free
@@ -222,41 +221,41 @@ handle_fx_plot_2bit:
 
 handle_fx_plot_2bit.return:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ Taken from dispatch to allow this return handler to branch fold
-        b       dispatch.skip_1                          @ 
+        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ Taken from dispatch to allow this return handler to branch fold
+        b       dispatch                                 @ 
 
 @ RPIX 2BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_2bit:
         add     rR15, rR15, #1                           @ R15++
-        ldr     r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
+        ldr     rPRG, [rGSU, #FX_vScreenHeight]          @ R1 = screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrb    rR15, [rGSU, #FX_R2]                     @ R15 = Y
-        cmp     rR15, r1                                 @ Test Y > screen height
-        ldrb    r1, [rGSU, #FX_R1]                       @ R1 = X
+        cmp     rR15, rPRG                               @ Test Y > screen height
+        ldrb    rPRG, [rGSU, #FX_R1]                     @ R1 = X
         bcs     handle_fx_rpix_8bit.return               @ If Y > screen height, return
         
         @ R1 is X, rR15 is Y
-        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        lsr     vLow, rPRG, #3                             @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
         mov     ip, #128                                 @ R15 = BIT(7) >> (X & 7)
-        and     r1, r1, #7                               @  |
-        lsr     ip, ip, r1                               @  |
-        lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
-        add     r1, rGSU, r1, lsl #2                     @  |
-        ldr     r1, [r1, #FX_apvScreen]                  @  |
+        and     rPRG, rPRG, #7                           @  |
+        lsr     ip, ip, rPRG                             @  |
+        lsr     rPRG, rR15, #3                           @ R1 = GSU.apvScreen[Y >> 3]
+        add     rPRG, rGSU, rPRG, lsl #2                 @  |
+        ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
         lsl     rR15, rR15, #29                          @ IP = pixel 0 pointer
         add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     rR15, rR15, r1                           @  |
+        add     rR15, rR15, rPRG                         @  |
 
         @ rR15 is pixel 0 Pointer, IP is the pixel mask
-        ldrh    r1, [rR15, #0]                           @ Load pixel pair 1
+        ldrh    rPRG, [rR15, #0]                         @ Load pixel pair 1
         mov     vLow, #0                                 @ Initial result
         add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14. Lifted from return to save a cycle
 
-        tst r1, ip                                       @ Pixel pair 1
+        tst rPRG, ip                                     @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-        tst r1, ip, lsl #8                               @  |
+        tst rPRG, ip, lsl #8                             @  |
         orrne vLow, vLow, #2                             @  |
 
         strh vLow, [rDREG]                               @ Store result
@@ -268,16 +267,16 @@ handle_fx_plot_4bit:
         add     rR15, rR15, #1                           @ R15++
         ldr     rSREG, [rGSU, #FX_vScreenHeight]         @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldrh    r1, [rGSU, #FX_R1]                       @ Load X
+        ldrh    rPRG, [rGSU, #FX_R1]                     @ Load X
         cmp     ip, rSREG                                @ Test Y > screen height
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        add     r2, r1, #1                               @ X++
+        add     r2, rPRG, #1                             @ X++
         strh    r2, [rGSU, #FX_R1]                       @  |
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0. Prevents stall from next branch getting folded
         bcs     handle_fx_plot_4bit.return               @ If Y > screen height, return
         ldrb    vLow, [rGSU, #FX_vPlotOptionReg]         @ Load vPlotOptionReg
         ldrb    r2, [rGSU, #FX_vColorReg]                @ Load vColorReg
-        uxtb    r1, r1                                   @ Truncate X to 8-bit
+        uxtb    rPRG, rPRG                               @ Truncate X to 8-bit
         tst     vLow, #2                                 @ If PLOT_DITHER, potentially shift color
         bne     handle_fx_plot_4bit.L238                 @  |
 
@@ -290,18 +289,18 @@ handle_fx_plot_4bit:
         and     vLow, vLow, #1                           @ If the color is transparent and PLOT_TRANSPARENT is disabled, return
         orrs    vLow, vLow, r2, lsl #28                  @  |
         beq     handle_fx_plot_4bit.return               @  |
-        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        lsr     vLow, rPRG, #3                           @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
         mov     rR15, #128                               @ R15 = BIT(7) >> (X & 7)
-        and     r1, r1, #7                               @  |
-        lsr     rR15, rR15, r1                           @  |
-        lsr     r1, ip, #3                               @ R1 = GSU.apvScreen[Y >> 3]
-        add     r1, rGSU, r1, lsl #2                     @  |
-        ldr     r1, [r1, #FX_apvScreen]                  @  |
+        and     rPRG, rPRG, #7                           @  |
+        lsr     rR15, rR15, rPRG                         @  |
+        lsr     rPRG, ip, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        add     rPRG, rGSU, rPRG, lsl #2                 @  |
+        ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
         lsl     ip, ip, #29                              @ IP = pixel 0 pointer
         add     ip, vLow, ip, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     ip, ip, r1                               @  |
+        add     ip, ip, rPRG                             @  |
 
         @ vLow is free
         @ R1 is free
@@ -310,17 +309,17 @@ handle_fx_plot_4bit:
         @ rR15 is the pixel mask
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        ldrh    r1, [ip, #0]                             @ Load pixel pair 1
+        ldrh    rPRG, [ip, #0]                           @ Load pixel pair 1
         tst     r2, #1                                   @ Pixel conditional
         ldrh    vLow, [ip, #16]                          @ Load pixel pair 2. Up here to avoid a stall.
-        orrne   r1, r1, rR15                             @  |
-        biceq   r1, r1, rR15                             @  |
+        orrne   rPRG, rPRG, rR15                         @  |
+        biceq   rPRG, rPRG, rR15                         @  |
         tst     r2, #2                                   @ Pixel conditional
-        orrne   r1, r1, rR15, lsl #8                     @  |
-        biceq   r1, r1, rR15, lsl #8                     @  |
-        strh    r1, [ip, #0]                             @ Store pixel pair
+        orrne   rPRG, rPRG, rR15, lsl #8                 @  |
+        biceq   rPRG, rPRG, rR15, lsl #8                 @  |
+        strh    rPRG, [ip, #0]                           @ Store pixel pair
 
-        @ Interleave between vLow and r1 to prevent stalls
+        @ Interleave between vLow and rPRG to prevent stalls
         tst     r2, #4                                   @ Pixel conditional
         orrne   vLow, vLow, rR15                         @  |
         biceq   vLow, vLow, rR15                         @  |
@@ -331,41 +330,41 @@ handle_fx_plot_4bit:
 
 handle_fx_plot_4bit.return:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ Taken from dispatch to allow this return handler to branch fold
-        b       dispatch.skip_1                          @ 
+        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ Taken from dispatch to allow this return handler to branch fold
+        b       dispatch                                 @ 
 
 @ RPIX 4BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_4bit:
         add     rR15, rR15, #1                           @ R15++
-        ldr     r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
+        ldr     rPRG, [rGSU, #FX_vScreenHeight]          @ R1 = screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrb    rR15, [rGSU, #FX_R2]                     @ R15 = Y
-        cmp     rR15, r1                                 @ Test Y > screen height
-        ldrb    r1, [rGSU, #FX_R1]                       @ R1 = X
+        cmp     rR15, rPRG                               @ Test Y > screen height
+        ldrb    rPRG, [rGSU, #FX_R1]                     @ R1 = X
         bcs     handle_fx_rpix_8bit.return               @ If Y > screen height, return
         
         @ R1 is X, rR15 is Y
-        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        lsr     vLow, rPRG, #3                           @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
         mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
-        and     r1, r1, #7                               @  |
-        lsr     ip, ip, r1                               @  |
-        lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
-        add     r1, rGSU, r1, lsl #2                     @  |
-        ldr     r1, [r1, #FX_apvScreen]                  @  |
+        and     rPRG, rPRG, #7                           @  |
+        lsr     ip, ip, rPRG                             @  |
+        lsr     rPRG, rR15, #3                           @ R1 = GSU.apvScreen[Y >> 3]
+        add     rPRG, rGSU, rPRG, lsl #2                 @  |
+        ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
         lsl     rR15, rR15, #29                          @ R15 = pixel 0 pointer
         add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     rR15, rR15, r1                           @  |
+        add     rR15, rR15, rPRG                         @  |
 
         @ rR15 is pixel 0 Pointer, IP is the pixel mask
-        ldrh r1, [rR15, #0]                              @ Load pixel pair 1
+        ldrh rPRG, [rR15, #0]                            @ Load pixel pair 1
         ldrh r2, [rR15, #16]                             @ Load pixel pair 2
         mov vLow, #0                                     @ Initial result
 
-        tst r1, ip                                       @ Pixel pair 1
+        tst rPRG, ip                                     @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-        tst r1, ip, lsl #8                               @  |
+        tst rPRG, ip, lsl #8                             @  |
         orrne vLow, vLow, #2                             @  |
 
         tst r2, ip                                       @ Pixel pair 2
@@ -387,32 +386,32 @@ handle_fx_plot_8bit:
         add     rR15, rR15, #1                           @ R15++
         ldr     vLow, [rGSU, #FX_vScreenHeight]          @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldrh    r1, [rGSU, #FX_R1]                       @ Load X
+        ldrh    rPRG, [rGSU, #FX_R1]                     @ Load X
         cmp     ip, vLow                                 @ Test Y > screen height
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0.
-        add     r2, r1, #1                               @ X++
+        add     r2, rPRG, #1                             @ X++
         strh    r2, [rGSU, #FX_R1]                       @  |
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0. Prevents stall from next branch getting folded
         bcs     handle_fx_plot_8bit.return               @ If Y > screen height, return
         ldrb    vLow, [rGSU, #FX_vPlotOptionReg]         @ Load vPlotOptionReg
         ldrb    r2, [rGSU, #FX_vColorReg]                @ Load vColorReg
-        uxtb    r1, r1                                   @ Truncate X to 8-bit
+        uxtb    rPRG, rPRG                               @ Truncate X to 8-bit
         tst     vLow, #1                                 @ If !PLOT_TRANSPARENT, handle pixel rejection
         beq     handle_fx_plot_8bit.L239                 @  |
 
 .L40:
-        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        lsr     vLow, rPRG, #3                           @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
         mov     rR15, #128                               @ R15 = BIT(7) >> (X & 7)
-        and     r1, r1, #7                               @  |
-        lsr     rR15, rR15, r1                           @  |
-        lsr     r1, ip, #3                               @ R1 = GSU.apvScreen[Y >> 3]
-        add     r1, rGSU, r1, lsl #2                     @  |
-        ldr     r1, [r1, #FX_apvScreen]                  @  |
+        and     rPRG, rPRG, #7                           @  |
+        lsr     rR15, rR15, rPRG                         @  |
+        lsr     rPRG, ip, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        add     rPRG, rGSU, rPRG, lsl #2                 @  |
+        ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
         lsl     ip, ip, #29                              @ IP = pixel 0 pointer
         add     ip, vLow, ip, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     ip, ip, r1                               @  |
+        add     ip, ip, rPRG                             @  |
 
         @ vLow is free
         @ R1 is free
@@ -421,22 +420,22 @@ handle_fx_plot_8bit:
         @ rR15 is the pixel mask
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        @ Interleave between vLow and r1 to prevent stalls
+        @ Interleave between vLow and rPRG to prevent stalls
         @ WYATT_TODO these could be reversed and tail-merged at no cost
-        ldrh    r1, [ip, #0]                 @           @ Load pixel pair 1
+        ldrh    rPRG, [ip, #0]               @           @ Load pixel pair 1
         tst     r2, #1                       @           @ Pixel conditional
         ldrh    vLow, [ip, #16]              @           @ Load pixel pair 2. Up here to avoid a stall.
-        orrne   r1, r1, rR15                 @           @  |
-        biceq   r1, r1, rR15                 @           @  |
+        orrne   rPRG, rPRG, rR15             @           @  |
+        biceq   rPRG, rPRG, rR15             @           @  |
         tst     r2, #2                       @           @ Pixel conditional
-        orrne   r1, r1, rR15, lsl #8         @           @  |
-        biceq   r1, r1, rR15, lsl #8         @           @  |
-        strh    r1, [ip, #0]                 @           @ Store pixel pair
+        orrne   rPRG, rPRG, rR15, lsl #8     @           @  |
+        biceq   rPRG, rPRG, rR15, lsl #8     @           @  |
+        strh    rPRG, [ip, #0]               @           @ Store pixel pair
 
         @ Pixel pair 2
         tst     r2, #4                       @           @ Pixel conditional
         orrne   vLow, vLow, rR15             @           @  |
-        ldrh    r1, [ip, #32]                @           @ Load pixel pair 3. Up here to avoid a stall.
+        ldrh    rPRG, [ip, #32]              @           @ Load pixel pair 3. Up here to avoid a stall.
         biceq   vLow, vLow, rR15             @           @  |
         tst     r2, #8                       @           @ Pixel conditional
         orrne   vLow, vLow, rR15, lsl #8     @           @  |
@@ -445,13 +444,13 @@ handle_fx_plot_8bit:
 
         @ Pixel pair 3
         tst     r2, #16                      @           @ Pixel conditional
-        orrne   r1, r1, rR15                 @           @  |
+        orrne   rPRG, rPRG, rR15             @           @  |
         ldrh    vLow, [ip, #48]              @           @ Load pixel pair 4. Up here to avoid a stall.
-        biceq   r1, r1, rR15                 @           @  |
+        biceq   rPRG, rPRG, rR15             @           @  |
         tst     r2, #32                      @           @ Pixel conditional
-        orrne   r1, r1, rR15, lsl #8         @           @  |
-        biceq   r1, r1, rR15, lsl #8         @           @  |
-        strh    r1, [ip, #32]                @           @ Store pixel pair
+        orrne   rPRG, rPRG, rR15, lsl #8     @           @  |
+        biceq   rPRG, rPRG, rR15, lsl #8     @           @  |
+        strh    rPRG, [ip, #32]              @           @ Store pixel pair
 
         @ Pixel pair 4
         tst     r2, #64                      @           @ Pixel conditional
@@ -464,53 +463,53 @@ handle_fx_plot_8bit:
 
 handle_fx_plot_8bit.return:
         bic     rSTAT, rSTAT, #4864          @           @ CLRFLAGS: STAT
-        ldr     r1, [rGSU, #FX_pvPrgBank]    @           @ Taken from dispatch to allow this return handler to branch fold
-        b       dispatch.skip_1              @           @ 
+        ldr     rPRG, [rGSU, #FX_pvPrgBank]  @           @ Taken from dispatch to allow this return handler to branch fold
+        b       dispatch                     @           @ 
 
 @ RPIX 8BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_8bit:
         add     rR15, rR15, #1                           @ R15++
-        ldr     r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
+        ldr     rPRG, [rGSU, #FX_vScreenHeight]          @ R1 = screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrb    rR15, [rGSU, #FX_R2]                     @ R15 = Y
-        cmp     rR15, r1                                 @ Test Y > screen height
-        ldrb    r1, [rGSU, #FX_R1]                       @ R1 = X
+        cmp     rR15, rPRG                               @ Test Y > screen height
+        ldrb    rPRG, [rGSU, #FX_R1]                     @ R1 = X
         bcs     handle_fx_rpix_8bit.return               @ If Y > screen height, return
         
         @ R1 is X, rR15 is Y
-        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
+        lsr     vLow, rPRG, #3                           @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
         mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
-        and     r1, r1, #7                               @  |
-        lsr     ip, ip, r1                               @  |
-        lsr     r1, rR15, #3                             @ R1 = GSU.apvScreen[Y >> 3]
-        add     r1, rGSU, r1, lsl #2                     @  |
-        ldr     r1, [r1, #FX_apvScreen]                  @  |
+        and     rPRG, rPRG, #7                           @  |
+        lsr     ip, ip, rPRG                             @  |
+        lsr     rPRG, rR15, #3                           @ R1 = GSU.apvScreen[Y >> 3]
+        add     rPRG, rGSU, rPRG, lsl #2                 @  |
+        ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
         lsl     rR15, rR15, #29                          @ R15 = pixel 0 pointer
         add     rR15, vLow, rR15, lsr #28                @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     rR15, rR15, r1                           @  |
+        add     rR15, rR15, rPRG                         @  |
 
         @ rR15 is pixel 0 Pointer, IP is the pixel mask
-        ldrh r1, [rR15, #0]                              @ Load pixel pair 1
+        ldrh rPRG, [rR15, #0]                            @ Load pixel pair 1
         ldrh r2, [rR15, #16]                             @ Load pixel pair 2
         mov vLow, #0                                     @ Initial result
 
-        tst r1, ip                                       @ Pixel pair 1
+        tst rPRG, ip                                     @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-        tst r1, ip, lsl #8                               @  |
+        tst rPRG, ip, lsl #8                             @  |
         orrne vLow, vLow, #2                             @  |
 
-        ldrh r1, [rR15, #32]                             @ Load pixel pair 3
+        ldrh rPRG, [rR15, #32]                           @ Load pixel pair 3
         tst r2, ip                                       @ Pixel pair 2
         orrne vLow, vLow, #4                             @  |
         tst r2, ip, lsl #8                               @  |
         orrne vLow, vLow, #8                             @  |
 
         ldrh r2, [rR15, #48]                             @ Load pixel pair 4
-        tst r1, ip                                       @ Pixel pair 3
+        tst rPRG, ip                                     @ Pixel pair 3
         orrne vLow, vLow, #16                            @  |
-        tst r1, ip, lsl #8                               @  |
+        tst rPRG, ip, lsl #8                             @  |
         orrne vLow, vLow, #32                            @  |
 
         tst r2, ip                                       @ Pixel pair 4
@@ -531,6 +530,7 @@ handle_fx_rpix_8bit.return_skip_1:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ Restore since we clobbered it. WYATT_TODO don't clobber it :)
         b       dispatch                                 @ 
 
 @ NOP: Clears flags and advances R15
@@ -540,7 +540,7 @@ handle_fx_nop:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ CACHE: reintialize GSU cache
 handle_fx_cache:
@@ -558,7 +558,7 @@ handle_fx_cache:
         strh    r2, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
         mov     ip, #0                                   @ 
         str     ip, [rGSU, #FX_vCacheFlags]              @ GSU.vCacheFlags = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ LSR: logical shift right
 handle_fx_lsr:
@@ -575,7 +575,7 @@ handle_fx_lsr:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ ROL: rotate left
 handle_fx_rol:
@@ -595,16 +595,16 @@ handle_fx_rol:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ BRA: unconditional branch
 handle_fx_bra:
         add     rR15, rR15, #1                           @ R15++
         uxth    r2, rR15                                 @ Wrap R15 at 16 bits
         sxtab16 rR15, rR15, rPIPE                        @ Add PIPE to R15
-        ldrb    rPIPE, [r1, r2]                          @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, r2]                        @ FETCHPIPE
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch_flags.skip_2                    @ 
+        b       dispatch_flags.skip_1                    @ 
 
 @ BGE: branch if greater or equal
 handle_fx_bge:
@@ -613,9 +613,9 @@ handle_fx_bge:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16ge  rR15, r2, rPIPE                       @ Handle branch
         uadd16lt   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BLT: branch if less than
 handle_fx_blt:
@@ -624,9 +624,9 @@ handle_fx_blt:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16lt  rR15, r2, rPIPE                       @ Handle branch
         uadd16ge   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BNE: branch if not equal
 handle_fx_bne:
@@ -635,9 +635,9 @@ handle_fx_bne:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16ne  rR15, r2, rPIPE                       @ Handle branch
         uadd16eq   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BEQ: branch if equal
 handle_fx_beq:
@@ -646,9 +646,9 @@ handle_fx_beq:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16eq  rR15, r2, rPIPE                       @ Handle branch
         uadd16ne   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BPL: branch if positive or zero
 handle_fx_bpl:
@@ -657,9 +657,9 @@ handle_fx_bpl:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16pl  rR15, r2, rPIPE                       @ Handle branch
         uadd16mi   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BMI: branch if negative
 handle_fx_bmi:
@@ -668,9 +668,9 @@ handle_fx_bmi:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16mi  rR15, r2, rPIPE                       @ Handle branch
         uadd16pl   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BCC: branch if lower (unsigned <)
 handle_fx_bcc:
@@ -679,9 +679,9 @@ handle_fx_bcc:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16cc  rR15, r2, rPIPE                       @ Handle branch
         uadd16cs   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BCS: branch if higher or same (unsigned >=)
 handle_fx_bcs:
@@ -690,9 +690,9 @@ handle_fx_bcs:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16cs  rR15, r2, rPIPE                       @ Handle branch
         uadd16cc   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BVC: branch if no overflow
 handle_fx_bvc:
@@ -701,9 +701,9 @@ handle_fx_bvc:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16vc  rR15, r2, rPIPE                       @ Handle branch
         uadd16vs   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ BVS: branch if overflow
 handle_fx_bvs:
@@ -712,9 +712,9 @@ handle_fx_bvs:
         uadd16     r2, rR15, vLow                        @ R15++
         sxtab16vs  rR15, r2, rPIPE                       @ Handle branch
         uadd16vc   rR15, r2, vLow                        @ 
-        ldrb       rPIPE, [r1, r2]                       @ FETCHPIPE
+        ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
-        b          dispatch_flags.skip_2                 @ 
+        b          dispatch_flags.skip_1                 @ 
 
 @ TO: set register n as destination register
 @ move one register to another (if B flag is set)
@@ -731,11 +731,11 @@ handle_fx_to_r:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    r2, [rGSU, vLow]                         @ Register N = SREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 handle_fx_to_r.b_is_not_set:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15. vLow cannot be 15, so early store is valid
         add     rDREG, rGSU, vLow, lsl #1                @ DREG = vLow
-        b       dispatch_flags.skip_1                    @ 
+        b       dispatch_flags                           @ 
 
 @ TO_R14: set register 14 as destination register
 @ If B flag is set, move SREG to R14, CLRFLAGS, and READR14 instead
@@ -746,7 +746,7 @@ handle_fx_to_r14:
 @ B is not set
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rDREG, rGSU, #FX_R14                     @ DREG = pointer to R14
-        b       dispatch_flags.skip_1                    @ 
+        b       dispatch_flags                           @ 
 handle_fx_to_r14.b_is_set:
         ldrh    r2, [rSREG]                              @ Load SREG
         ldr     ip, [rGSU, #FX_pvRomBank]                @ READR14: Load GSU.pvRomBank
@@ -757,7 +757,7 @@ handle_fx_to_r14.b_is_set:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store ROMBUFFER
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ TO_R15: Set DREG to R15 and increment R15
 @ If B flag is set, move SREG to R15 instead
@@ -770,12 +770,12 @@ handle_fx_to_r15:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ R15 = SREG
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 handle_fx_to_r15.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rDREG, rGSU, #FX_R15                     @ DREG = pointer to R15
-        b       dispatch_flags.skip_1                    @ 
+        b       dispatch_flags                           @ 
 
 @ WITH: set register n as source and destination register
 handle_fx_with_r:
@@ -784,7 +784,7 @@ handle_fx_with_r:
         add     rDREG, rGSU, vLow, lsl #1                @ Calculate register
         mov     rSREG, rDREG                             @ Copy register to SREG
         orr     rSTAT, rSTAT, #4096                      @ Set flag B
-        b       dispatch_flags.skip_1                    @ 
+        b       dispatch_flags                           @ 
 
 @ STW: store word (16 bits)
 handle_fx_stw_r:
@@ -802,7 +802,7 @@ handle_fx_stw_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ LOOP: decrement loop counter R12 and branch to R13 on not zero
 handle_fx_loop:
@@ -820,13 +820,13 @@ handle_fx_loop:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 handle_fx_loop.loop_end:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ ALT1: set ALT mode 1
 handle_fx_alt1:
@@ -834,7 +834,7 @@ handle_fx_alt1:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         orr     rSTAT, rSTAT, #256                       @ Set ALT1 flag
-        b       dispatch_flags.skip_1                    @ 
+        b       dispatch_flags                           @ 
 
 @ ALT2: set ALT mode 2
 handle_fx_alt2:
@@ -842,7 +842,7 @@ handle_fx_alt2:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         orr     rSTAT, rSTAT, #512                       @ Set ALT2 flag
-        b       dispatch_flags.skip_1                    @ 
+        b       dispatch_flags                           @ 
         
 @ ALT3: set ALT mode 3
 handle_fx_alt3:
@@ -850,7 +850,7 @@ handle_fx_alt3:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         orr     rSTAT, rSTAT, #768                       @ Set ALT1 + ALT2 flags
-        b       dispatch_flags.skip_1                    @ 
+        b       dispatch_flags                           @ 
 
 @ LDW: load word
 handle_fx_ldw_r:
@@ -871,7 +871,7 @@ handle_fx_ldw_r:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ SWAP: swap low and high bytes of SREG, store in DREG
 handle_fx_swap:
@@ -890,7 +890,7 @@ handle_fx_swap:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ COLOR: copy SREG to color register
 handle_fx_color:
@@ -910,7 +910,7 @@ handle_fx_color:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ NOT: bitwise NOT of SREG, store in DREG
 handle_fx_not:
@@ -928,7 +928,7 @@ handle_fx_not:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ ADD: SREG + register n, store in DREG
 handle_fx_add_r:
@@ -948,7 +948,7 @@ handle_fx_add_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ SUB: SREG - register n, store in DREG
 handle_fx_sub_r:
@@ -968,7 +968,7 @@ handle_fx_sub_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ MERGE: Top halves of R7 and R8 as upper and lower bytes respectively, store in DREG
 handle_fx_merge:
@@ -991,7 +991,7 @@ handle_fx_merge:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ AND: bitwise AND of SREG and register n, store in DREG
 handle_fx_and_r:
@@ -1012,7 +1012,7 @@ handle_fx_and_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ MULT: multiply SREG and register n as signed 8-bit ints, store in DREG
 @ WYATT_TODO check that vLow early reg stall
@@ -1033,7 +1033,7 @@ handle_fx_mult_r:
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ SBK: store word to last accessed RAM address
 handle_fx_sbk:
@@ -1049,7 +1049,7 @@ handle_fx_sbk:
         strb    ip, [vLow, r2]                           @ Store bottom byte
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ LINK: R11 = R15 + immediate
 handle_fx_link_i:
@@ -1060,7 +1060,7 @@ handle_fx_link_i:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ SEX: sign-extend 8-bit to 16-bit, SREG to DREG
 handle_fx_sex:
@@ -1077,7 +1077,7 @@ handle_fx_sex:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ ASR: arithmetic shift right, SREG to DREG
 handle_fx_asr:
@@ -1094,7 +1094,7 @@ handle_fx_asr:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ ROR: rotate right, SREG to DREG
 handle_fx_ror:
@@ -1112,7 +1112,7 @@ handle_fx_ror:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ JMP: jump to address of register N. No delay slot.
 handle_fx_jmp_r:
@@ -1122,7 +1122,7 @@ handle_fx_jmp_r:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ LOB: set upper byte to 0, SREG to DREG
 handle_fx_lob:
@@ -1140,7 +1140,7 @@ handle_fx_lob:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ Data table for fx_run_asm
 .L242:
@@ -1166,14 +1166,14 @@ handle_fx_fmult:
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         uxth    rR15, rR15                               @ Taken from dispatch to enable branch folding
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ IBT: fetch PIPE and store to register N
 handle_fx_ibt_r:
         mov     ip, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, ip                           @ R15++
         sxtb    r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, ip                           @ R15++
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
@@ -1181,7 +1181,7 @@ handle_fx_ibt_r:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    r2, [rGSU, vLow]                         @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ IBT R14: fetch PIPE and store to Register 14, then READR14
 handle_fx_ibt_r14:
@@ -1189,7 +1189,7 @@ handle_fx_ibt_r14:
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
         uadd16  rR15, rR15, ip                           @ R15++
         strh    r2, [rGSU, #FX_R14]                      @ Store result
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
         uadd16  rR15, rR15, ip                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
@@ -1198,7 +1198,7 @@ handle_fx_ibt_r14:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ FROM: Set SREG to register N
 @ If B flag is set, move register N to DREG and set flags instead
@@ -1210,7 +1210,7 @@ handle_fx_from_r:
 @ B is not set
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
-        b       dispatch_flags.skip_1                    @ 
+        b       dispatch_flags                           @ 
 handle_fx_from_r.b_is_set:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -1228,7 +1228,7 @@ handle_fx_from_r.b_is_set:
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ HIB: logical right-shift register by 8, SREG to DREG
 handle_fx_hib:
@@ -1247,7 +1247,7 @@ handle_fx_hib:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ OR: logically OR SREG and register N, store in DREG
 handle_fx_or_r:
@@ -1268,7 +1268,7 @@ handle_fx_or_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ INC: increment a register. Cannot be called with R15.
 handle_fx_inc_r:
@@ -1285,7 +1285,7 @@ handle_fx_inc_r:
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ INC R14: increment R14 and READR14
 handle_fx_inc_r14:
@@ -1304,7 +1304,7 @@ handle_fx_inc_r14:
         mrs     rARM, cpsr                               @ Read flags from CPSR
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ GETC: transfer ROMBUFFER to color register
 handle_fx_getc:
@@ -1324,7 +1324,7 @@ handle_fx_getc:
         strb    r2, [rGSU, #FX_vColorReg]                @ Store result to GSU.vColorReg
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ DEC: decrement a register
 handle_fx_dec_r:
@@ -1341,7 +1341,7 @@ handle_fx_dec_r:
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ DEC R14: decrement R14 and then READR14
 handle_fx_dec_r14:
@@ -1360,7 +1360,7 @@ handle_fx_dec_r14:
         mrs     rARM, cpsr                               @ Read flags from CPSR
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ GETB: get byte from ROMBUFFER
 handle_fx_getb:
@@ -1374,58 +1374,58 @@ handle_fx_getb:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ IWT: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
 handle_fx_iwt_r:
         mov     ip, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, ip                           @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrb    r2, [r1, rR15]                           @ FETCHPIPE
+        ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         uadd16  rR15, rR15, ip                           @ R15++
         orr     r2, rPIPE, r2, lsl #8                    @ Combine both PIPEs into result
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         strh    r2, [rGSU, vLow]                         @ Store result to register N
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         uadd16  rR15, rR15, ip                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ IWT R14: Combine existing PIPE and next PIPE into register 14, then FETCHPIPE again and READR14
 handle_fx_iwt_r14:
         mov     ip, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, ip                           @ R15++
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        ldrb    r2, [r1, rR15]                           @ FETCHPIPE
+        ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         uadd16  rR15, rR15, ip                           @ R15++
         orr     r2, rPIPE, r2, lsl #8                    @ Combine both PIPEs into result
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, ip                           @ R15++
         strh    r2, [rGSU, #FX_R14]                      @ Store result to R14
         ldrb    vLow, [vLow, r2]                         @ READR14: Load ROM(R14)
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ IWT: Combine existing PIPE and next PIPE into register 15, then FETCHPIPE again
 handle_fx_iwt_r15:
         mov     ip, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, ip                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrb    r2, [r1, rR15]                           @ FETCHPIPE
+        ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
         uadd16  ip, rR15, ip                             @ R15++
         mov     vLow, rPIPE                              @ Sacrifice 1cyc here to save 2cyc in dispatch
-        ldrb    rPIPE, [r1, ip]                          @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, ip]                        @ FETCHPIPE
         orr     rR15, vLow, r2, lsl #8                   @ Combine both PIPEs into result
         strh    rR15, [rGSU, #FX_R15]                    @ Store result to register 15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ STB: Store byte in SREG at the RAM location pointed to by register N
 handle_fx_stb_r:
@@ -1440,7 +1440,7 @@ handle_fx_stb_r:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    vLow, [r2, ip]                           @ Store value to RAM(register N)
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ LDB: Load byte from the RAM location pointed to by register N into DREG
 handle_fx_ldb_r:
@@ -1458,7 +1458,7 @@ handle_fx_ldb_r:
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ CMODE: set plot option register to the value in SREG
 @ Call clobbers r0-r3, r12, lr (vLow, pvPrgBank, r2, rR15, ip, reserved)
@@ -1475,7 +1475,8 @@ handle_fx_cmode:
         bl      fx_computeScreenPointers                 @ Recompute screen ptrs. WYATT_TODO if regs are changed, be careful!
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch                                 @ R1 and rR15 may be corrupted and need a reload, so full branch
+        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ R1 may be clobbered
+        b       dispatch                                 @ rR15 may be clobbered, so full branch
 
 @ ADC: add-with-carry, SREG + register N, store in DREG
 handle_fx_adc_r:
@@ -1498,7 +1499,7 @@ handle_fx_adc_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ SBC: subtract-with-carry, SREG - register N, store in DREG
 handle_fx_sbc_r:
@@ -1520,7 +1521,7 @@ handle_fx_sbc_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ BIC: DREG = SREG & ~register N
 handle_fx_bic_r:
@@ -1541,7 +1542,7 @@ handle_fx_bic_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ UMULT: 8-bit to 16-bit unsigned multiply, SREG * register N, stored in DREG
 handle_fx_umult_r:
@@ -1561,7 +1562,7 @@ handle_fx_umult_r:
         strh    ip, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ DIV2: Divides SREG by 2 and stores in DREG
 handle_fx_div2:
@@ -1580,7 +1581,7 @@ handle_fx_div2:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ LJMP: set program bank to register N and jump to SREG
 handle_fx_ljmp_r:
@@ -1596,11 +1597,11 @@ handle_fx_ljmp_r:
         strh    ip, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
         add     r2, r2, #FX_apvRomBank >> 2              @ Offset magic for apvRomBank, pre-shifted down
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        ldr     r1, [rGSU, r2, lsl #2]                   @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
+        ldr     rPRG, [rGSU, r2, lsl #2]                 @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
         str     vLow, [rGSU, #FX_vCacheFlags]            @ Store GSU.vCacheFlags
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        str     r1, [rGSU, #FX_pvPrgBank]                @ Store GSU.pvPrgBank pointer
-        b       dispatch_flags.skip_2                    @ 
+        str     rPRG, [rGSU, #FX_pvPrgBank]              @ Store GSU.pvPrgBank pointer
+        b       dispatch_flags.skip_1                    @ 
 
 @ LMULT: 16-bit to 32-bit signed multiplication SREG * R6, low result in R4, then high result in DREG.
 handle_fx_lmult:
@@ -1621,7 +1622,7 @@ handle_fx_lmult:
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         uxth    rR15, rR15                               @ Taken from dispatch to enable branch folding
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ LMS: load word from RAM (short address), store in register N
 handle_fx_lms_r:
@@ -1632,14 +1633,14 @@ handle_fx_lms_r:
         ldrh    ip, [ip, r2]                             @ Load the halfword
         uadd16  rR15, rR15, rSREG                        @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, rSREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    ip, [rGSU, vLow]                         @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
         
 @ LMS: load word from RAM (short address), store in register 14, then READR14
 handle_fx_lms_r14:
@@ -1650,7 +1651,7 @@ handle_fx_lms_r14:
         mov     rSREG, #1                                @ Prep R15 increment value
         ldrh    ip, [ip, r2]                             @ Load the halfword
         uadd16  rR15, rR15, rSREG                        @ R15++
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, rSREG                        @ R15++
         ldrb    r2, [vLow, ip]                           @ READR14: Load ROM(R14)
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
@@ -1659,7 +1660,7 @@ handle_fx_lms_r14:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ LMS: load word from RAM (short address), store in register 15
 handle_fx_lms_r15:
@@ -1670,11 +1671,11 @@ handle_fx_lms_r15:
         ldrh    rR15, [r2, ip]                           @ Load the halfword
         uxth    rPIPE, rPIPE                             @ Zero-extend R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrb    rPIPE, [r1, rPIPE]                       @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rPIPE]                     @ FETCHPIPE
         strh    rR15, [rGSU, #FX_R15]                    @ Store result
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ XOR: exclusive OR between SREG and register N, stored in DREG
 handle_fx_xor_r:
@@ -1695,7 +1696,7 @@ handle_fx_xor_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ GETBH: Overwrite the high byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbh:
@@ -1711,14 +1712,14 @@ handle_fx_getbh:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ LM: Load word from RAM and store it in register N. The address is fetched from PIPE.
 handle_fx_lm_r:
         mov     r2, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, r2                           @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
+        ldrb    ip, [rPRG, rR15]                         @ FETCHPIPE
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1727,21 +1728,21 @@ handle_fx_lm_r:
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
         tst     ip, #1                                   @ If low bit of address is set, swap the bytes
         bic     ip, ip, #1                               @ Zero low bit of address
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         ldrh    ip, [rSREG, ip]                          @ Load the value
         uadd16  rR15, rR15, r2                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         rev16ne ip, ip                                   @ Swap the bytes
         strh    ip, [rGSU, vLow]                         @ Store result
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ LM: Load word from RAM and store it in register 14, then READR14. The address is fetched from PIPE.
 handle_fx_lm_r14:
         mov     r2, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, r2                           @ R15++
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
+        ldrb    ip, [rPRG, rR15]                         @ FETCHPIPE
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1750,7 +1751,7 @@ handle_fx_lm_r14:
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
         tst     ip, #1                                   @ If low bit of address is set, swap the bytes
         bic     ip, ip, #1                               @ Zero low bit of address
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         ldrh    ip, [rSREG, ip]                          @ Load the value
         uadd16  rR15, rR15, r2                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
@@ -1759,7 +1760,7 @@ handle_fx_lm_r14:
         strh    ip, [rGSU, #FX_R14]                      @ Store result
         ldrb    vLow, [vLow, ip]                         @ READR14: Load ROM(R14)
         strb    vLow, [rGSU, #FX_vRomBuffer]   @ stall 2 @ READR14: Store to ROMBUFFER
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ ADD_I: Add SREG + 4-bit immediate, store in DREG
 handle_fx_add_i:
@@ -1777,7 +1778,7 @@ handle_fx_add_i:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ SUB_I: Subtract SREG - 4-bit immediate, store in DREG
 handle_fx_sub_i:
@@ -1795,7 +1796,7 @@ handle_fx_sub_i:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ AND_I: Logically AND SREG and 4-bit immediate, store in DREG
 handle_fx_and_i:
@@ -1812,7 +1813,7 @@ handle_fx_and_i:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ MULT_I: multiply SREG and 4-bit immediate as signed 8-bit ints, store in DREG
 handle_fx_mult_i:
@@ -1830,7 +1831,7 @@ handle_fx_mult_i:
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ SMS: Store register N in RAM (short address). The address is fetched from PIPE.
 handle_fx_sms_r:
@@ -1841,14 +1842,14 @@ handle_fx_sms_r:
         strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
         mov     rSREG, #1                                @ Prep R15 increment value
         uadd16  rR15, rR15, rSREG                        @ R15++
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, rSREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    vLow, [ip, r2]                           @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ OR_I: Logically OR SREG and 4-bit immediate, store in DREG
 handle_fx_or_i:
@@ -1866,7 +1867,7 @@ handle_fx_or_i:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ RAMB: Set current RAM bank to SREG
 handle_fx_ramb:
@@ -1881,7 +1882,7 @@ handle_fx_ramb:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         str     ip, [rGSU, #FX_pvRamBank]                @ Store to GSU.pvRamBank
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ GETBL: Overwrite the low byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbl:
@@ -1897,14 +1898,14 @@ handle_fx_getbl:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ SM: Store register N in RAM. The address is fetched from PIPE.
 handle_fx_sm_r:
         mov     rDREG, #1                                @ Prep R15 increment value
         uadd16  rR15, rR15, rDREG                        @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrb    r2, [r1, rR15]                           @ FETCHPIPE
+        ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
         ldrh    ip, [rGSU, vLow]                         @ Load register N
         uadd16  rR15, rR15, rDREG                        @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -1914,13 +1915,13 @@ handle_fx_sm_r:
         tst     r2, #1                                   @ If low bit of address is set, swap the bytes
         rev16ne ip, ip                                   @ Swap the bytes
         bic     r2, r2, #1                               @ Zero low bit of address
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         strh    ip, [rSREG, r2]                          @ Store the value
         uadd16  rR15, rR15, rDREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ ADC_I: add-with-carry, SREG + 4-bit immediate, store in DREG
 handle_fx_adc_i:
@@ -1941,7 +1942,7 @@ handle_fx_adc_i:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ CMP: Compare SREG to register N. Effectively a subtract with no result.
 handle_fx_cmp_r:
@@ -1956,7 +1957,7 @@ handle_fx_cmp_r:
         lsl     ip, ip, #16                              @ Shift SREG into the upper half of the register
         cmp     ip, r2, lsl #16                          @ Compare to set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ BIC_I: DREG = SREG & ~4-bit immediate
 handle_fx_bic_i:
@@ -1975,7 +1976,7 @@ handle_fx_bic_i:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ UMULT_I: 8-bit to 16-bit unsigned multiply, SREG * 4-bit immediate, stored in DREG
 handle_fx_umult_i:
@@ -1993,7 +1994,7 @@ handle_fx_umult_i:
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ XOR_I: exclusive OR between SREG and 4-bit immediate, stored in DREG
 handle_fx_xor_i:
@@ -2012,7 +2013,7 @@ handle_fx_xor_i:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ ROMB: set program bank to SREG
 handle_fx_romb:
@@ -2027,16 +2028,16 @@ handle_fx_romb:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         str     ip, [rGSU, #FX_pvRomBank]                @ Store to GSU.pvRomBank
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 testr14_clrflags_dispatch:
         ldrh    vLow, [rGSU, #FX_R14]                    @ TESTR14
         ldr     r2, [rGSU, #FX_pvRomBank]                @  |
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        ldr     r1, [rGSU, #FX_pvPrgBank]                @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch
+        ldrh    rR15, [rGSU, #FX_R15]                    @ Taken from dispatch
         ldrb    vLow, [r2, vLow]                         @  |
-        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch
+        ldr     ip, [rGOTO, rPIPE, lsl #2]               @ Taken from dispatch
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @  |
         b       dispatch.skip_2                          @ 
@@ -2045,7 +2046,7 @@ testr14_clrflags_dispatch:
 @ Inlining this or not is a bit of a tossup
 @ R1 is X, IP is Y, vLow is vPlotOptionReg, R2 is COLOR
 handle_fx_plot_2bit.L237:
-        eor     rR15, r1, ip                             @ X ^ Y
+        eor     rR15, rPRG, ip                           @ X ^ Y
         tst     rR15, #1                                 @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L15                                     @ 
@@ -2065,7 +2066,7 @@ handle_fx_plot_8bit.L239:
 @ Inlining this or not is a bit of a tossup
 @ R1 is X, IP is Y, vLow is vPlotOptionReg, R2 is COLOR
 handle_fx_plot_4bit.L238:
-        eor     rR15, r1, ip                             @ X ^ Y
+        eor     rR15, rPRG, ip                           @ X ^ Y
         tst     rR15, #1                                 @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L25                                     @ 
@@ -2078,12 +2079,12 @@ handle_fx_ibt_r15:
         mov     ip, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, ip                           @ R15++
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strh    r2, [rGSU, #FX_R15]                      @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
 @ LM: Load word from RAM and store it in register 15. The address is fetched from PIPE.
 @ WYATT_TODO untested
@@ -2091,7 +2092,7 @@ handle_fx_lm_r15:
         mov     r2, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, r2                           @ R15++
         tst     rPIPE, #1                                @ If low bit of address is set, swap the bytes
-        ldrb    ip, [r1, rR15]                           @ FETCHPIPE
+        ldrb    ip, [rPRG, rR15]                         @ FETCHPIPE
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -2099,12 +2100,12 @@ handle_fx_lm_r15:
         strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
         bic     ip, ip, #1                               @ Zero low bit of address
-        ldrb    rPIPE, [r1, rR15]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         ldrh    rR15, [rSREG, ip]              @ stall 1 @ Load the value
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         rev16ne rR15, rR15                     @ stall 2 @ Swap the bytes
         strh    rR15, [rGSU, #FX_R15]                    @ Store result
-        b       dispatch.skip_2                          @ 
+        b       dispatch.skip_1                          @ 
 
     .cfi_endproc
 
