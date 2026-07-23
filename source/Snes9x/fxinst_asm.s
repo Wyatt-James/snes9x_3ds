@@ -14,8 +14,8 @@
 #define rPRG   ip
 
 @ Constants for a wacky linker optimization. See link.ld for more info. Currently disabled.
-@ #define GSU_PTR #0x004FFFE4
-@ #define R14_PTR #0x00500000
+#define GSU_PTR #0x004FFFE4
+#define R14_PTR #0x00500000
 
 @ R0 contains vLow
 @ R1 contains the dispatch branch destination after interpreter
@@ -127,9 +127,8 @@ loop_end:
 @ GETBS: get sign extended byte from ROM at address R14
 handle_fx_getbs:
         ldrsb   r1, [rGSU, #FX_vRomBuffer]               @ R15 = SEX8(ROMBUFFER)
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         add     rR15, rR15, #1                           @ R15++
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -245,19 +244,17 @@ handle_fx_rpix_2bit:
         ldr     r1, [r1, #FX_apvScreen]                  @  |
         add     r2, rR15, r2, lsr #28                    @  |  Shifted math is equivalent to R2 + ((y & 7) << 1)
         mov     rR15, #0                                 @ Initial result
-        add     vLow, r2, r1                               @  |
+        add     vLow, r2, r1                             @  |
 
         @ r2 is pixel 0 Pointer, IP is the pixel mask
         ldrh    r1, [vLow, #0]                           @ Load pixel pair 1
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14. Lifted from return to save a cycle
-
         tst     r1, rSREG                                @ Pixel pair 1
         orrne   rR15, rR15, #1                           @  |
         tst     r1, rSREG, lsl #8                        @  |
         orrne   rR15, rR15, #2                           @  |
 
         strh    rR15, [rDREG]                            @ Store result
-        b handle_fx_rpix_8bit.return_skip_1
+        b handle_fx_rpix_8bit.return
 
 @ PLOT 4BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_4bit:
@@ -365,7 +362,6 @@ handle_fx_rpix_4bit:
         @ r2 is pixel 0 Pointer, IP is the pixel mask
         ldrh    r1, [vLow, #0]                           @ Load pixel pair 1
         ldrh    r2, [vLow, #16]                          @ Load pixel pair 2
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
 
         tst     r1, rSREG                                @ Pixel pair 1
         orrne   rR15, rR15, #1                           @  |
@@ -378,7 +374,7 @@ handle_fx_rpix_4bit:
         orrne   rR15, rR15, #8                           @  |
 
         strh    rR15, [rDREG]                            @ Store result
-        b handle_fx_rpix_8bit.return_skip_1
+        b handle_fx_rpix_8bit.return
 
 @ PLOT 8BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_8bit:
@@ -521,9 +517,7 @@ handle_fx_rpix_8bit:
         orreq   rARM, rARM, #1073741824                  @  |
 
 handle_fx_rpix_8bit.return:
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-handle_fx_rpix_8bit.return_skip_1:
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -564,8 +558,7 @@ handle_fx_lsr:
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         lsrs    r1, r1, #1                               @ Do the rightshift
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -583,8 +576,7 @@ handle_fx_rol:
         orrcs   r1, r1, #32768                           @ If carry is set, set bit 15
         lsls    r1, r1, #1                               @ Shift left 1 to set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         lsr     r1, r1, #16                              @ Shift down from top half of register
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
@@ -860,12 +852,11 @@ handle_fx_ldw_r:
         strh    rSREG, [rGSU, #FX_vLastRamAdr]           @ Store offset to GSU.vLastRamAdr
         ldrb    r1, [vLow, r1]                           @ Load top byte
         ldrb    rSREG, [vLow, rSREG]                     @ Load bottom byte
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         orr     rSREG, rSREG, r1, lsl #8                 @ Combine bytes into word
         strh    rSREG, [rDREG]                           @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         b       dispatch                                 @ 
@@ -874,14 +865,13 @@ handle_fx_ldw_r:
 handle_fx_swap:
         ldrh    r1, [rSREG]                              @ Load value from SREG
         add     rR15, rR15, #1                           @ R15++
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         rev16   r1, r1                                   @ Byteswap value
         lsl     rARM, r1, #16                            @ Shift for flag setting
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: Branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -912,19 +902,18 @@ handle_fx_color:
 @ NOT: bitwise NOT of SREG, store in DREG
 handle_fx_not:
         ldrh    r1, [rSREG]                              @ Load value from SREG
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orr     r1, r1, r1, lsl #16                      @ Duplicate value into both halves of a register
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         mvns    r1, r1                                   @ Negate value and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
 @ ADD: SREG + register n, store in DREG
@@ -932,14 +921,13 @@ handle_fx_add_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     r1, r1, #16                              @ Shift value 1 to the top half of its register
         adds    r1, r1, r2, lsl #16                      @ Add both values. Overwrites all flags.
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         lsr     r1, r1, #16                              @ Shift result down from top half of register
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -952,14 +940,13 @@ handle_fx_sub_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     r1, r1, #16                              @ Shift value 1 to the top half of its register
         subs    r1, r1, r2, lsl #16                      @ Subtract value 2 from value 1. Overwrites all flags.
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         lsr     r1, r1, #16                              @ Shift result down from top half of register
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -971,8 +958,8 @@ handle_fx_sub_r:
 handle_fx_merge:
         ldrh    r1, [rGSU, #FX_R7]                       @ Load R7
         ldrh    r2, [rGSU, #FX_R8]                       @ Load R8
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        add     rR15, rR15, #1                           @ R15++
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         bic     r1, r1, #255                             @ Clear bottom half of R7
         orr     r2, r1, r2, lsr #8                       @ Shift top half of R8 down and OR to create final value
         lsr     rARM, r2, #4                             @ Calculate merge flag LUT offset
@@ -980,7 +967,6 @@ handle_fx_merge:
         and     rARM, rARM, #15                          @  |
         add     rARM, rGSU, rARM                         @  V
         ldrb    rARM, [rARM, #FX_mergeFlagLut]           @ Load flags from LUT
-        add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r2, [rDREG]                              @ Store result to DREG
         lsl     rARM, rARM, #28                          @ Shift resultant flags into position
@@ -1001,8 +987,7 @@ handle_fx_and_r:
         orr     r2, r2, r2, lsl #16                      @  |
         ands    r1, r1, r2                               @ AND the two values together
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1017,17 +1002,16 @@ handle_fx_mult_r:
         ldrsb   r1, [rSREG]                              @ Load s8 value 1 from SREG
         ldrsb   r2, [rGSU, vLow]                         @ Load s8 value 2 from register N
         add     rR15, rR15, #1                           @ R15++
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         smulbb  r1, r1, r2                               @ Multiply to get the result
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         movs    r1, r1                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         b       dispatch                                 @ 
 
@@ -1065,8 +1049,7 @@ handle_fx_sex:
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         movs    r1, r1                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store value
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1082,8 +1065,7 @@ handle_fx_asr:
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         asrs    r1, r1, #1                               @ ASR by 1 and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1100,8 +1082,7 @@ handle_fx_ror:
         orrcs   r1, r1, #65536                           @ If the carry flag was set, set bit 16 of value
         rrxs    r1, r1                                   @ ASR by 1 and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1128,8 +1109,7 @@ handle_fx_lob:
         lsl     rARM, r1, #24                            @ Shift result to top byte of register
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1152,13 +1132,12 @@ handle_fx_fmult:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         smulbb  r1, r1, r2                               @ Signed multiply
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         asrs    r1, r1, #16                              @ Shift top half down and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         uxth    rR15, rR15                               @ Taken from dispatch to enable branch folding
@@ -1211,15 +1190,14 @@ handle_fx_from_r.b_is_set:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrh    r1, [rGSU, vLow]                         @ Load result
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rARM, rARM, #-805306368                  @ Clear NZO flags
         lsls    r2, r1, #24                              @ Set the flags we need
         orrmi   rARM, rARM, #268435456                   @  |
         lsls    r2, r1, #16                              @  |
         orrmi   rARM, rARM, #-2147483648                 @  |
         orreq   rARM, rARM, #1073741824                  @  V
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1229,15 +1207,14 @@ handle_fx_from_r.b_is_set:
 @ HIB: logical right-shift register by 8, SREG to DREG
 handle_fx_hib:
         ldrh    r1, [rSREG]                              @ Load result from SREG
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         lsr     r1, r1, #8                               @ Prep high byte
         strh    r1, [rDREG]                              @ Store result
         sxtb    r2, r1                                   @ Sign-extend result into scratch register
         movs    r2, r2                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        add     rR15, rR15, #1                           @ R15++
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1256,8 +1233,7 @@ handle_fx_or_r:
         orr     r2, r2, r2, lsl #16                      @  |
         orrs    r1, r1, r2                               @ OR the two values together
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1360,8 +1336,7 @@ handle_fx_dec_r14:
 
 @ GETB: get byte from ROMBUFFER
 handle_fx_getb:
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         ldrb    r1, [rGSU, #FX_vRomBuffer]               @ Load value from ROMBUFFER
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
@@ -1441,13 +1416,12 @@ handle_fx_stb_r:
 @ LDB: Load byte from the RAM location pointed to by register N into DREG
 handle_fx_ldb_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        add     r1, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         ldrh    r2, [rGSU, vLow]                         @ Load source pointer
-        ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        cmp     rDREG, r1                                @ TESTR14: If DREG == 14, load rombuffer
+        ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store source pointer to GSU.vLastRamAdr
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrb    r1, [vLow, r2]                           @ Load result
+        ldrb    r1, [rSREG, r2]                          @ Load result
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
@@ -1487,8 +1461,7 @@ handle_fx_adc_r:
         orrcs   r2, r2, #32768                           @ Move carry flag into value 1
         adds    r1, r2, r1, ror #16                      @ Add the values and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         lsr     r1, r1, #16                              @ Shift result into bottom half of register
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1504,14 +1477,13 @@ handle_fx_sbc_r:
         add     rR15, rR15, #1                           @ R15++
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     r1, r1, #16                              @ Shift value 1 into top half of register
         sbcs    r1, r1, r2, lsl #16                      @ Do the subtract-with-carry
         mrs     rARM, cpsr                               @ Read flags from CPSR
         lsrs    r1, r1, #16                              @ Shift result into bottom half of register and set flags
         orreq   rARM, rARM, #1073741824                  @ If the result is 0, set the Z flag
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1530,8 +1502,7 @@ handle_fx_bic_r:
         orr     r2, r2, r2, lsl #16                      @  |
         bics    r1, r1, r2                               @ Bit clear and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1550,11 +1521,10 @@ handle_fx_umult_r:
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         smulbb  r1, r1, r2                               @ Multiply
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         lsl     rARM, r1, #16                            @ Shift result to top of register
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1564,14 +1534,13 @@ handle_fx_umult_r:
 handle_fx_div2:
         ldrsh   r1, [rSREG]                              @ Load value
         add     rR15, rR15, #1                           @ R15++
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         cmn     r1, #1                                   @ If value == -1, set value to 1
         moveq   r1, #1                                   @  |
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         asrs    r1, r1, #1                               @ Divide value by 2 with ASR
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1607,18 +1576,16 @@ handle_fx_lmult:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         smulbb  r2, r1, r2                               @ Signed multiply
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         strh    r2, [rGSU, #FX_R4]                       @ Store low result
         asrs    r1, r2, #16                              @ Shift top half down and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store high result
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        uxth    rR15, rR15                               @ Taken from dispatch to enable branch folding
-        b       dispatch.skip_1                          @ 
+        b       dispatch                                 @ 
 
 @ LMS: load word from RAM (short address), store in register N
 handle_fx_lms_r:
@@ -1684,8 +1651,7 @@ handle_fx_xor_r:
         orr     r2, r2, r2, lsl #16                      @  |
         eors    r1, r1, r2                               @ XOR the two values together
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1698,12 +1664,11 @@ handle_fx_xor_r:
 handle_fx_getbh:
         ldrb    r2, [rGSU, #FX_vRomBuffer]               @ Load ROMBUFFER
         ldrb    r1, [rSREG]                              @ Load SREG bottom byte
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        orr     r1, r1, r2, lsl #8                       @ Combine both sources
-        strh    r1, [rDREG]                              @ Store result
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
+        orr     r1, r1, r2, lsl #8                       @ Combine both sources
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1766,8 +1731,7 @@ handle_fx_add_i:
         lsl     rARM, rARM, #16                          @ Shift SREG into top half of register
         adds    r1, rARM, vLow, lsl #16                  @ Add SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         lsr     r1, r1, #16                              @ Shift result to bottom half of register
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1784,8 +1748,7 @@ handle_fx_sub_i:
         lsl     rARM, rARM, #16                          @ Shift SREG into top half of register
         subs    r1, rARM, vLow, lsl #16                  @ Add SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         lsr     r1, r1, #16                              @ Shift result to bottom half of register
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1798,11 +1761,10 @@ handle_fx_sub_i:
 handle_fx_and_i:
         ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         ands    r1, r1, vLow                             @ AND SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1815,17 +1777,16 @@ handle_fx_and_i:
 handle_fx_mult_i:
         ldrsb   r1, [rSREG]                              @ Load SREG as s8
         add     rR15, rR15, #1                           @ R15++
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         smulbb  r1, r1, vLow                             @ Multiply to get the result
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         movs    r1, r1                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         b       dispatch                                 @ 
 
@@ -1851,13 +1812,12 @@ handle_fx_sms_r:
 handle_fx_or_i:
         ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         orr     r1, r1, r1, lsl #16                      @ Duplicate value into both halves of a register
         orrs    r1, r1, vLow                             @ OR SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1884,11 +1844,10 @@ handle_fx_ramb:
 handle_fx_getbl:
         ldrb    r1, [rSREG, #1]                          @ Load SREG top byte
         ldrb    r2, [rGSU, #FX_vRomBuffer]               @ Load ROMBUFFER
-        add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
+        add     rR15, rR15, #1                           @ R15++
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         orr     r1, r2, r1, lsl #8                       @ Combine both sources
         strh    r1, [rDREG]                              @ Store result
-        add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1929,8 +1888,7 @@ handle_fx_adc_i:
         orrcs   r1, r1, #32768                           @ Move carry flag into SREG
         adds    r1, r1, vLow, ror #16                    @ Add the values and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         lsr     r1, r1, #16                              @ Shift result into bottom half of register
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result
@@ -1959,13 +1917,12 @@ handle_fx_cmp_r:
 handle_fx_bic_i:
         ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         orr     vLow, vLow, vLow, lsl #16                @ Duplicate value into both halves of a register
         orr     r1, r1, r1, lsl #16                      @ Duplicate value into both halves of a register
         bics    r1, r1, vLow                             @ OR SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1978,17 +1935,16 @@ handle_fx_bic_i:
 handle_fx_umult_i:
         ldrb    r1, [rSREG]                              @ Load SREG as u8
         add     rR15, rR15, #1                           @ R15++
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         smulbb  r1, r1, vLow                             @ Multiply to get the result
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         movs    r1, r1                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         b       dispatch                                 @ 
 
@@ -1996,13 +1952,12 @@ handle_fx_umult_i:
 handle_fx_xor_i:
         ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
-        add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         orr     vLow, vLow, vLow, lsl #16                @ Duplicate value into both halves of a register
         orr     r1, r1, r1, lsl #16                      @ Duplicate value into both halves of a register
         eors    r1, r1, vLow                             @ OR SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch

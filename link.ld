@@ -10,9 +10,9 @@
  * This also balloons the file when enabled. Not sure how to fix it.
  */
 
-/*
+
 SECTIONS
 {
   .gsu_segment 0x004FFFE4  : {KEEP(*(.bss))}
 }
-*/
+
