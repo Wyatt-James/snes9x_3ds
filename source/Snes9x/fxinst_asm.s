@@ -520,11 +520,11 @@ handle_fx_rpix_8bit.return:
         add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
 handle_fx_rpix_8bit.return_skip_1:
         cmp     rDREG, rR15                              @ TESTR14: If DREG == 14, load rombuffer
+        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ Restore since we clobbered it. WYATT_TODO don't clobber it :)
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ Restore since we clobbered it. WYATT_TODO don't clobber it :)
         b       dispatch                                 @ 
 
 @ NOP: Clears flags and advances R15
