@@ -40,7 +40,6 @@
 @ R1, rR15 (reload necessary if modified)
 
 @ WYATT_TODO various optimizations:
-@ - Put the GSU struct in its own over-aligned segment. This would allow us to do certain comparisons, notably the one in TESTR14, in one fewer instruction.
 @ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
 @ - If all handlers were the same size, we could possibly save a load in dispatch and the entirety of rGOTO.
 
