@@ -538,7 +538,7 @@ static inline void fx_rpix_2bit(uint8 unused)
     R15++;
 
 #ifdef CHECK_LIMITS
-    if(y >= GSU.vScreenHeight) return;
+    if(y >= GSU.vScreenHeight) return; // Highly unlikely
 #endif
 
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
@@ -606,7 +606,7 @@ static inline void fx_rpix_4bit(uint8 unused)
     R15++;
 
 #ifdef CHECK_LIMITS
-    if(y >= GSU.vScreenHeight) return;
+    if(y >= GSU.vScreenHeight) return; // Highly unlikely
 #endif
 
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
@@ -684,7 +684,7 @@ static inline void fx_rpix_8bit(uint8 unused)
 #ifdef CHECK_LIMITS
     if(y >= GSU.vScreenHeight) return;
 #endif
-    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
+    a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1); // Highly unlikely
     v = 128 >> (x&7);
 
     uint32 dReg = 0;
