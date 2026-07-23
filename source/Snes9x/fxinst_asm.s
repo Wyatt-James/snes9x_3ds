@@ -382,89 +382,87 @@ handle_fx_rpix_4bit:
 
 @ PLOT 8BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_8bit:
-        ldrb    r1, [rGSU, #FX_R2]                       @ Load Y
+        ldrb    r2, [rGSU, #FX_R2]                       @ Load Y
         add     rR15, rR15, #1                           @ R15++
         ldr     vLow, [rGSU, #FX_vScreenHeight]          @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        ldrh    rPRG, [rGSU, #FX_R1]                     @ Load X
-        cmp     r1, vLow                                 @ Test Y > screen height
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0.
-        add     r2, rPRG, #1                             @ X++
-        strh    r2, [rGSU, #FX_R1]                       @  |
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0. Prevents stall from next branch getting folded
+        ldrh    r1, [rGSU, #FX_R1]                       @ Load X
+        cmp     r2, vLow                                 @ Test Y > screen height
+        ldrb    rSREG, [rGSU, #FX_vPlotOptionReg]        @ Load vPlotOptionReg
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        add     vLow, r1, #1                             @ X++
+        strh    vLow, [rGSU, #FX_R1]                     @  |
         bcs     handle_fx_plot_8bit.return               @ If Y > screen height, return
-        ldrb    vLow, [rGSU, #FX_vPlotOptionReg]         @ Load vPlotOptionReg
-        ldrb    r2, [rGSU, #FX_vColorReg]                @ Load vColorReg
-        uxtb    rPRG, rPRG                               @ Truncate X to 8-bit
-        tst     vLow, #1                                 @ If !PLOT_TRANSPARENT, handle pixel rejection
-        beq     handle_fx_plot_8bit.L239                 @  |
+        tst     rSREG, #1                                @ If !PLOT_TRANSPARENT, handle pixel rejection
+        ldrb    rDREG, [rGSU, #FX_vColorReg]             @ Load vColorReg
+        uxtb    r1, r1                                   @ Truncate X to 8-bit
+        beq     handle_fx_plot_8bit.handle_freezehigh    @  |
 
 handle_fx_plot_8bit.L40:
-        lsr     vLow, rPRG, #3                           @ vLow = GSU.x[X >> 3]
-        add     vLow, rGSU, vLow, lsl #2                 @  |
-        ldr     vLow, [vLow, #FX_x]                      @  |
+        lsr     vLow, r1, #3                             @ vLow = GSU.x[X >> 3]
         mov     rR15, #128                               @ R15 = BIT(7) >> (X & 7)
-        and     rPRG, rPRG, #7                           @  |
-        lsr     rR15, rR15, rPRG                         @  |
-        lsr     rPRG, r1, #3                             @ R1 = GSU.apvScreen[Y >> 3]
-        add     rPRG, rGSU, rPRG, lsl #2                 @  |
-        ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
-        lsl     r1, r1, #29                              @ IP = pixel 0 pointer
-        add     r1, vLow, r1, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     r1, r1, rPRG                             @  |
+        add     vLow, rGSU, vLow, lsl #2                 @  |
+        and     rSREG, r1, #7                            @  |
+        ldr     vLow, [vLow, #FX_x]                      @  |
+        lsr     r1, r2, #3                               @ R1 = GSU.apvScreen[Y >> 3]
+        lsr     rR15, rR15, rSREG                        @  |
+        add     r1, rGSU, r1, lsl #2                     @  |
+        lsl     r2, r2, #29                              @ R2 = pixel 0 pointer
+        ldr     r1, [r1, #FX_apvScreen]                  @  |
+        add     r2, vLow, r2, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        add     r2, r2, r1                               @  |
 
         @ vLow is free
         @ R1 is free
-        @ R2 is color
-        @ IP is the pixel 0 Pointer
+        @ rDREG is color
+        @ R2 is the pixel 0 Pointer
         @ rR15 is the pixel mask
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        @ Interleave between vLow and rPRG to prevent stalls
-        @ WYATT_TODO these could be reversed and tail-merged at no cost
-        ldrh    rPRG, [r1, #0]               @           @ Load pixel pair 1
-        tst     r2, #1                       @           @ Pixel conditional
-        ldrh    vLow, [r1, #16]              @           @ Load pixel pair 2. Up here to avoid a stall.
-        orrne   rPRG, rPRG, rR15             @           @  |
-        biceq   rPRG, rPRG, rR15             @           @  |
-        tst     r2, #2                       @           @ Pixel conditional
-        orrne   rPRG, rPRG, rR15, lsl #8     @           @  |
-        biceq   rPRG, rPRG, rR15, lsl #8     @           @  |
-        strh    rPRG, [r1, #0]               @           @ Store pixel pair
+        @ Interleave between vLow and r1 to prevent stalls
+        ldrh    r1, [r2, #0]                             @ Load pixel pair 1
+        tst     rDREG, #1                                @ Pixel conditional
+        ldrh    vLow, [r2, #16]                          @ Load pixel pair 2. Up here to avoid a stall.
+        orrne   r1, r1, rR15                             @  |
+        biceq   r1, r1, rR15                             @  |
+        tst     rDREG, #2                                @ Pixel conditional
+        orrne   r1, r1, rR15, lsl #8                     @  |
+        biceq   r1, r1, rR15, lsl #8                     @  |
+        strh    r1, [r2, #0]                             @ Store pixel pair
 
         @ Pixel pair 2
-        tst     r2, #4                       @           @ Pixel conditional
-        orrne   vLow, vLow, rR15             @           @  |
-        ldrh    rPRG, [r1, #32]              @           @ Load pixel pair 3. Up here to avoid a stall.
-        biceq   vLow, vLow, rR15             @           @  |
-        tst     r2, #8                       @           @ Pixel conditional
-        orrne   vLow, vLow, rR15, lsl #8     @           @  |
-        biceq   vLow, vLow, rR15, lsl #8     @           @  |
-        strh    vLow, [r1, #16]              @           @ Store pixel pair
+        tst     rDREG, #4                                @ Pixel conditional
+        orrne   vLow, vLow, rR15                         @  |
+        ldrh    r1, [r2, #32]                            @ Load pixel pair 3. Up here to avoid a stall.
+        biceq   vLow, vLow, rR15                         @  |
+        tst     rDREG, #8                                @ Pixel conditional
+        orrne   vLow, vLow, rR15, lsl #8                 @  |
+        biceq   vLow, vLow, rR15, lsl #8                 @  |
+        strh    vLow, [r2, #16]                          @ Store pixel pair
 
         @ Pixel pair 3
-        tst     r2, #16                      @           @ Pixel conditional
-        orrne   rPRG, rPRG, rR15             @           @  |
-        ldrh    vLow, [r1, #48]              @           @ Load pixel pair 4. Up here to avoid a stall.
-        biceq   rPRG, rPRG, rR15             @           @  |
-        tst     r2, #32                      @           @ Pixel conditional
-        orrne   rPRG, rPRG, rR15, lsl #8     @           @  |
-        biceq   rPRG, rPRG, rR15, lsl #8     @           @  |
-        strh    rPRG, [r1, #32]              @           @ Store pixel pair
+        tst     rDREG, #16                               @ Pixel conditional
+        orrne   r1, r1, rR15                             @  |
+        ldrh    vLow, [r2, #48]                          @ Load pixel pair 4. Up here to avoid a stall.
+        biceq   r1, r1, rR15                             @  |
+        tst     rDREG, #32                               @ Pixel conditional
+        orrne   r1, r1, rR15, lsl #8                     @  |
+        biceq   r1, r1, rR15, lsl #8                     @  |
+        strh    r1, [r2, #32]                            @ Store pixel pair
 
         @ Pixel pair 4
-        tst     r2, #64                      @           @ Pixel conditional
-        orrne   vLow, vLow, rR15             @           @  |
-        biceq   vLow, vLow, rR15             @           @  |
-        tst     r2, #128                     @           @ Pixel conditional
-        orrne   vLow, vLow, rR15, lsl #8     @           @  |
-        biceq   vLow, vLow, rR15, lsl #8     @           @  |
-        strh    vLow, [r1, #48]              @           @ Store pixel pair
+        tst     rDREG, #64                               @ Pixel conditional
+        orrne   vLow, vLow, rR15                         @  |
+        biceq   vLow, vLow, rR15                         @  |
+        tst     rDREG, #128                              @ Pixel conditional
+        orrne   vLow, vLow, rR15, lsl #8                 @  |
+        biceq   vLow, vLow, rR15, lsl #8                 @  |
+        strh    vLow, [r2, #48]                          @ Store pixel pair
 
-handle_fx_plot_8bit.return:
-        bic     rSTAT, rSTAT, #4864          @           @ CLRFLAGS: STAT
-        ldr     rPRG, [rGSU, #FX_pvPrgBank]  @           @ Taken from dispatch to allow this return handler to branch fold
-        b       dispatch                     @           @ 
+@Inline return
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        b       dispatch                                 @ 
 
 @ RPIX 8BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_8bit:
@@ -2055,14 +2053,17 @@ handle_fx_plot_2bit.handle_dither:
 
 @ EQ is zero, NE is nonzero
 @ Test transparency
-@ R1 is X, IP is Y, vLow is vPlotOptionReg, R2 is COLOR
-handle_fx_plot_8bit.L239:
-        tst     vLow, #8                                 @ Test PLOT_FREEZEHIGH
-        mov     vLow, r2                                 @ We need to preserve COLOR, so use vLow
-        andne   vLow, vLow, #15                          @ If PLOT_FREEZEHIGH, only test the bottom nibble
-        tst     vLow, #255                               @ If COLOR == 0, return. Else, continue drawing
+@ R1 is X, R2 is Y, rSREG is vPlotOptionReg, rDREG is COLOR
+handle_fx_plot_8bit.handle_freezehigh:
+        tst     rSREG, #8                                @ Test PLOT_FREEZEHIGH
+        mov     rSREG, rDREG                              @ We need to preserve COLOR, so use rSREG
+        andne   rSREG, rSREG, #15                        @ If PLOT_FREEZEHIGH, only test the bottom nibble
+        tst     rSREG, #255                              @ If COLOR == 0, return. Else, continue drawing
         bne     handle_fx_plot_8bit.L40                  @  |
-        b       handle_fx_plot_8bit.return               @  |
+handle_fx_plot_8bit.return:
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        b       dispatch                                 @ 
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
 @ Inlining this or not is a bit of a tossup
