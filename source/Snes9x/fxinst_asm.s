@@ -245,10 +245,10 @@ handle_fx_rpix_2bit:
         ldr     r1, [r1, #FX_apvScreen]                  @  |
         add     r2, rR15, r2, lsr #28                    @  |  Shifted math is equivalent to R2 + ((y & 7) << 1)
         mov     rR15, #0                                 @ Initial result
-        add     r2, r2, r1                               @  |
+        add     vLow, r2, r1                               @  |
 
         @ r2 is pixel 0 Pointer, IP is the pixel mask
-        ldrh    r1, [r2, #0]                             @ Load pixel pair 1
+        ldrh    r1, [vLow, #0]                           @ Load pixel pair 1
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14. Lifted from return to save a cycle
 
         tst     r1, rSREG                                @ Pixel pair 1
@@ -360,11 +360,11 @@ handle_fx_rpix_4bit:
         ldr     r1, [r1, #FX_apvScreen]                  @  |
         add     r2, rR15, r2, lsr #28                    @  |  Shifted math is equivalent to R2 + ((y & 7) << 1)
         mov     rR15, #0                                 @ Initial result
-        add     r2, r2, r1                               @  |
+        add     vLow, r2, r1                               @  |
 
         @ r2 is pixel 0 Pointer, IP is the pixel mask
-        ldrh    r1, [r2, #0]                             @ Load pixel pair 1
-        ldrh    r2, [r2, #16]                            @ Load pixel pair 2
+        ldrh    r1, [vLow, #0]                           @ Load pixel pair 1
+        ldrh    r2, [vLow, #16]                          @ Load pixel pair 2
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
 
         tst     r1, rSREG                                @ Pixel pair 1
@@ -489,25 +489,25 @@ handle_fx_rpix_8bit:
         ldr     r1, [r1, #FX_apvScreen]                  @  |
         add     r2, rR15, r2, lsr #28                    @  |  Shifted math is equivalent to R2 + ((y & 7) << 1)
         mov     rR15, #0                                 @ Initial result
-        add     r2, r2, r1                               @  |
+        add     vLow, r2, r1                             @  |
 
         @ r2 is pixel 0 Pointer, IP is the pixel mask
         bic     rARM, rARM, #1073741824                  @  |
-        ldrh    r1, [r2, #0]                             @ Load pixel pair 1
-        ldrh    r2, [r2, #16]                            @ Load pixel pair 2
+        ldrh    r1, [vLow, #0]                           @ Load pixel pair 1
+        ldrh    r2, [vLow, #16]                          @ Load pixel pair 2
 
         tst     r1, rSREG                                @ Pixel pair 1
         orrne   rR15, rR15, #1                           @  |
         tst     r1, rSREG, lsl #8                        @  |
         orrne   rR15, rR15, #2                           @  |
 
-        ldrh    r1, [r2, #32]                            @ Load pixel pair 3
+        ldrh    r1, [vLow, #32]                          @ Load pixel pair 3
         tst     r2, rSREG                                @ Pixel pair 2
         orrne   rR15, rR15, #4                           @  |
         tst     r2, rSREG, lsl #8                        @  |
         orrne   rR15, rR15, #8                           @  |
 
-        ldrh    r2, [r2, #48]                            @ Load pixel pair 4
+        ldrh    r2, [vLow, #48]                          @ Load pixel pair 4
         tst     r1, rSREG                                @ Pixel pair 3
         orrne   rR15, rR15, #16                          @  |
         tst     r1, rSREG, lsl #8                        @  |
