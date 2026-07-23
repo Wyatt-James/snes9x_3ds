@@ -106,7 +106,6 @@ dispatch:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
 dispatch.skip_1:                                         @ If used, be careful to ensure that R15 is still 16-bit
         ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
-dispatch.skip_2:
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
@@ -2024,16 +2023,20 @@ handle_fx_romb:
         b       dispatch                                 @ 
 
 testr14_clrflags_dispatch:
-        ldrh    vLow, [rGSU, #FX_R14]                    @ TESTR14
-        ldr     r2, [rGSU, #FX_pvRomBank]                @  |
+        ldrh    vLow, [rGSU, #FX_R14]                    @ READR14: Load R14
+        ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM pointer
+        ldrh    rR15, [rGSU, #FX_R15]                    @ Reload R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Taken from dispatch
-        ldrb    vLow, [r2, vLow]                         @  |
-        ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Taken from dispatch
+        ldrb    r2, [r2, vLow]                           @ READR14: Load ROM(R14)
+        ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load next opcode destination
+        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strb    vLow, [rGSU, #FX_vRomBuffer]             @  |
-        b       dispatch.skip_2                          @ 
+        strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store value to ROMBUFFER
+        beq     loop_end                                 @ 
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
 @ Inlining this or not is a bit of a tossup
