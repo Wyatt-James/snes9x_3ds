@@ -980,7 +980,7 @@ handle_fx_merge:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r2, [rDREG]                              @ Store result to DREG
-        lsl     rARM, rARM, #28                          @ Shift resultant flags into position. WYATT_TODO could use u32s, but would be more DCACHE.
+        lsl     rARM, rARM, #28                          @ Shift resultant flags into position
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1009,7 +1009,6 @@ handle_fx_and_r:
         b       dispatch                                 @ 
 
 @ MULT: multiply SREG and register n as signed 8-bit ints, store in DREG
-@ WYATT_TODO check that vLow early reg stall
 handle_fx_mult_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrsb   r1, [rSREG]                              @ Load s8 value 1 from SREG
@@ -1466,11 +1465,11 @@ handle_fx_cmode:
         movne   r2, #256                                 @ If PLOT_OBJECT, fake screenHeight as 256
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         str     r2, [rGSU, #FX_vScreenHeight]            @ Store screenHeight
-        bl      fx_computeScreenPointers                 @ Recompute screen ptrs. WYATT_TODO if regs are changed, be careful!
+        bl      fx_computeScreenPointers                 @ Recompute screen ptrs. If regs are changed, be careful!
+        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ IP is call-clobbered
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ R1 may be clobbered
-        b       dispatch                                 @ rR15 may be clobbered, so full branch
+        b       dispatch                                 @ rR15 is call-clobbered, so full branch
 
 @ ADC: add-with-carry, SREG + register N, store in DREG
 handle_fx_adc_r:
