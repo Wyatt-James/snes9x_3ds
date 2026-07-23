@@ -2,7 +2,6 @@
 #include "fxinst_asm.h"
 
 #define vLow   r0
-#define rPRG   r1
 #define rR15   r3
 #define rGSU   r4
 #define rVCNT  r5
@@ -12,13 +11,14 @@
 #define rSREG  r9
 #define rDREG  r10
 #define rGOTO  fp
+#define rPRG   ip
 
 @ Constants for a wacky linker optimization. See link.ld for more info. Currently disabled.
 @ #define GSU_PTR #0x004FFFE4
 @ #define R14_PTR #0x00500000
 
 @ R0 contains vLow
-@ R1 contains GSU.pvPrgBank, for fetching PIPE
+@ R1 contains the dispatch branch destination after interpreter
 @ R2 contains extended opcode after interpreter
 @ R3 contains GSU R15 after interpreter
 @ R4 contains the pointer to GSU
@@ -29,12 +29,13 @@
 @ R9 contains a pointer to the GSU SREG
 @ R10 contains a pointer to the GSU DREG
 @ FP contains a pointer to the instruction dispatch table
-@ IP contains the dispatch branch destination after interpreter
+@ IP contains GSU.pvPrgBank, for fetching PIPE
 @ LR is reserved and must be preserved
 
 @ ----- Preferred regalloc order -----
-@ R2, IP, vLow
+@ R1, vLow
 @ rSREG, rDREG (if overwritten later)
+@ R2 (be careful with store locks affecting dispatch)
 @ rARM (if overwritten later)
 @ R1, rR15 (reload necessary if modified)
 
@@ -94,23 +95,23 @@ dispatch_flags.skip_1:                                   @ If used, be careful t
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
-        ldr     ip, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
         beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        bx      ip                                       @ Branch to handler
+        bx      r1                                       @ Branch to handler
 
 @ Dispatch for after instructions that run CLRFLAGS
 dispatch:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
 dispatch.skip_1:                                         @ If used, be careful to ensure that R15 is still 16-bit
-        ldr     ip, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
+        ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
 dispatch.skip_2:
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        bx      ip                                       @ Branch to handler
+        bx      r1                                       @ Branch to handler
 
 loop_end:
         sub     rR15, rSREG, rGSU                        @ Save reserved registers
@@ -126,12 +127,12 @@ loop_end:
 
 @ GETBS: get sign extended byte from ROM at address R14
 handle_fx_getbs:
-        ldrsb   ip, [rGSU, #FX_vRomBuffer]               @ R15 = SEX8(ROMBUFFER)
+        ldrsb   r1, [rGSU, #FX_vRomBuffer]               @ R15 = SEX8(ROMBUFFER)
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -157,12 +158,12 @@ handle_fx_stop:
 
 @ PLOT 2BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_2bit:
-        ldrb    ip, [rGSU, #FX_R2]                       @ Load Y
+        ldrb    r1, [rGSU, #FX_R2]                       @ Load Y
         add     rR15, rR15, #1                           @ R15++
         ldr     rSREG, [rGSU, #FX_vScreenHeight]         @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrh    rPRG, [rGSU, #FX_R1]                     @ Load X
-        cmp     ip, rSREG                                @ Test Y > screen height
+        cmp     r1, rSREG                                @ Test Y > screen height
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         add     r2, rPRG, #1                             @ X++
         strh    r2, [rGSU, #FX_R1]                       @  |
@@ -189,12 +190,12 @@ handle_fx_plot_2bit:
         mov     rR15, #128                               @ IP = BIT(7) >> (X & 7)
         and     rPRG, rPRG, #7                           @  |
         lsr     rR15, rR15, rPRG                         @  |
-        lsr     rPRG, ip, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        lsr     rPRG, r1, #3                             @ R1 = GSU.apvScreen[Y >> 3]
         add     rPRG, rGSU, rPRG, lsl #2                 @  |
         ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
-        lsl     ip, ip, #29                              @ R15 = pixel 0 pointer
-        add     ip, vLow, ip, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     ip, ip, rPRG                             @  |
+        lsl     r1, r1, #29                              @ R15 = pixel 0 pointer
+        add     r1, vLow, r1, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        add     r1, r1, rPRG                             @  |
 
         @ vLow is free
         @ R1 is free
@@ -203,14 +204,14 @@ handle_fx_plot_2bit:
         @ rR15 is the pixel mask
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        ldrh    vLow, [ip, #0]                           @ Load pixel pair
+        ldrh    vLow, [r1, #0]                           @ Load pixel pair
         tst     r2, #1                                   @ Pixel conditional
         orrne   vLow, vLow, rR15             @ stall 1   @  |
         biceq   vLow, vLow, rR15                         @  |
         tst     r2, #2                                   @ Pixel conditional
         orrne   vLow, vLow, rR15, lsl #8                 @  |
         biceq   vLow, vLow, rR15, lsl #8                 @  |
-        strh    vLow, [ip, #0]                           @ Store pixel pair
+        strh    vLow, [r1, #0]                           @ Store pixel pair
 
 handle_fx_plot_2bit.return:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -231,9 +232,9 @@ handle_fx_rpix_2bit:
         lsr     vLow, rPRG, #3                             @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
-        mov     ip, #128                                 @ R15 = BIT(7) >> (X & 7)
+        mov     r1, #128                                 @ R15 = BIT(7) >> (X & 7)
         and     rPRG, rPRG, #7                           @  |
-        lsr     ip, ip, rPRG                             @  |
+        lsr     r1, r1, rPRG                             @  |
         lsr     rPRG, rR15, #3                           @ R1 = GSU.apvScreen[Y >> 3]
         add     rPRG, rGSU, rPRG, lsl #2                 @  |
         ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
@@ -246,9 +247,9 @@ handle_fx_rpix_2bit:
         mov     vLow, #0                                 @ Initial result
         add     rR15, rGSU, #FX_R14                      @ TESTR14: Pointer to R14. Lifted from return to save a cycle
 
-        tst rPRG, ip                                     @ Pixel pair 1
+        tst rPRG, r1                                     @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-        tst rPRG, ip, lsl #8                             @  |
+        tst rPRG, r1, lsl #8                             @  |
         orrne vLow, vLow, #2                             @  |
 
         strh vLow, [rDREG]                               @ Store result
@@ -256,12 +257,12 @@ handle_fx_rpix_2bit:
 
 @ PLOT 4BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_4bit:
-        ldrb    ip, [rGSU, #FX_R2]                       @ Load Y
+        ldrb    r1, [rGSU, #FX_R2]                       @ Load Y
         add     rR15, rR15, #1                           @ R15++
         ldr     rSREG, [rGSU, #FX_vScreenHeight]         @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrh    rPRG, [rGSU, #FX_R1]                     @ Load X
-        cmp     ip, rSREG                                @ Test Y > screen height
+        cmp     r1, rSREG                                @ Test Y > screen height
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         add     r2, rPRG, #1                             @ X++
         strh    r2, [rGSU, #FX_R1]                       @  |
@@ -288,12 +289,12 @@ handle_fx_plot_4bit:
         mov     rR15, #128                               @ R15 = BIT(7) >> (X & 7)
         and     rPRG, rPRG, #7                           @  |
         lsr     rR15, rR15, rPRG                         @  |
-        lsr     rPRG, ip, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        lsr     rPRG, r1, #3                             @ R1 = GSU.apvScreen[Y >> 3]
         add     rPRG, rGSU, rPRG, lsl #2                 @  |
         ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
-        lsl     ip, ip, #29                              @ IP = pixel 0 pointer
-        add     ip, vLow, ip, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     ip, ip, rPRG                             @  |
+        lsl     r1, r1, #29                              @ IP = pixel 0 pointer
+        add     r1, vLow, r1, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        add     r1, r1, rPRG                             @  |
 
         @ vLow is free
         @ R1 is free
@@ -302,15 +303,15 @@ handle_fx_plot_4bit:
         @ rR15 is the pixel mask
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        ldrh    rPRG, [ip, #0]                           @ Load pixel pair 1
+        ldrh    rPRG, [r1, #0]                           @ Load pixel pair 1
         tst     r2, #1                                   @ Pixel conditional
-        ldrh    vLow, [ip, #16]                          @ Load pixel pair 2. Up here to avoid a stall.
+        ldrh    vLow, [r1, #16]                          @ Load pixel pair 2. Up here to avoid a stall.
         orrne   rPRG, rPRG, rR15                         @  |
         biceq   rPRG, rPRG, rR15                         @  |
         tst     r2, #2                                   @ Pixel conditional
         orrne   rPRG, rPRG, rR15, lsl #8                 @  |
         biceq   rPRG, rPRG, rR15, lsl #8                 @  |
-        strh    rPRG, [ip, #0]                           @ Store pixel pair
+        strh    rPRG, [r1, #0]                           @ Store pixel pair
 
         @ Interleave between vLow and rPRG to prevent stalls
         tst     r2, #4                                   @ Pixel conditional
@@ -319,7 +320,7 @@ handle_fx_plot_4bit:
         tst     r2, #8                                   @ Pixel conditional
         orrne   vLow, vLow, rR15, lsl #8                 @  |
         biceq   vLow, vLow, rR15, lsl #8                 @  |
-        strh    vLow, [ip, #16]                          @ Store pixel pair
+        strh    vLow, [r1, #16]                          @ Store pixel pair
 
 handle_fx_plot_4bit.return:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -340,9 +341,9 @@ handle_fx_rpix_4bit:
         lsr     vLow, rPRG, #3                           @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
-        mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
+        mov     r1, #128                                 @ IP = BIT(7) >> (X & 7)
         and     rPRG, rPRG, #7                           @  |
-        lsr     ip, ip, rPRG                             @  |
+        lsr     r1, r1, rPRG                             @  |
         lsr     rPRG, rR15, #3                           @ R1 = GSU.apvScreen[Y >> 3]
         add     rPRG, rGSU, rPRG, lsl #2                 @  |
         ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
@@ -355,14 +356,14 @@ handle_fx_rpix_4bit:
         ldrh r2, [rR15, #16]                             @ Load pixel pair 2
         mov vLow, #0                                     @ Initial result
 
-        tst rPRG, ip                                     @ Pixel pair 1
+        tst rPRG, r1                                     @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-        tst rPRG, ip, lsl #8                             @  |
+        tst rPRG, r1, lsl #8                             @  |
         orrne vLow, vLow, #2                             @  |
 
-        tst r2, ip                                       @ Pixel pair 2
+        tst r2, r1                                       @ Pixel pair 2
         orrne vLow, vLow, #4                             @  |
-        tst r2, ip, lsl #8                               @  |
+        tst r2, r1, lsl #8                               @  |
         orrne vLow, vLow, #8                             @  |
 
         strh vLow, [rDREG]                               @ Store result
@@ -375,12 +376,12 @@ handle_fx_rpix_4bit:
 
 @ PLOT 8BIT: Draws a pixel at R1,R2 (X,Y), using GSU.vColorReg as the source
 handle_fx_plot_8bit:
-        ldrb    ip, [rGSU, #FX_R2]                       @ Load Y
+        ldrb    r1, [rGSU, #FX_R2]                       @ Load Y
         add     rR15, rR15, #1                           @ R15++
         ldr     vLow, [rGSU, #FX_vScreenHeight]          @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrh    rPRG, [rGSU, #FX_R1]                     @ Load X
-        cmp     ip, vLow                                 @ Test Y > screen height
+        cmp     r1, vLow                                 @ Test Y > screen height
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0.
         add     r2, rPRG, #1                             @ X++
         strh    r2, [rGSU, #FX_R1]                       @  |
@@ -399,12 +400,12 @@ handle_fx_plot_8bit:
         mov     rR15, #128                               @ R15 = BIT(7) >> (X & 7)
         and     rPRG, rPRG, #7                           @  |
         lsr     rR15, rR15, rPRG                         @  |
-        lsr     rPRG, ip, #3                             @ R1 = GSU.apvScreen[Y >> 3]
+        lsr     rPRG, r1, #3                             @ R1 = GSU.apvScreen[Y >> 3]
         add     rPRG, rGSU, rPRG, lsl #2                 @  |
         ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
-        lsl     ip, ip, #29                              @ IP = pixel 0 pointer
-        add     ip, vLow, ip, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
-        add     ip, ip, rPRG                             @  |
+        lsl     r1, r1, #29                              @ IP = pixel 0 pointer
+        add     r1, vLow, r1, lsr #28                    @  |  Shifted math is equivalent to vLow + ((y & 7) << 1)
+        add     r1, r1, rPRG                             @  |
 
         @ vLow is free
         @ R1 is free
@@ -415,35 +416,35 @@ handle_fx_plot_8bit:
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
         @ Interleave between vLow and rPRG to prevent stalls
         @ WYATT_TODO these could be reversed and tail-merged at no cost
-        ldrh    rPRG, [ip, #0]               @           @ Load pixel pair 1
+        ldrh    rPRG, [r1, #0]               @           @ Load pixel pair 1
         tst     r2, #1                       @           @ Pixel conditional
-        ldrh    vLow, [ip, #16]              @           @ Load pixel pair 2. Up here to avoid a stall.
+        ldrh    vLow, [r1, #16]              @           @ Load pixel pair 2. Up here to avoid a stall.
         orrne   rPRG, rPRG, rR15             @           @  |
         biceq   rPRG, rPRG, rR15             @           @  |
         tst     r2, #2                       @           @ Pixel conditional
         orrne   rPRG, rPRG, rR15, lsl #8     @           @  |
         biceq   rPRG, rPRG, rR15, lsl #8     @           @  |
-        strh    rPRG, [ip, #0]               @           @ Store pixel pair
+        strh    rPRG, [r1, #0]               @           @ Store pixel pair
 
         @ Pixel pair 2
         tst     r2, #4                       @           @ Pixel conditional
         orrne   vLow, vLow, rR15             @           @  |
-        ldrh    rPRG, [ip, #32]              @           @ Load pixel pair 3. Up here to avoid a stall.
+        ldrh    rPRG, [r1, #32]              @           @ Load pixel pair 3. Up here to avoid a stall.
         biceq   vLow, vLow, rR15             @           @  |
         tst     r2, #8                       @           @ Pixel conditional
         orrne   vLow, vLow, rR15, lsl #8     @           @  |
         biceq   vLow, vLow, rR15, lsl #8     @           @  |
-        strh    vLow, [ip, #16]              @           @ Store pixel pair
+        strh    vLow, [r1, #16]              @           @ Store pixel pair
 
         @ Pixel pair 3
         tst     r2, #16                      @           @ Pixel conditional
         orrne   rPRG, rPRG, rR15             @           @  |
-        ldrh    vLow, [ip, #48]              @           @ Load pixel pair 4. Up here to avoid a stall.
+        ldrh    vLow, [r1, #48]              @           @ Load pixel pair 4. Up here to avoid a stall.
         biceq   rPRG, rPRG, rR15             @           @  |
         tst     r2, #32                      @           @ Pixel conditional
         orrne   rPRG, rPRG, rR15, lsl #8     @           @  |
         biceq   rPRG, rPRG, rR15, lsl #8     @           @  |
-        strh    rPRG, [ip, #32]              @           @ Store pixel pair
+        strh    rPRG, [r1, #32]              @           @ Store pixel pair
 
         @ Pixel pair 4
         tst     r2, #64                      @           @ Pixel conditional
@@ -452,7 +453,7 @@ handle_fx_plot_8bit:
         tst     r2, #128                     @           @ Pixel conditional
         orrne   vLow, vLow, rR15, lsl #8     @           @  |
         biceq   vLow, vLow, rR15, lsl #8     @           @  |
-        strh    vLow, [ip, #48]              @           @ Store pixel pair
+        strh    vLow, [r1, #48]              @           @ Store pixel pair
 
 handle_fx_plot_8bit.return:
         bic     rSTAT, rSTAT, #4864          @           @ CLRFLAGS: STAT
@@ -473,9 +474,9 @@ handle_fx_rpix_8bit:
         lsr     vLow, rPRG, #3                           @ vLow = GSU.x[X >> 3]
         add     vLow, rGSU, vLow, lsl #2                 @  |
         ldr     vLow, [vLow, #FX_x]                      @  |
-        mov     ip, #128                                 @ IP = BIT(7) >> (X & 7)
+        mov     r1, #128                                 @ IP = BIT(7) >> (X & 7)
         and     rPRG, rPRG, #7                           @  |
-        lsr     ip, ip, rPRG                             @  |
+        lsr     r1, r1, rPRG                             @  |
         lsr     rPRG, rR15, #3                           @ R1 = GSU.apvScreen[Y >> 3]
         add     rPRG, rGSU, rPRG, lsl #2                 @  |
         ldr     rPRG, [rPRG, #FX_apvScreen]              @  |
@@ -488,26 +489,26 @@ handle_fx_rpix_8bit:
         ldrh r2, [rR15, #16]                             @ Load pixel pair 2
         mov vLow, #0                                     @ Initial result
 
-        tst rPRG, ip                                     @ Pixel pair 1
+        tst rPRG, r1                                     @ Pixel pair 1
         orrne vLow, vLow, #1                             @  |
-        tst rPRG, ip, lsl #8                             @  |
+        tst rPRG, r1, lsl #8                             @  |
         orrne vLow, vLow, #2                             @  |
 
         ldrh rPRG, [rR15, #32]                           @ Load pixel pair 3
-        tst r2, ip                                       @ Pixel pair 2
+        tst r2, r1                                       @ Pixel pair 2
         orrne vLow, vLow, #4                             @  |
-        tst r2, ip, lsl #8                               @  |
+        tst r2, r1, lsl #8                               @  |
         orrne vLow, vLow, #8                             @  |
 
         ldrh r2, [rR15, #48]                             @ Load pixel pair 4
-        tst rPRG, ip                                     @ Pixel pair 3
+        tst rPRG, r1                                     @ Pixel pair 3
         orrne vLow, vLow, #16                            @  |
-        tst rPRG, ip, lsl #8                             @  |
+        tst rPRG, r1, lsl #8                             @  |
         orrne vLow, vLow, #32                            @  |
 
-        tst r2, ip                                       @ Pixel pair 4
+        tst r2, r1                                       @ Pixel pair 4
         orrne vLow, vLow, #64                            @  |
-        tst r2, ip, lsl #8                               @  |
+        tst r2, r1, lsl #8                               @  |
         orrne vLow, vLow, #128                           @  |
 
         strh vLow, [rDREG]                               @ Store result
@@ -537,10 +538,10 @@ handle_fx_nop:
 
 @ CACHE: reintialize GSU cache
 handle_fx_cache:
-        ldrh    ip, [rGSU, #FX_vCacheBaseReg]            @ ip = GSU.vCacheBaseReg
+        ldrh    r1, [rGSU, #FX_vCacheBaseReg]            @ r1 = GSU.vCacheBaseReg
         bic     r2, rR15, #15                            @ r2 = R15 & 0xfff0
         add     rR15, rR15, #1                           @ R15++
-        cmp     ip, r2                                   @ If cache base is incorrect or if cache is disabled, reload
+        cmp     r1, r2                                   @ If cache base is incorrect or if cache is disabled, reload
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -549,21 +550,21 @@ handle_fx_cache:
         
         @ Reload cache
         strh    r2, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
-        mov     ip, #0                                   @ 
-        str     ip, [rGSU, #FX_vCacheFlags]              @ GSU.vCacheFlags = 0
+        mov     r1, #0                                   @ 
+        str     r1, [rGSU, #FX_vCacheFlags]              @ GSU.vCacheFlags = 0
         b       dispatch                                 @ 
 
 @ LSR: logical shift right
 handle_fx_lsr:
-        ldrh    ip, [rSREG]                              @ Load SREG
+        ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsrs    ip, ip, #1                               @ Do the rightshift
+        lsrs    r1, r1, #1                               @ Do the rightshift
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -572,18 +573,18 @@ handle_fx_lsr:
 
 @ ROL: rotate left
 handle_fx_rol:
-        ldrh    ip, [rSREG]                              @ Load SREG
+        ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     ip, ip, #16                              @ Shift value into upper half of reg
-        orrcs   ip, ip, #32768                           @ If carry is set, set bit 15
-        lsls    ip, ip, #1                               @ Shift left 1 to set flags
+        lsl     r1, r1, #16                              @ Shift value into upper half of reg
+        orrcs   r1, r1, #32768                           @ If carry is set, set bit 15
+        lsls    r1, r1, #1                               @ Shift left 1 to set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        lsr     ip, ip, #16                              @ Shift down from top half of register
+        lsr     r1, r1, #16                              @ Shift down from top half of register
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -742,11 +743,11 @@ handle_fx_to_r14:
         b       dispatch_flags                           @ 
 handle_fx_to_r14.b_is_set:
         ldrh    r2, [rSREG]                              @ Load SREG
-        ldr     ip, [rGSU, #FX_pvRomBank]                @ READR14: Load GSU.pvRomBank
+        ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load GSU.pvRomBank
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    r2, [rGSU, #FX_R14]                      @ R14 = SREG
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        ldrb    vLow, [ip, r2]                           @ READR14: Load GSU.pvRomBank[R14]
+        ldrb    vLow, [r1, r2]                           @ READR14: Load GSU.pvRomBank[R14]
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store ROMBUFFER
@@ -783,15 +784,15 @@ handle_fx_with_r:
 handle_fx_stw_r:
         lsl     vLow, vLow, #1                           @ Double vLow for 16-bit offset
         ldrh    vLow, [rGSU, vLow]                       @ Load offset
-        ldr     ip, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        ldr     r1, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
         strh    vLow, [rGSU, #FX_vLastRamAdr]            @ Store offset to GSU.vLastRamAdr
         ldrh    r2, [rSREG]                              @ Load source data
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strb    r2, [ip, vLow]                           @ Store bottom byte
+        strb    r2, [r1, vLow]                           @ Store bottom byte
         eor     vLow, vLow, #1                           @ Flip bottom bit of offset
         add     rR15, rR15, #1                           @ R15++
         lsr     r2, r2, #8                               @ Prep top byte
-        strb    r2, [ip, vLow]                           @ Store top byte
+        strb    r2, [r1, vLow]                           @ Store top byte
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -852,13 +853,13 @@ handle_fx_ldw_r:
         ldrh    rSREG, [rGSU, vLow]                      @ Load RAM offset
         ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        eor     ip, rSREG, #1                            @ Flip bottom bit of offset, stored in a separate register
+        eor     r1, rSREG, #1                            @ Flip bottom bit of offset, stored in a separate register
         strh    rSREG, [rGSU, #FX_vLastRamAdr]           @ Store offset to GSU.vLastRamAdr
-        ldrb    ip, [vLow, ip]                           @ Load top byte
+        ldrb    r1, [vLow, r1]                           @ Load top byte
         ldrb    rSREG, [vLow, rSREG]                     @ Load bottom byte
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        orr     rSREG, rSREG, ip, lsl #8                 @ Combine bytes into word
+        orr     rSREG, rSREG, r1, lsl #8                 @ Combine bytes into word
         strh    rSREG, [rDREG]                           @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -868,17 +869,17 @@ handle_fx_ldw_r:
 
 @ SWAP: swap low and high bytes of SREG, store in DREG
 handle_fx_swap:
-        ldrh    ip, [rSREG]                              @ Load value from SREG
+        ldrh    r1, [rSREG]                              @ Load value from SREG
         add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        rev16   ip, ip                                   @ Byteswap value
-        lsl     rARM, ip, #16                            @ Shift for flag setting
+        rev16   r1, r1                                   @ Byteswap value
+        lsl     rARM, r1, #16                            @ Shift for flag setting
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: Branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -887,18 +888,18 @@ handle_fx_swap:
 
 @ COLOR: copy SREG to color register
 handle_fx_color:
-        ldrb    ip, [rGSU, #FX_vPlotOptionReg]           @ Load plotOptionReg
+        ldrb    r1, [rGSU, #FX_vPlotOptionReg]           @ Load plotOptionReg
         ldrb    r2, [rSREG]                              @ Load color from SREG
         add     rR15, rR15, #1                           @ R15++
-        tst     ip, #4                                   @ If PLOT_HIGHNIBBLE, duplicate the high nibble of color to the low nibble
+        tst     r1, #4                                   @ If PLOT_HIGHNIBBLE, duplicate the high nibble of color to the low nibble
         andne   vLow, r2, #240                           @  |
         orrne   r2, vLow, r2, lsr #4                     @  V
-        tst     ip, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
-        ldrbne  ip, [rGSU, #FX_vColorReg]                @  |
+        tst     r1, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
+        ldrbne  r1, [rGSU, #FX_vColorReg]                @  |
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         andne   r2, r2, #15                              @  |
-        bicne   ip, ip, #15                              @  |
-        orrne   r2, ip, r2                               @  V
+        bicne   r1, r1, #15                              @  |
+        orrne   r2, r1, r2                               @  V
         strb    r2, [rGSU, #FX_vColorReg]                @ Store result to GSU.vColorReg
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -907,16 +908,16 @@ handle_fx_color:
 
 @ NOT: bitwise NOT of SREG, store in DREG
 handle_fx_not:
-        ldrh    ip, [rSREG]                              @ Load value from SREG
+        ldrh    r1, [rSREG]                              @ Load value from SREG
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        orr     ip, ip, ip, lsl #16                      @ Duplicate value into both halves of a register
+        orr     r1, r1, r1, lsl #16                      @ Duplicate value into both halves of a register
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        mvns    ip, ip                                   @ Negate value and set flags
+        mvns    r1, r1                                   @ Negate value and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -926,17 +927,17 @@ handle_fx_not:
 @ ADD: SREG + register n, store in DREG
 handle_fx_add_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
+        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         add     rR15, rR15, #1                           @ R15++
-        lsl     ip, ip, #16                              @ Shift value 1 to the top half of its register
-        adds    ip, ip, r2, lsl #16                      @ Add both values. Overwrites all flags.
+        lsl     r1, r1, #16                              @ Shift value 1 to the top half of its register
+        adds    r1, r1, r2, lsl #16                      @ Add both values. Overwrites all flags.
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        lsr     ip, ip, #16                              @ Shift result down from top half of register
+        lsr     r1, r1, #16                              @ Shift result down from top half of register
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -946,17 +947,17 @@ handle_fx_add_r:
 @ SUB: SREG - register n, store in DREG
 handle_fx_sub_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
+        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         add     rR15, rR15, #1                           @ R15++
-        lsl     ip, ip, #16                              @ Shift value 1 to the top half of its register
-        subs    ip, ip, r2, lsl #16                      @ Subtract value 2 from value 1. Overwrites all flags.
+        lsl     r1, r1, #16                              @ Shift value 1 to the top half of its register
+        subs    r1, r1, r2, lsl #16                      @ Subtract value 2 from value 1. Overwrites all flags.
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        lsr     ip, ip, #16                              @ Shift result down from top half of register
+        lsr     r1, r1, #16                              @ Shift result down from top half of register
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -965,14 +966,14 @@ handle_fx_sub_r:
 
 @ MERGE: Top halves of R7 and R8 as upper and lower bytes respectively, store in DREG
 handle_fx_merge:
-        ldrh    ip, [rGSU, #FX_R7]                       @ Load R7
+        ldrh    r1, [rGSU, #FX_R7]                       @ Load R7
         ldrh    r2, [rGSU, #FX_R8]                       @ Load R8
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        bic     ip, ip, #255                             @ Clear bottom half of R7
-        orr     r2, ip, r2, lsr #8                       @ Shift top half of R8 down and OR to create final value
+        bic     r1, r1, #255                             @ Clear bottom half of R7
+        orr     r2, r1, r2, lsr #8                       @ Shift top half of R8 down and OR to create final value
         lsr     rARM, r2, #4                             @ Calculate merge flag LUT offset
-        orr     rARM, rARM, ip, lsr #12                  @  |
+        orr     rARM, rARM, r1, lsr #12                  @  |
         and     rARM, rARM, #15                          @  |
         add     rARM, rGSU, rARM                         @  V
         ldrb    rARM, [rARM, #FX_mergeFlagLut]           @ Load flags from LUT
@@ -989,18 +990,18 @@ handle_fx_merge:
 @ AND: bitwise AND of SREG and register n, store in DREG
 handle_fx_and_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
+        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        orr     ip, ip, ip, lsl #16                      @ Duplicate values into both halves of their registers
+        orr     r1, r1, r1, lsl #16                      @ Duplicate values into both halves of their registers
         orr     r2, r2, r2, lsl #16                      @  |
-        ands    ip, ip, r2                               @ AND the two values together
+        ands    r1, r1, r2                               @ AND the two values together
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1011,18 +1012,18 @@ handle_fx_and_r:
 @ WYATT_TODO check that vLow early reg stall
 handle_fx_mult_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrsb   ip, [rSREG]                              @ Load s8 value 1 from SREG
+        ldrsb   r1, [rSREG]                              @ Load s8 value 1 from SREG
         ldrsb   r2, [rGSU, vLow]                         @ Load s8 value 2 from register N
         add     rR15, rR15, #1                           @ R15++
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        smulbb  ip, ip, r2                               @ Multiply to get the result
+        smulbb  r1, r1, r2                               @ Multiply to get the result
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        movs    ip, ip                                   @ Set flags
+        movs    r1, r1                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1032,14 +1033,14 @@ handle_fx_mult_r:
 handle_fx_sbk:
         ldrh    r2, [rGSU, #FX_vLastRamAdr]              @ Load RAM offset
         ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        ldrh    ip, [rSREG]                              @ Load value from SREG
+        ldrh    r1, [rSREG]                              @ Load value from SREG
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strb    ip, [vLow, r2]                           @ Store bottom byte
+        strb    r1, [vLow, r2]                           @ Store bottom byte
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         eor     r2, r2, #1                               @ Flip bottom bit of offset
-        lsr     ip, ip, #8                               @ Shift top byte down
-        strb    ip, [vLow, r2]                           @ Store bottom byte
+        lsr     r1, r1, #8                               @ Shift top byte down
+        strb    r1, [vLow, r2]                           @ Store bottom byte
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         b       dispatch                                 @ 
@@ -1057,15 +1058,15 @@ handle_fx_link_i:
 
 @ SEX: sign-extend 8-bit to 16-bit, SREG to DREG
 handle_fx_sex:
-        ldrsb   ip, [rSREG]                              @ Load value from SREG and sign-extend
+        ldrsb   r1, [rSREG]                              @ Load value from SREG and sign-extend
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        movs    ip, ip                                   @ Set flags
+        movs    r1, r1                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store value
+        strh    r1, [rDREG]                              @ Store value
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1074,15 +1075,15 @@ handle_fx_sex:
 
 @ ASR: arithmetic shift right, SREG to DREG
 handle_fx_asr:
-        ldrsh   ip, [rSREG]                              @ Load value from SREG and sign-extend to 32-bit
+        ldrsh   r1, [rSREG]                              @ Load value from SREG and sign-extend to 32-bit
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        asrs    ip, ip, #1                               @ ASR by 1 and set flags
+        asrs    r1, r1, #1                               @ ASR by 1 and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1091,16 +1092,16 @@ handle_fx_asr:
 
 @ ROR: rotate right, SREG to DREG
 handle_fx_ror:
-        ldrh    ip, [rSREG]                              @ Load value from SREG and sign-extend to 32-bit
+        ldrh    r1, [rSREG]                              @ Load value from SREG and sign-extend to 32-bit
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        orrcs   ip, ip, #65536                           @ If the carry flag was set, set bit 16 of value
-        rrxs    ip, ip                                   @ ASR by 1 and set flags
+        orrcs   r1, r1, #65536                           @ If the carry flag was set, set bit 16 of value
+        rrxs    r1, r1                                   @ ASR by 1 and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1119,16 +1120,16 @@ handle_fx_jmp_r:
 
 @ LOB: set upper byte to 0, SREG to DREG
 handle_fx_lob:
-        ldrb    ip, [rSREG]                              @ Load bottom byte of register N and zero-extend
+        ldrb    r1, [rSREG]                              @ Load bottom byte of register N and zero-extend
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsl     rARM, ip, #24                            @ Shift result to top byte of register
+        lsl     rARM, r1, #24                            @ Shift result to top byte of register
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1143,18 +1144,18 @@ handle_fx_lob:
 
 @ FMULT: 16 to 32 bit signed multiply, keep top 16. SREG * R6, store to DREG
 handle_fx_fmult:
-        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
+        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, #FX_R6]                       @ Load value 2 from R6
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        smulbb  ip, ip, r2                               @ Signed multiply
+        smulbb  r1, r1, r2                               @ Signed multiply
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        asrs    ip, ip, #16                              @ Shift top half down and set flags
+        asrs    r1, r1, #16                              @ Shift top half down and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1163,11 +1164,11 @@ handle_fx_fmult:
 
 @ IBT: fetch PIPE and store to register N
 handle_fx_ibt_r:
-        mov     ip, #1                                   @ Prep R15 increment value
-        uadd16  rR15, rR15, ip                           @ R15++
+        mov     r1, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, r1                           @ R15++
         sxtb    r2, rPIPE                                @ Sign-extend PIPE into temporary variable
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        uadd16  rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, r1                           @ R15++
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
@@ -1178,13 +1179,13 @@ handle_fx_ibt_r:
 
 @ IBT R14: fetch PIPE and store to Register 14, then READR14
 handle_fx_ibt_r14:
-        mov     ip, #1                                   @ Prep R15 increment value
+        mov     r1, #1                                   @ Prep R15 increment value
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
-        uadd16  rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, r1                           @ R15++
         strh    r2, [rGSU, #FX_R14]                      @ Store result
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        uadd16  rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, r1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldrb    vLow, [vLow, r2]                         @ READR14: Load ROM(R14)
@@ -1207,17 +1208,17 @@ handle_fx_from_r:
 handle_fx_from_r.b_is_set:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrh    ip, [rGSU, vLow]                         @ Load result
+        ldrh    r1, [rGSU, vLow]                         @ Load result
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         bic     rARM, rARM, #-805306368                  @ Clear NZO flags
-        lsls    r2, ip, #24                              @ Set the flags we need
+        lsls    r2, r1, #24                              @ Set the flags we need
         orrmi   rARM, rARM, #268435456                   @  |
-        lsls    r2, ip, #16                              @  |
+        lsls    r2, r1, #16                              @  |
         orrmi   rARM, rARM, #-2147483648                 @  |
         orreq   rARM, rARM, #1073741824                  @  V
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1225,12 +1226,12 @@ handle_fx_from_r.b_is_set:
 
 @ HIB: logical right-shift register by 8, SREG to DREG
 handle_fx_hib:
-        ldrh    ip, [rSREG]                              @ Load result from SREG
+        ldrh    r1, [rSREG]                              @ Load result from SREG
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        lsr     ip, ip, #8                               @ Prep high byte
-        strh    ip, [rDREG]                              @ Store result
-        sxtb    r2, ip                                   @ Sign-extend result into scratch register
+        lsr     r1, r1, #8                               @ Prep high byte
+        strh    r1, [rDREG]                              @ Store result
+        sxtb    r2, r1                                   @ Sign-extend result into scratch register
         movs    r2, r2                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
@@ -1245,18 +1246,18 @@ handle_fx_hib:
 @ OR: logically OR SREG and register N, store in DREG
 handle_fx_or_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
+        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        orr     ip, ip, ip, lsl #16                      @ Duplicate values into both halves of their registers
+        orr     r1, r1, r1, lsl #16                      @ Duplicate values into both halves of their registers
         orr     r2, r2, r2, lsl #16                      @  |
-        orrs    ip, ip, r2                               @ OR the two values together
+        orrs    r1, r1, r2                               @ OR the two values together
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1288,12 +1289,12 @@ handle_fx_inc_r14:
         add     r2, r2, #1                               @ Increment value
         strh    r2, [rGSU, #FX_R14]                      @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        ldr     ip, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
+        ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
         lsl     r2, r2, #16                              @ Set flags
         movs    vLow, r2                                 @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        ldrb    r2, [ip, r2, lsr #16]                    @ READR14: Load ROM(R14)
+        ldrb    r2, [r1, r2, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
@@ -1301,17 +1302,17 @@ handle_fx_inc_r14:
 
 @ GETC: transfer ROMBUFFER to color register
 handle_fx_getc:
-        ldrb    ip, [rGSU, #FX_vPlotOptionReg]           @ Load plotOptionReg
+        ldrb    r1, [rGSU, #FX_vPlotOptionReg]           @ Load plotOptionReg
         ldrb    r2, [rGSU, #FX_vRomBuffer]               @ Load ROMBUFFER
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        tst     ip, #4                                   @ If PLOT_HIGHNIBBLE, duplicate the high nibble of color to the low nibble
+        tst     r1, #4                                   @ If PLOT_HIGHNIBBLE, duplicate the high nibble of color to the low nibble
         andne   vLow, r2, #240                           @  |
         orrne   r2, vLow, r2, lsr #4                     @  V
-        tst     ip, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
-        ldrbne  ip, [rGSU, #FX_vColorReg]                @  |
+        tst     r1, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
+        ldrbne  r1, [rGSU, #FX_vColorReg]                @  |
         andne   r2, r2, #15                              @  |
-        bicne   ip, ip, #15                              @  |
-        orrne   r2, ip, r2                               @  V
+        bicne   r1, r1, #15                              @  |
+        orrne   r2, r1, r2                               @  V
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strb    r2, [rGSU, #FX_vColorReg]                @ Store result to GSU.vColorReg
@@ -1344,12 +1345,12 @@ handle_fx_dec_r14:
         sub     r2, r2, #1                               @ Increment value
         strh    r2, [rGSU, #FX_R14]                      @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        ldr     ip, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
+        ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
         lsl     r2, r2, #16                              @ Set flags
         movs    vLow, r2                                 @  |
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        ldrb    r2, [ip, r2, lsr #16]                    @ READR14: Load ROM(R14)
+        ldrb    r2, [r1, r2, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
@@ -1359,10 +1360,10 @@ handle_fx_dec_r14:
 handle_fx_getb:
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        ldrb    ip, [rGSU, #FX_vRomBuffer]               @ Load value from ROMBUFFER
+        ldrb    r1, [rGSU, #FX_vRomBuffer]               @ Load value from ROMBUFFER
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store value to DREG
+        strh    r1, [rDREG]                              @ Store value to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1371,33 +1372,33 @@ handle_fx_getb:
 
 @ IWT: Combine existing PIPE and next PIPE into register N, then FETCHPIPE again
 handle_fx_iwt_r:
-        mov     ip, #1                                   @ Prep R15 increment value
-        uadd16  rR15, rR15, ip                           @ R15++
+        mov     r1, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, r1                           @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        uadd16  rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, r1                           @ R15++
         orr     r2, rPIPE, r2, lsl #8                    @ Combine both PIPEs into result
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         strh    r2, [rGSU, vLow]                         @ Store result to register N
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        uadd16  rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, r1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         b       dispatch.skip_1                          @ 
 
 @ IWT R14: Combine existing PIPE and next PIPE into register 14, then FETCHPIPE again and READR14
 handle_fx_iwt_r14:
-        mov     ip, #1                                   @ Prep R15 increment value
-        uadd16  rR15, rR15, ip                           @ R15++
+        mov     r1, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, r1                           @ R15++
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        uadd16  rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, r1                           @ R15++
         orr     r2, rPIPE, r2, lsl #8                    @ Combine both PIPEs into result
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        uadd16  rR15, rR15, ip                           @ R15++
+        uadd16  rR15, rR15, r1                           @ R15++
         strh    r2, [rGSU, #FX_R14]                      @ Store result to R14
         ldrb    vLow, [vLow, r2]                         @ READR14: Load ROM(R14)
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1407,13 +1408,13 @@ handle_fx_iwt_r14:
 
 @ IWT: Combine existing PIPE and next PIPE into register 15, then FETCHPIPE again
 handle_fx_iwt_r15:
-        mov     ip, #1                                   @ Prep R15 increment value
-        uadd16  rR15, rR15, ip                           @ R15++
+        mov     r1, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, r1                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
-        uadd16  ip, rR15, ip                             @ R15++
+        uadd16  r1, rR15, r1                             @ R15++
         mov     vLow, rPIPE                              @ Sacrifice 1cyc here to save 2cyc in dispatch
-        ldrb    rPIPE, [rPRG, ip]                        @ FETCHPIPE
+        ldrb    rPIPE, [rPRG, r1]                        @ FETCHPIPE
         orr     rR15, vLow, r2, lsl #8                   @ Combine both PIPEs into result
         strh    rR15, [rGSU, #FX_R15]                    @ Store result to register 15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1424,43 +1425,43 @@ handle_fx_iwt_r15:
 handle_fx_stb_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         add     rR15, rR15, #1                           @ R15++
-        ldrh    ip, [rGSU, vLow]                         @ Load destination pointer
+        ldrh    r1, [rGSU, vLow]                         @ Load destination pointer
         ldr     r2, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store destination pointer to GSU.vLastRamAdr
+        strh    r1, [rGSU, #FX_vLastRamAdr]              @ Store destination pointer to GSU.vLastRamAdr
         ldrh    vLow, [rSREG]                            @ Load value from SREG
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        strb    vLow, [r2, ip]                           @ Store value to RAM(register N)
+        strb    vLow, [r2, r1]                           @ Store value to RAM(register N)
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
 @ LDB: Load byte from the RAM location pointed to by register N into DREG
 handle_fx_ldb_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        add     ip, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
+        add     r1, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         ldrh    r2, [rGSU, vLow]                         @ Load source pointer
         ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
-        cmp     rDREG, ip                                @ TESTR14: If DREG == 14, load rombuffer
+        cmp     rDREG, r1                                @ TESTR14: If DREG == 14, load rombuffer
         strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store source pointer to GSU.vLastRamAdr
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrb    ip, [vLow, r2]                           @ Load result
+        ldrb    r1, [vLow, r2]                           @ Load result
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         b       dispatch                                 @ 
 
 @ CMODE: set plot option register to the value in SREG
-@ Call clobbers r0-r3, r12, lr (vLow, pvPrgBank, r2, rR15, ip, reserved)
+@ Call clobbers r0-r3, r12, lr (vLow, pvPrgBank, r2, rR15, r1, reserved)
 handle_fx_cmode:
-        ldrb    ip, [rSREG]                              @ Load result in SREG
+        ldrb    r1, [rSREG]                              @ Load result in SREG
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        tst     ip, #16                                  @ Test plotOptionReg for screenHeight
-        strb    ip, [rGSU, #FX_vPlotOptionReg]           @ Store result
+        tst     r1, #16                                  @ Test plotOptionReg for screenHeight
+        strb    r1, [rGSU, #FX_vPlotOptionReg]           @ Store result
         ldreq   r2, [rGSU, #FX_vScreenRealHeight]        @ Else, set screenHeight to its real height
         movne   r2, #256                                 @ If PLOT_OBJECT, fake screenHeight as 256
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -1476,18 +1477,18 @@ handle_fx_adc_r:
         ldrh    r2, [rSREG]                              @ Load value 1 from SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         add     rR15, rR15, #1                           @ R15++
-        ldrh    ip, [rGSU, vLow]                         @ Load value 2 from register N
+        ldrh    r1, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         lsl     r2, r2, #16                              @ Shift value 1 into the upper half of the register
-        orrcs   ip, ip, #-2147483648                     @ Move carry flag into value 2
+        orrcs   r1, r1, #-2147483648                     @ Move carry flag into value 2
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         orrcs   r2, r2, #32768                           @ Move carry flag into value 1
-        adds    ip, r2, ip, ror #16                      @ Add the values and set flags
+        adds    r1, r2, r1, ror #16                      @ Add the values and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        lsr     ip, ip, #16                              @ Shift result into bottom half of register
-        strh    ip, [rDREG]                              @ Store result
+        lsr     r1, r1, #16                              @ Shift result into bottom half of register
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1496,20 +1497,20 @@ handle_fx_adc_r:
 
 @ SBC: subtract-with-carry, SREG - register N, store in DREG
 handle_fx_sbc_r:
-        ldrh    ip, [rSREG]                              @ Load value 1 frpm SREG
+        ldrh    r1, [rSREG]                              @ Load value 1 frpm SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         add     rR15, rR15, #1                           @ R15++
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        lsl     ip, ip, #16                              @ Shift value 1 into top half of register
-        sbcs    ip, ip, r2, lsl #16                      @ Do the subtract-with-carry
+        lsl     r1, r1, #16                              @ Shift value 1 into top half of register
+        sbcs    r1, r1, r2, lsl #16                      @ Do the subtract-with-carry
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        lsrs    ip, ip, #16                              @ Shift result into bottom half of register and set flags
+        lsrs    r1, r1, #16                              @ Shift result into bottom half of register and set flags
         orreq   rARM, rARM, #1073741824                  @ If the result is 0, set the Z flag
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1519,18 +1520,18 @@ handle_fx_sbc_r:
 @ BIC: DREG = SREG & ~register N
 handle_fx_bic_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
+        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        orr     ip, ip, ip, lsl #16                      @ Duplicate values into both halves of their registers
+        orr     r1, r1, r1, lsl #16                      @ Duplicate values into both halves of their registers
         orr     r2, r2, r2, lsl #16                      @  |
-        bics    ip, ip, r2                               @ Bit clear and set flags
+        bics    r1, r1, r2                               @ Bit clear and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1541,35 +1542,35 @@ handle_fx_bic_r:
 handle_fx_umult_r:
         ldrb    r2, [rGSU, vLow, lsl #1]                 @ Load value 2
         add     rR15, rR15, #1                           @ R15++
-        ldrb    ip, [rSREG]                              @ Load value 1
+        ldrb    r1, [rSREG]                              @ Load value 1
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        smulbb  ip, ip, r2                               @ Multiply
+        smulbb  r1, r1, r2                               @ Multiply
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        lsl     rARM, ip, #16                            @ Shift result to top of register
+        lsl     rARM, r1, #16                            @ Shift result to top of register
         movs    rARM, rARM                               @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         b       dispatch                                 @ 
 
 @ DIV2: Divides SREG by 2 and stores in DREG
 handle_fx_div2:
-        ldrsh   ip, [rSREG]                              @ Load value
+        ldrsh   r1, [rSREG]                              @ Load value
         add     rR15, rR15, #1                           @ R15++
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
-        cmn     ip, #1                                   @ If value == -1, set value to 1
-        moveq   ip, #1                                   @  |
+        cmn     r1, #1                                   @ If value == -1, set value to 1
+        moveq   r1, #1                                   @  |
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        asrs    ip, ip, #1                               @ Divide value by 2 with ASR
+        asrs    r1, r1, #1                               @ Divide value by 2 with ASR
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1586,8 +1587,8 @@ handle_fx_ljmp_r:
         ldrh    rR15, [rSREG]                            @ Load destination R15
         and     r2, r2, #127                             @ AND bank to 7-bit
         strb    r2, [rGSU, #FX_vPrgBankReg]              @ Store bank to GSU.vPrgBankReg
-        bic     ip, rR15, #15                            @ R15 & 0xfff0
-        strh    ip, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
+        bic     r1, rR15, #15                            @ R15 & 0xfff0
+        strh    r1, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
         add     r2, r2, #FX_apvRomBank >> 2              @ Offset magic for apvRomBank, pre-shifted down
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldr     rPRG, [rGSU, r2, lsl #2]                 @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
@@ -1598,19 +1599,19 @@ handle_fx_ljmp_r:
 
 @ LMULT: 16-bit to 32-bit signed multiplication SREG * R6, low result in R4, then high result in DREG.
 handle_fx_lmult:
-        ldrh    ip, [rSREG]                              @ Load value 1
+        ldrh    r1, [rSREG]                              @ Load value 1
         ldrh    r2, [rGSU, #FX_R6]                       @ Load value 2
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        smulbb  r2, ip, r2                               @ Signed multiply
+        smulbb  r2, r1, r2                               @ Signed multiply
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         strh    r2, [rGSU, #FX_R4]                       @ Store low result
-        asrs    ip, r2, #16                              @ Shift top half down and set flags
+        asrs    r1, r2, #16                              @ Shift top half down and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        strh    ip, [rDREG]                              @ Store high result
+        strh    r1, [rDREG]                              @ Store high result
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1619,17 +1620,17 @@ handle_fx_lmult:
 
 @ LMS: load word from RAM (short address), store in register N
 handle_fx_lms_r:
-        ldr     ip, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        ldr     r1, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
         lsl     r2, rPIPE, #1                            @ Shift source address left 1
         strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
         mov     rSREG, #1                                @ Prep R15 increment value
-        ldrh    ip, [ip, r2]                             @ Load the halfword
+        ldrh    r1, [r1, r2]                             @ Load the halfword
         uadd16  rR15, rR15, rSREG                        @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, rSREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rGSU, vLow]                         @ Store result
+        strh    r1, [rGSU, vLow]                         @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1638,17 +1639,17 @@ handle_fx_lms_r:
 @ LMS: load word from RAM (short address), store in register 14, then READR14
 handle_fx_lms_r14:
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        ldr     ip, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        ldr     r1, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
         lsl     r2, rPIPE, #1                            @ Shift source address left 1
         strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
         mov     rSREG, #1                                @ Prep R15 increment value
-        ldrh    ip, [ip, r2]                             @ Load the halfword
+        ldrh    r1, [r1, r2]                             @ Load the halfword
         uadd16  rR15, rR15, rSREG                        @ R15++
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, rSREG                        @ R15++
-        ldrb    r2, [vLow, ip]                           @ READR14: Load ROM(R14)
+        ldrb    r2, [vLow, r1]                           @ READR14: Load ROM(R14)
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rGSU, $FX_R14]                      @ Store result
+        strh    r1, [rGSU, $FX_R14]                      @ Store result
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1658,10 +1659,10 @@ handle_fx_lms_r14:
 @ LMS: load word from RAM (short address), store in register 15
 handle_fx_lms_r15:
         ldr     r2, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
-        lsl     ip, rPIPE, #1                            @ Shift source address left 1
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
+        lsl     r1, rPIPE, #1                            @ Shift source address left 1
+        strh    r1, [rGSU, #FX_vLastRamAdr]              @ Store shifted pipe to GSU.vLastRamAdr
         add     rPIPE, rR15, #1                          @ R15++
-        ldrh    rR15, [r2, ip]                           @ Load the halfword
+        ldrh    rR15, [r2, r1]                           @ Load the halfword
         uxth    rPIPE, rPIPE                             @ Zero-extend R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrb    rPIPE, [rPRG, rPIPE]                     @ FETCHPIPE
@@ -1673,18 +1674,18 @@ handle_fx_lms_r15:
 @ XOR: exclusive OR between SREG and register N, stored in DREG
 handle_fx_xor_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrh    ip, [rSREG]                              @ Load value 1 from SREG
+        ldrh    r1, [rSREG]                              @ Load value 1 from SREG
         ldrh    r2, [rGSU, vLow]                         @ Load value 2 from register N
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        orr     ip, ip, ip, lsl #16                      @ Duplicate values into both halves of their registers
+        orr     r1, r1, r1, lsl #16                      @ Duplicate values into both halves of their registers
         orr     r2, r2, r2, lsl #16                      @  |
-        eors    ip, ip, r2                               @ XOR the two values together
+        eors    r1, r1, r2                               @ XOR the two values together
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result to DREG
+        strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1694,11 +1695,11 @@ handle_fx_xor_r:
 @ GETBH: Overwrite the high byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbh:
         ldrb    r2, [rGSU, #FX_vRomBuffer]               @ Load ROMBUFFER
-        ldrb    ip, [rSREG]                              @ Load SREG bottom byte
+        ldrb    r1, [rSREG]                              @ Load SREG bottom byte
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        orr     ip, ip, r2, lsl #8                       @ Combine both sources
-        strh    ip, [rDREG]                              @ Store result
+        orr     r1, r1, r2, lsl #8                       @ Combine both sources
+        strh    r1, [rDREG]                              @ Store result
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1712,22 +1713,22 @@ handle_fx_lm_r:
         mov     r2, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, r2                           @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        ldrb    ip, [rPRG, rR15]                         @ FETCHPIPE
+        ldrb    r1, [rPRG, rR15]                         @ FETCHPIPE
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of address
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
+        orr     r1, rPIPE, r1, lsl #8                    @ Combine both bytes of address
+        strh    r1, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
-        tst     ip, #1                                   @ If low bit of address is set, swap the bytes
-        bic     ip, ip, #1                               @ Zero low bit of address
+        tst     r1, #1                                   @ If low bit of address is set, swap the bytes
+        bic     r1, r1, #1                               @ Zero low bit of address
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        ldrh    ip, [rSREG, ip]                          @ Load the value
+        ldrh    r1, [rSREG, r1]                          @ Load the value
         uadd16  rR15, rR15, r2                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        rev16ne ip, ip                                   @ Swap the bytes
-        strh    ip, [rGSU, vLow]                         @ Store result
+        rev16ne r1, r1                                   @ Swap the bytes
+        strh    r1, [rGSU, vLow]                         @ Store result
         b       dispatch.skip_1                          @ 
 
 @ LM: Load word from RAM and store it in register 14, then READR14. The address is fetched from PIPE.
@@ -1735,23 +1736,23 @@ handle_fx_lm_r14:
         mov     r2, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, r2                           @ R15++
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
-        ldrb    ip, [rPRG, rR15]                         @ FETCHPIPE
+        ldrb    r1, [rPRG, rR15]                         @ FETCHPIPE
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of address
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
+        orr     r1, rPIPE, r1, lsl #8                    @ Combine both bytes of address
+        strh    r1, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
-        tst     ip, #1                                   @ If low bit of address is set, swap the bytes
-        bic     ip, ip, #1                               @ Zero low bit of address
+        tst     r1, #1                                   @ If low bit of address is set, swap the bytes
+        bic     r1, r1, #1                               @ Zero low bit of address
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        ldrh    ip, [rSREG, ip]                          @ Load the value
+        ldrh    r1, [rSREG, r1]                          @ Load the value
         uadd16  rR15, rR15, r2                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        rev16ne ip, ip                                   @ Swap the bytes
-        strh    ip, [rGSU, #FX_R14]                      @ Store result
-        ldrb    vLow, [vLow, ip]                         @ READR14: Load ROM(R14)
+        rev16ne r1, r1                                   @ Swap the bytes
+        strh    r1, [rGSU, #FX_R14]                      @ Store result
+        ldrb    vLow, [vLow, r1]                         @ READR14: Load ROM(R14)
         strb    vLow, [rGSU, #FX_vRomBuffer]   @ stall 2 @ READR14: Store to ROMBUFFER
         b       dispatch.skip_1                          @ 
 
@@ -1761,12 +1762,12 @@ handle_fx_add_i:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     rARM, rARM, #16                          @ Shift SREG into top half of register
-        adds    ip, rARM, vLow, lsl #16                  @ Add SREG and immediate, set flags
+        adds    r1, rARM, vLow, lsl #16                  @ Add SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
-        lsr     ip, ip, #16                              @ Shift result to bottom half of register
-        strh    ip, [rDREG]                              @ Store result
+        lsr     r1, r1, #16                              @ Shift result to bottom half of register
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1779,12 +1780,12 @@ handle_fx_sub_i:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     rARM, rARM, #16                          @ Shift SREG into top half of register
-        subs    ip, rARM, vLow, lsl #16                  @ Add SREG and immediate, set flags
+        subs    r1, rARM, vLow, lsl #16                  @ Add SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
-        lsr     ip, ip, #16                              @ Shift result to bottom half of register
-        strh    ip, [rDREG]                              @ Store result
+        lsr     r1, r1, #16                              @ Shift result to bottom half of register
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1793,15 +1794,15 @@ handle_fx_sub_i:
 
 @ AND_I: Logically AND SREG and 4-bit immediate, store in DREG
 handle_fx_and_i:
-        ldrh    ip, [rSREG]                              @ Load SREG
+        ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        ands    ip, ip, vLow                             @ AND SREG and immediate, set flags
+        ands    r1, r1, vLow                             @ AND SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1810,17 +1811,17 @@ handle_fx_and_i:
 
 @ MULT_I: multiply SREG and 4-bit immediate as signed 8-bit ints, store in DREG
 handle_fx_mult_i:
-        ldrsb   ip, [rSREG]                              @ Load SREG as s8
+        ldrsb   r1, [rSREG]                              @ Load SREG as s8
         add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        smulbb  ip, ip, vLow                             @ Multiply to get the result
+        smulbb  r1, r1, vLow                             @ Multiply to get the result
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        movs    ip, ip                                   @ Set flags
+        movs    r1, r1                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1828,7 +1829,7 @@ handle_fx_mult_i:
 
 @ SMS: Store register N in RAM (short address). The address is fetched from PIPE.
 handle_fx_sms_r:
-        ldr     ip, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
+        ldr     r1, [rGSU, #FX_pvRamBank]                @ Load RAM base pointer
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         lsl     r2, rPIPE, #1                            @ Shift source address left 1
         ldrh    vLow, [rGSU, vLow]                       @ Load the value
@@ -1838,7 +1839,7 @@ handle_fx_sms_r:
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, rSREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    vLow, [ip, r2]                           @ Store result
+        strh    vLow, [r1, r2]                           @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1846,16 +1847,16 @@ handle_fx_sms_r:
 
 @ OR_I: Logically OR SREG and 4-bit immediate, store in DREG
 handle_fx_or_i:
-        ldrh    ip, [rSREG]                              @ Load SREG
+        ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        orr     ip, ip, ip, lsl #16                      @ Duplicate value into both halves of a register
-        orrs    ip, ip, vLow                             @ OR SREG and immediate, set flags
+        orr     r1, r1, r1, lsl #16                      @ Duplicate value into both halves of a register
+        orrs    r1, r1, vLow                             @ OR SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1869,22 +1870,22 @@ handle_fx_ramb:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         and     r2, r2, #3                               @ SREG & (FX_RAM_BANKS - 1)
         strb    r2, [rGSU, #FX_vRamBankReg]              @ Store to GSU.vRamBankReg
-        add     ip, r2, #FX_apvRamBank >> 2              @ Add apvRamBank table offset, pre-shifted down
+        add     r1, r2, #FX_apvRamBank >> 2              @ Add apvRamBank table offset, pre-shifted down
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldr     ip, [rGSU, ip, lsl #2]                   @ Load pointer at GSU.apvRamBank[GSU.vRamBankReg]
+        ldr     r1, [rGSU, r1, lsl #2]                   @ Load pointer at GSU.apvRamBank[GSU.vRamBankReg]
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        str     ip, [rGSU, #FX_pvRamBank]                @ Store to GSU.pvRamBank
+        str     r1, [rGSU, #FX_pvRamBank]                @ Store to GSU.pvRamBank
         b       dispatch                                 @ 
 
 @ GETBL: Overwrite the low byte in SREG with ROMBUFFER, stored in DREG
 handle_fx_getbl:
-        ldrb    ip, [rSREG, #1]                          @ Load SREG top byte
+        ldrb    r1, [rSREG, #1]                          @ Load SREG top byte
         ldrb    r2, [rGSU, #FX_vRomBuffer]               @ Load ROMBUFFER
         add     vLow, rGSU, #FX_R14                      @ TESTR14: Pointer to R14
         cmp     rDREG, vLow                              @ TESTR14: If DREG == 14, load rombuffer
-        orr     ip, r2, ip, lsl #8                       @ Combine both sources
-        strh    ip, [rDREG]                              @ Store result
+        orr     r1, r2, r1, lsl #8                       @ Combine both sources
+        strh    r1, [rDREG]                              @ Store result
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
@@ -1899,17 +1900,17 @@ handle_fx_sm_r:
         uadd16  rR15, rR15, rDREG                        @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
-        ldrh    ip, [rGSU, vLow]                         @ Load register N
+        ldrh    r1, [rGSU, vLow]                         @ Load register N
         uadd16  rR15, rR15, rDREG                        @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         orr     r2, rPIPE, r2, lsl #8                    @ Combine both bytes of address
         strh    r2, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
         tst     r2, #1                                   @ If low bit of address is set, swap the bytes
-        rev16ne ip, ip                                   @ Swap the bytes
+        rev16ne r1, r1                                   @ Swap the bytes
         bic     r2, r2, #1                               @ Zero low bit of address
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        strh    ip, [rSREG, r2]                          @ Store the value
+        strh    r1, [rSREG, r2]                          @ Store the value
         uadd16  rR15, rR15, rDREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -1918,19 +1919,19 @@ handle_fx_sm_r:
 
 @ ADC_I: add-with-carry, SREG + 4-bit immediate, store in DREG
 handle_fx_adc_i:
-        ldrh    ip, [rSREG]                              @ Load SREG
+        ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         orrcs   vLow, vLow, #-2147483648                 @ Move carry flag into immediate
-        lsl     ip, ip, #16                              @ Shift SREG into the upper half of the register
-        orrcs   ip, ip, #32768                           @ Move carry flag into SREG
-        adds    ip, ip, vLow, ror #16                    @ Add the values and set flags
+        lsl     r1, r1, #16                              @ Shift SREG into the upper half of the register
+        orrcs   r1, r1, #32768                           @ Move carry flag into SREG
+        adds    r1, r1, vLow, ror #16                    @ Add the values and set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
-        lsr     ip, ip, #16                              @ Shift result into bottom half of register
+        lsr     r1, r1, #16                              @ Shift result into bottom half of register
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1939,7 +1940,7 @@ handle_fx_adc_i:
 
 @ CMP: Compare SREG to register N. Effectively a subtract with no result.
 handle_fx_cmp_r:
-        ldrh    ip, [rSREG]                              @ Load SREG
+        ldrh    r1, [rSREG]                              @ Load SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         add     rR15, rR15, #1                           @ R15++
         ldrh    r2, [rGSU, vLow]                         @ Load register N
@@ -1947,24 +1948,24 @@ handle_fx_cmp_r:
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        lsl     ip, ip, #16                              @ Shift SREG into the upper half of the register
-        cmp     ip, r2, lsl #16                          @ Compare to set flags
+        lsl     r1, r1, #16                              @ Shift SREG into the upper half of the register
+        cmp     r1, r2, lsl #16                          @ Compare to set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         b       dispatch                                 @ 
 
 @ BIC_I: DREG = SREG & ~4-bit immediate
 handle_fx_bic_i:
-        ldrh    ip, [rSREG]                              @ Load SREG
+        ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         orr     vLow, vLow, vLow, lsl #16                @ Duplicate value into both halves of a register
-        orr     ip, ip, ip, lsl #16                      @ Duplicate value into both halves of a register
-        bics    ip, ip, vLow                             @ OR SREG and immediate, set flags
+        orr     r1, r1, r1, lsl #16                      @ Duplicate value into both halves of a register
+        bics    r1, r1, vLow                             @ OR SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1973,17 +1974,17 @@ handle_fx_bic_i:
 
 @ UMULT_I: 8-bit to 16-bit unsigned multiply, SREG * 4-bit immediate, stored in DREG
 handle_fx_umult_i:
-        ldrb    ip, [rSREG]                              @ Load SREG as u8
+        ldrb    r1, [rSREG]                              @ Load SREG as u8
         add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        smulbb  ip, ip, vLow                             @ Multiply to get the result
+        smulbb  r1, r1, vLow                             @ Multiply to get the result
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         msr     cpsr_f, rARM                             @ Load flags into CPSR
-        movs    ip, ip                                   @ Set flags
+        movs    r1, r1                                   @ Set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -1991,17 +1992,17 @@ handle_fx_umult_i:
 
 @ XOR_I: exclusive OR between SREG and 4-bit immediate, stored in DREG
 handle_fx_xor_i:
-        ldrh    ip, [rSREG]                              @ Load SREG
+        ldrh    r1, [rSREG]                              @ Load SREG
         add     rR15, rR15, #1                           @ R15++
         add     r2, rGSU, #FX_R14                        @ TESTR14: Pointer to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         orr     vLow, vLow, vLow, lsl #16                @ Duplicate value into both halves of a register
-        orr     ip, ip, ip, lsl #16                      @ Duplicate value into both halves of a register
-        eors    ip, ip, vLow                             @ OR SREG and immediate, set flags
+        orr     r1, r1, r1, lsl #16                      @ Duplicate value into both halves of a register
+        eors    r1, r1, vLow                             @ OR SREG and immediate, set flags
         mrs     rARM, cpsr                               @ Read flags from CPSR
         cmp     rDREG, r2                                @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        strh    ip, [rDREG]                              @ Store result
+        strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
@@ -2015,12 +2016,12 @@ handle_fx_romb:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         and     r2, r2, #127                             @ SREG & (FX_ROM_BANKS - 1)
         strb    r2, [rGSU, #FX_vRomBankReg]              @ Store to GSU.vRomBankReg
-        add     ip, r2, #FX_apvRomBank >> 2              @ Add apvRomBank table offset, pre-shifted down
+        add     r1, r2, #FX_apvRomBank >> 2              @ Add apvRomBank table offset, pre-shifted down
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldr     ip, [rGSU, ip, lsl #2]                   @ Load pointer at GSU.apvRomBank[GSU.vRomBankReg]
+        ldr     r1, [rGSU, r1, lsl #2]                   @ Load pointer at GSU.apvRomBank[GSU.vRomBankReg]
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        str     ip, [rGSU, #FX_pvRomBank]                @ Store to GSU.pvRomBank
+        str     r1, [rGSU, #FX_pvRomBank]                @ Store to GSU.pvRomBank
         b       dispatch                                 @ 
 
 testr14_clrflags_dispatch:
@@ -2030,7 +2031,7 @@ testr14_clrflags_dispatch:
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         ldrh    rR15, [rGSU, #FX_R15]                    @ Taken from dispatch
         ldrb    vLow, [r2, vLow]                         @  |
-        ldr     ip, [rGOTO, rPIPE, lsl #2]               @ Taken from dispatch
+        ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Taken from dispatch
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @  |
         b       dispatch.skip_2                          @ 
@@ -2039,7 +2040,7 @@ testr14_clrflags_dispatch:
 @ Inlining this or not is a bit of a tossup
 @ R1 is X, IP is Y, vLow is vPlotOptionReg, R2 is COLOR
 handle_fx_plot_2bit.L237:
-        eor     rR15, rPRG, ip                           @ X ^ Y
+        eor     rR15, rPRG, r1                           @ X ^ Y
         tst     rR15, #1                                 @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L15                                     @ 
@@ -2059,7 +2060,7 @@ handle_fx_plot_8bit.L239:
 @ Inlining this or not is a bit of a tossup
 @ R1 is X, IP is Y, vLow is vPlotOptionReg, R2 is COLOR
 handle_fx_plot_4bit.L238:
-        eor     rR15, rPRG, ip                           @ X ^ Y
+        eor     rR15, rPRG, r1                           @ X ^ Y
         tst     rR15, #1                                 @ Test if odd
         lsrne   r2, r2, #4                               @ Odd X uses top nibble of color
         b       .L25                                     @ 
@@ -2069,8 +2070,8 @@ handle_fx_plot_4bit.L238:
 
 @ IBT R15: fetch PIPE and store to Register 15
 handle_fx_ibt_r15:
-        mov     ip, #1                                   @ Prep R15 increment value
-        uadd16  rR15, rR15, ip                           @ R15++
+        mov     r1, #1                                   @ Prep R15 increment value
+        uadd16  rR15, rR15, r1                           @ R15++
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
@@ -2085,16 +2086,16 @@ handle_fx_lm_r15:
         mov     r2, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, r2                           @ R15++
         tst     rPIPE, #1                                @ If low bit of address is set, swap the bytes
-        ldrb    ip, [rPRG, rR15]                         @ FETCHPIPE
+        ldrb    r1, [rPRG, rR15]                         @ FETCHPIPE
         uadd16  rR15, rR15, r2                           @ R15++
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        orr     ip, rPIPE, ip, lsl #8                    @ Combine both bytes of address
-        strh    ip, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
+        orr     r1, rPIPE, r1, lsl #8                    @ Combine both bytes of address
+        strh    r1, [rGSU, #FX_vLastRamAdr]              @ Store address to vLastRamAdr
         ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
-        bic     ip, ip, #1                               @ Zero low bit of address
+        bic     r1, r1, #1                               @ Zero low bit of address
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        ldrh    rR15, [rSREG, ip]              @ stall 1 @ Load the value
+        ldrh    rR15, [rSREG, r1]              @ stall 1 @ Load the value
         mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         rev16ne rR15, rR15                     @ stall 2 @ Swap the bytes
         strh    rR15, [rGSU, #FX_R15]                    @ Store result
