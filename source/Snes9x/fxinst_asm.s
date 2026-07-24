@@ -61,14 +61,11 @@ fx_run_asm:
         mov     rVCNT, vLow                              @ Decrement vCounter by 1, move to correct variable
         ldrb    rR15, [rGSU, #FX_vMode]                  @ Load GSU.vMode
         ldr     rGOTO, .L242+4                           @ Load GOTO table
-      @ cmp     rR15, #3                                 @ If vMode > 3, vMode = 0.  Unreachable.
-      @ movhi   r3, #0                                   @  |
         ldr     r2, .L242+8                              @ Load plot/rpix table
         add     rPRG, r2, rR15, lsl #3                   @ Compute target address
         ldr     r2, [r2, rR15, lsl #3]                   @ Load plot from the table 
         ldr     rR15, [rPRG, #4]                         @ Load rpix from the table
         ldrh    rPRG, [rGSU, #FX_R14]                    @ READR14: Load R14
-      @ cmp     vLow, #0                                 @ If nInstructions == 0, end. Unreachable.
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
         ldrb    rPRG, [vLow, rPRG]                       @ READR14: Load ROM(R14)
         ldrb    rSREG, [rGSU, #FX_pvSreg]                @ Load reserved regs
@@ -84,7 +81,6 @@ fx_run_asm:
         str     rR15, [rGOTO, #1328]                     @  |
         str     r2, [rGOTO, #2352]                       @  |
         str     r2, [rGOTO, #304]                        @  V
-      @ beq     loop_end                                 @ End if nInstructions == 0. Unreachable.
         ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
 
 @ Dispatch for after instructions that do not run CLRFLAGS
