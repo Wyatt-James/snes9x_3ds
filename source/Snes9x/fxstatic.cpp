@@ -7,13 +7,13 @@
 
 // Contains various stuff that assists in integrating fxinst_asm.s
 
-#define ASSERT_GSU_OFFSET(field) _Static_assert(offsetof(struct FxRegs_s, field) == FX_ ## field, "GSU." #field " offset is incorrect. See fxdbg.cpp.")
-#define ASSERT_GSU_REG(r) _Static_assert(offsetof(struct FxRegs_s, avReg[r]) == FX_R ## r, "GSU.R" #r " offset is incorrect. See fxdbg.cpp.")
+#define ASSERT_GSU_OFFSET(field) _Static_assert(((int) offsetof(struct FxRegs_s, field) - GSU_STRUCT_PTR_OFFSET == FX_ ## field), "GSU." #field " offset is incorrect. See fxdbg.cpp.")
+#define ASSERT_GSU_REG(r) _Static_assert(((int) offsetof(struct FxRegs_s, avReg[r]) - GSU_STRUCT_PTR_OFFSET == FX_R ## r), "GSU.R" #r " offset is incorrect. See fxdbg.cpp.")
 
 #define appendInternal(f_, d_)                                                                                      \
 do {                                                                                                                \
     if (error == errorOk) {                                                                                            \
-        int result = snprintf(worker, sizeof(worker), "#define FX_" d_ " (%u)\n", offsetof(struct FxRegs_s, f_));   \
+        int result = snprintf(worker, sizeof(worker), "#define FX_" d_ " O_(%u)\n", offsetof(struct FxRegs_s, f_));   \
         if (result < 0) {                                                                                           \
             error = #d_;                                                                                            \
         } else {                                                                                                    \
@@ -74,12 +74,6 @@ void FX_printGsuOffsets(void)
     append(vStatusReg);
     append(armFlags);
     append(vCacheFlags);
-    append(vPipeAdr);
-    append(vErrorCode);
-    append(vIllegalAddress);
-    append(bBreakPoint);
-    append(vBreakPoint);
-    append(vStepPoint);
     append(pvRegisters);
     append(nRamBanks);
     append(pvRam);
@@ -93,17 +87,13 @@ void FX_printGsuOffsets(void)
     append(vScreenHeight);
     append(vScreenRealHeight);
     append(vPrevScreenHeight);
-    append(vScreenSize);
     append(pvRamBank);
     append(pvRomBank);
     append(pvPrgBank);
     append(apvRamBank);
     append(apvRomBank);
-    append(pvCache);
-    append(avCacheBackup);
-    append(vCounter);
-    append(vInstCount);
     append(vSCBRDirty);
+    append(sregDreg0);
 
     str[sizeof(str) - 1] = '\0';
     asm volatile ("nop" :: "r" (str), "r" (error)); // Breakpoint. printf "%s\n", str
@@ -113,6 +103,7 @@ void FX_printGsuOffsets(void)
 
 // Verifies that the offsets are correct.
 // Only assert these if printing is disabled.
+_Static_assert(offsetof(struct FxRegs_s, avReg) == GSU_STRUCT_PTR_OFFSET, "Overall GSU pointer offset is incorrect.");
 ASSERT_GSU_REG(0);
 ASSERT_GSU_REG(1);
 ASSERT_GSU_REG(2);
@@ -144,12 +135,6 @@ ASSERT_GSU_OFFSET(vPipe);
 ASSERT_GSU_OFFSET(vStatusReg);
 ASSERT_GSU_OFFSET(armFlags);
 ASSERT_GSU_OFFSET(vCacheFlags);
-ASSERT_GSU_OFFSET(vPipeAdr);
-ASSERT_GSU_OFFSET(vErrorCode);
-ASSERT_GSU_OFFSET(vIllegalAddress);
-ASSERT_GSU_OFFSET(bBreakPoint);
-ASSERT_GSU_OFFSET(vBreakPoint);
-ASSERT_GSU_OFFSET(vStepPoint);
 ASSERT_GSU_OFFSET(pvRegisters);
 ASSERT_GSU_OFFSET(nRamBanks);
 ASSERT_GSU_OFFSET(pvRam);
@@ -163,16 +148,12 @@ ASSERT_GSU_OFFSET(x);
 ASSERT_GSU_OFFSET(vScreenHeight);
 ASSERT_GSU_OFFSET(vScreenRealHeight);
 ASSERT_GSU_OFFSET(vPrevScreenHeight);
-ASSERT_GSU_OFFSET(vScreenSize);
 ASSERT_GSU_OFFSET(pvRamBank);
 ASSERT_GSU_OFFSET(pvRomBank);
 ASSERT_GSU_OFFSET(pvPrgBank);
 ASSERT_GSU_OFFSET(apvRamBank);
 ASSERT_GSU_OFFSET(apvRomBank);
-ASSERT_GSU_OFFSET(pvCache);
-ASSERT_GSU_OFFSET(avCacheBackup);
-ASSERT_GSU_OFFSET(vCounter);
-ASSERT_GSU_OFFSET(vInstCount);
 ASSERT_GSU_OFFSET(vSCBRDirty);
+ASSERT_GSU_OFFSET(sregDreg0);
 
 #endif // PRINT_GSU_OFFSETS

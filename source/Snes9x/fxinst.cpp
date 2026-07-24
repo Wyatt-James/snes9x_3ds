@@ -111,7 +111,7 @@ static inline uint16* GETR(size_t reg)
 static inline void fx_save_reserved(void)
 {
     GSU.vStatusReg = SFR;
-    GSU.armFlags = ARMFLAGS;
+    GSU.armFlags = ARMFLAGS >> 24;
     GSU.vPipe = PIPE;
     GSU.pvSreg = SREG_PTR - GSU.avReg;
     GSU.pvDreg = DREG_PTR - GSU.avReg;
@@ -121,7 +121,7 @@ static inline void fx_save_reserved(void)
 static inline void fx_load_reserved(void)
 {
     SFR = GSU.vStatusReg;
-    ARMFLAGS = GSU.armFlags;
+    ARMFLAGS = GSU.armFlags << 24;
     PIPE = GSU.vPipe;
     pvSregLocal = &GSU.avReg[GSU.pvSreg];
     pvDregLocal = &GSU.avReg[GSU.pvDreg];
@@ -1876,7 +1876,7 @@ void fx_run(uint32 nInstructions)
     };
 
     // Update the goto table with the correct plot/rpix handlers
-    uint32 vMode = GSU.vMode;
+    uint8 vMode = GSU.vMode;
     if (vMode >= ARRAY_COUNT(plot_rpix_handler_table)) vMode = 0;
     opcode_goto_table[0x04c] = opcode_goto_table[0x24c] = plot_rpix_handler_table[vMode][0],
     opcode_goto_table[0x14c] = opcode_goto_table[0x34c] = plot_rpix_handler_table[vMode][1];
@@ -1903,12 +1903,6 @@ void fx_run(uint32 nInstructions)
 	}
 
     loop_end:
-
- /*
-#ifndef FX_ADDRESS_CHECK
-    GSU.vPipeAdr = USEX16(R15-1) | (USEX8(GSU.vPrgBankReg)<<16);
-#endif
-*/
 
 #if T3DS_COUNT_INSTRUCTIONS == 1
     t3dsCountN(&t3dsMain, Snx_GsuInstructions, nInstructions - vCounter);

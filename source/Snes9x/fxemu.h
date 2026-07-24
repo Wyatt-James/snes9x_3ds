@@ -49,17 +49,6 @@ extern int FxEmulate(uint32 nInstructions);
 extern void FxCacheWriteAccess(uint16 vAddress);
 extern void FxFlushCache();	/* Called when the G flag in SFR is set to zero */
 
-/* Breakpoint */
-extern void FxBreakPointSet(uint32 vAddress);
-extern void FxBreakPointClear();
-
-/* Step by step execution */
-extern int FxStepOver(uint32 nInstructions);
-
-/* Errors */
-extern int FxGetErrorCode();
-extern int FxGetIllegalAddress();
-
 /* Access to internal registers */
 extern uint32 FxGetColorRegister();
 extern uint32 FxGetPlotOptionRegister();
@@ -82,7 +71,7 @@ extern void fx_updateRamBank(uint8 Byte);
 #define FX_FLAG_ADDRESS_CHECKING	0x01
 #define FX_FLAG_ROM_BUFFER		0x02
 
-/* Return codes from FxEmulate(), FxStepInto() or FxStepOver() */
+/* Return codes from FxEmulate() */
 #define FX_BREAKPOINT			-1
 #define FX_ERROR_ILLEGAL_ADDRESS	-2
 

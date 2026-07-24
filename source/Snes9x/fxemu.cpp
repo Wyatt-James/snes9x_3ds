@@ -15,6 +15,7 @@
 /* Used for some ASM optimization. See link.ld for more info. */
 struct FxRegs_s GSU __attribute__((section(".gsu_segment")));
 
+#define UNLIKELY(cond_) __builtin_expect(!!(cond_), 0)
 #define FXEMU_ENABLE_CALL_COUNTING 0
 
 enum
@@ -30,11 +31,6 @@ enum
 	F_FxReset,
 	F_fx_checkStartAddress,
 	F_FxEmulate,
-	F_FxBreakPointSet,
-	F_FxBreakPointClear,
-	F_FxStepOver,
-	F_FxGetErrorCode,
-	F_FxGetIllegalAddress,
 	F_FxGetColorRegister,
 	F_FxGetPlotOptionRegister,
 	F_FxGetSourceRegisterIndex,
@@ -63,11 +59,6 @@ CallCount callCounts[F_COUNT] = {
 	[F_FxReset]                       = {"FxReset                      ", 0, 0},
 	[F_fx_checkStartAddress]          = {"fx_checkStartAddress         ", 0, 0},
 	[F_FxEmulate]                     = {"FxEmulate                    ", 0, 0},
-	[F_FxBreakPointSet]               = {"FxBreakPointSet              ", 0, 0},
-	[F_FxBreakPointClear]             = {"FxBreakPointClear            ", 0, 0},
-	[F_FxStepOver]                    = {"FxStepOver                   ", 0, 0},
-	[F_FxGetErrorCode]                = {"FxGetErrorCode               ", 0, 0},
-	[F_FxGetIllegalAddress]           = {"FxGetIllegalAddress          ", 0, 0},
 	[F_FxGetColorRegister]            = {"FxGetColorRegister           ", 0, 0},
 	[F_FxGetPlotOptionRegister]       = {"FxGetPlotOptionRegister      ", 0, 0},
 	[F_FxGetSourceRegisterIndex]      = {"FxGetSourceRegisterIndex     ", 0, 0},
@@ -102,6 +93,9 @@ static void logFunctionCall(int id) {} // Stub
 
 void FxCacheWriteAccess(uint16 vAddress)
 {
+	// (__builtin_offsetof(struct FxRegs_s, sregDreg0) - (0x500000 - 0x4FFFE4) + 32)
+
+
 	logFunctionCall(F_FxCacheWriteAccess);
     if((vAddress & 0x00f) == 0x00f)
 	GSU.vCacheFlags |= 1 << ((vAddress&0x1f0) >> 4);
@@ -128,8 +122,6 @@ static void fx_readRegisterSpace()
 	logFunctionCall(F_fx_readRegisterSpace);
     static uint32 avHeight[] = { 128, 160, 192, 256 };
     static uint32 avMult[] = { 16, 32, 32, 64 };
-
-    GSU.vErrorCode = 0;
 
 	// Compliant optimized (0x2cc -> 0x20c)
     /* Update R0-R15 */
@@ -167,17 +159,16 @@ static void fx_readRegisterSpace()
     GSU.vScreenHeight = GSU.vScreenRealHeight = avHeight[i];
     GSU.vMode = pvGsuScmr & 0x03;
 
-    if(i == 3)
-		GSU.vScreenSize = (256/8) * (256/8) * 32;
-    else
-		GSU.vScreenSize = (GSU.vScreenHeight/8) * (256/8) * avMult[GSU.vMode];
+    uint32 vScreenSize;
+    if(i == 3) vScreenSize = (256/8) * (256/8) * 32;
+    else       vScreenSize = (GSU.vScreenHeight/8) * (256/8) * avMult[GSU.vMode];
 
     if (GSU.vPlotOptionReg & PLOT_OBJECT)
 		/* OBJ Mode (for drawing into sprites) */
 		GSU.vScreenHeight = 256;
 
-    if(GSU.pvScreenBase + GSU.vScreenSize > GSU.pvRam + (GSU.nRamBanks * 65536))
-		GSU.pvScreenBase =  GSU.pvRam + (GSU.nRamBanks * 65536) - GSU.vScreenSize;
+    if(GSU.pvScreenBase + vScreenSize > GSU.pvRam + (GSU.nRamBanks * 65536))
+		GSU.pvScreenBase =  GSU.pvRam + (GSU.nRamBanks * 65536) - vScreenSize;
 
     fx_computeScreenPointers ();
 }
@@ -190,7 +181,7 @@ void fx_dirtySCBR()
 
 void fx_computeScreenPointers ()
 {
-	uint32 vModeAdj = GSU.vMode, vModeAdjOld = GSU.vPrevMode;
+	uint8 vModeAdj = GSU.vMode, vModeAdjOld = GSU.vPrevMode;
 	if (vModeAdj >= 3)
 		vModeAdj = 2;
 	if (vModeAdjOld >= 3)
@@ -305,6 +296,7 @@ void FxReset(struct FxInit_s *psFxInfo)
     
     /* Clear all internal variables */
 	GSU = (struct FxRegs_s) {
+		.sregDreg0 = {&GSU.avReg[0], &GSU.avReg[0]},
 		.mergeFlagLut = {
 			0x0, 0x4, 0x6, 0x6,
 			0x7, 0x7, 0x7, 0x7,
@@ -365,9 +357,6 @@ void FxReset(struct FxInit_s *psFxInfo)
     /* Start with a nop in the pipe */
     GSU.vPipe = 0x01;
 
-    /* Set pointer to GSU cache */
-    GSU.pvCache = &GSU.pvRegisters[0x100];
-
     fx_readRegisterSpace();
 }
 
@@ -402,16 +391,15 @@ int FxEmulate(uint32 nInstructions)
 {
 	logFunctionCall(F_FxEmulate);
 
-    /* Read registers and initialize GSU session */
-    fx_readRegisterSpace();
-
     /* Check if the start address is valid */
-    if(!fx_checkStartAddress())
+    if(UNLIKELY(!fx_checkStartAddress()))
     {
-			CF(G);
-			fx_writeRegisterSpace();
+    		GSU.pvRegisters[GSU_SFR] &= ~FLG_G;
 			return 0;
     }
+
+    /* Read registers and initialize GSU session */
+    fx_readRegisterSpace();
 
     /* Execute GSU session */
     CF(IRQ);
@@ -422,64 +410,7 @@ int FxEmulate(uint32 nInstructions)
     fx_writeRegisterSpace();
 
     /* Check for error code */
-    if(GSU.vErrorCode)
-			return GSU.vErrorCode;
-    else
-			return nInstructions;
-}
-
-/* Breakpoints */
-void FxBreakPointSet(uint32 vAddress)
-{
-	logFunctionCall(F_FxBreakPointSet);
-    GSU.bBreakPoint = TRUE;
-    GSU.vBreakPoint = USEX16(vAddress);
-}
-void FxBreakPointClear()
-{
-	logFunctionCall(F_FxBreakPointClear);
-    GSU.bBreakPoint = FALSE;
-}
-
-/* Step by step execution */
-int FxStepOver(uint32 nInstructions)
-{
-	logFunctionCall(F_FxStepOver);
-    fx_readRegisterSpace();
-
-    /* Check if the start address is valid */
-    if(!fx_checkStartAddress())
-    {
-			CF(G);
-			return 0;
-    }
-    
-    if( PIPE >= 0xf0 )
-			GSU.vStepPoint = USEX16(R15+3);
-    else if( (PIPE >= 0x05 && PIPE <= 0x0f) || (PIPE >= 0xa0 && PIPE <= 0xaf) )
-			GSU.vStepPoint = USEX16(R15+2);
-    else
-			GSU.vStepPoint = USEX16(R15+1);
-
-    fx_run(nInstructions);
-    fx_writeRegisterSpace();
-    if(GSU.vErrorCode)
-			return GSU.vErrorCode;
-    else
-			return nInstructions;
-}
-
-/* Errors */
-int FxGetErrorCode()
-{
-	logFunctionCall(F_FxGetErrorCode);
-    return GSU.vErrorCode;
-}
-
-int FxGetIllegalAddress()
-{
-	logFunctionCall(F_FxGetIllegalAddress);
-    return GSU.vIllegalAddress;
+	return nInstructions;
 }
 
 /* Access to internal registers */

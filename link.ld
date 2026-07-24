@@ -13,6 +13,6 @@
 
 SECTIONS
 {
-  .gsu_segment 0x004FFFE4  : {KEEP(*(.bss))}
+  .gsu_segment 0x004FFFE0  : {KEEP(*(.bss))}
 }
 

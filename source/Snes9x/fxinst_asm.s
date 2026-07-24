@@ -7,14 +7,13 @@
 #define rVCNT  r5
 #define rSTAT  r6
 #define rARM   r7
-#define rPIPE  r8
-#define rSREG  r9
-#define rDREG  r10
+#define rSREG  r8
+#define rDREG  r9
+#define rPIPE  r10
 #define rGOTO  fp
 #define rPRG   ip
 
 @ Constants for a wacky linker optimization. See link.ld for more info. Currently disabled.
-#define GSU_PTR #0x004FFFE4
 #define R14_PTR #0x00500000
 
 @ R0 contains vLow
@@ -57,10 +56,10 @@
     .type fx_run_asm, %function
     .cfi_startproc
 fx_run_asm:
-        push    {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, lr}
+        push    {rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, lr}
         ldr     rGSU, .L242                              @ Load GSU pointer
         mov     rVCNT, vLow                              @ Decrement vCounter by 1, move to correct variable
-        ldr     rR15, [rGSU, #FX_vMode]                  @ Load GSU.vMode
+        ldrb    rR15, [rGSU, #FX_vMode]                  @ Load GSU.vMode
         ldr     rGOTO, .L242+4                           @ Load GOTO table
       @ cmp     rR15, #3                                 @ If vMode > 3, vMode = 0.  Unreachable.
       @ movhi   r3, #0                                   @  |
@@ -75,9 +74,10 @@ fx_run_asm:
         ldrb    rSREG, [rGSU, #FX_pvSreg]                @ Load reserved regs
         ldrb    rDREG, [rGSU, #FX_pvDreg]                @  |
         ldrh    rSTAT, [rGSU, #FX_vStatusReg]            @  |
-        ldr     rARM, [rGSU, #FX_armFlags]               @  |
+        ldrb    rARM, [rGSU, #FX_armFlags]               @  |
         ldrb    rPIPE, [rGSU, #FX_vPipe]                 @  |
         add     rSREG, rGSU, rSREG, lsl #1               @  |
+        lsl     rARM, rARM, #24                          @  |
         add     rDREG, rGSU, rDREG, lsl #1               @  V
         strb    rPRG, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
         str     rR15, [rGOTO, #3376]                     @ Populate GOTO table
@@ -111,18 +111,6 @@ dispatch.skip_1:                                         @ If used, be careful t
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      r1                                       @ Branch to handler
 
-loop_end:
-        sub     rR15, rSREG, rGSU                        @ Save reserved registers
-        asr     rR15, rR15, #1                           @  |
-        strb    rR15, [rGSU, #FX_pvSreg]                 @  |
-        sub     rR15, rDREG, rGSU                        @  |
-        asr     rR15, rR15, #1                           @  |
-        strh    rSTAT, [rGSU, #FX_vStatusReg]            @  |
-        str     rARM, [rGSU, #FX_armFlags]               @  |
-        strb    rPIPE, [rGSU, #FX_vPipe]                 @  |
-        strb    rR15, [rGSU, #FX_pvDreg]                 @  V
-        pop     {rGSU, rVCNT, rSTAT, rARM, rPIPE, rSREG, rDREG, rGOTO, pc} @ Return
-
 @ GETBS: get sign extended byte from ROM at address R14
 handle_fx_getbs:
         ldrsb   r1, [rGSU, #FX_vRomBuffer]               @ R15 = SEX8(ROMBUFFER)
@@ -131,8 +119,7 @@ handle_fx_getbs:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -157,7 +144,7 @@ handle_fx_stop:
 handle_fx_plot_2bit:
         ldrb    r2, [rGSU, #FX_R2]                       @ Load Y
         add     rR15, rR15, #1                           @ R15++
-        ldr     rDREG, [rGSU, #FX_vScreenHeight]         @ Load screen height
+        ldrh    rSREG, [rGSU, #FX_vScreenHeight]         @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrh    r1, [rGSU, #FX_R1]                       @ Load X
         cmp     r2, rDREG                                @ Test Y > screen height
@@ -216,13 +203,12 @@ handle_fx_plot_2bit.L15:
 
 handle_fx_plot_2bit.return:
         ldrh    rR15, [rGSU, #FX_R15]                    @ Taken from dispatch to allow branch folding
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch.skip_1                          @ 
 
 @ RPIX 2BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_2bit:
-        ldr     r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
+        ldrh    r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
         ldrb    r2, [rGSU, #FX_R2]                       @ R2 = Y
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
@@ -259,7 +245,7 @@ handle_fx_rpix_2bit:
 handle_fx_plot_4bit:
         ldrb    r2, [rGSU, #FX_R2]                       @ Load Y
         add     rR15, rR15, #1                           @ R15++
-        ldr     rDREG, [rGSU, #FX_vScreenHeight]         @ Load screen height
+        ldrh    rDREG, [rGSU, #FX_vScreenHeight]         @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrh    r1, [rGSU, #FX_R1]                       @ Load X
         cmp     r2, rDREG                                @ Test Y > screen height
@@ -329,13 +315,12 @@ handle_fx_plot_4bit.L25:
 
 handle_fx_plot_4bit.return:
         ldrh    rR15, [rGSU, #FX_R15]                    @ Taken from dispatch to allow branch folding
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ Reset SREG/DREG
         b       dispatch.skip_1                          @ 
 
 @ RPIX 4BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_4bit:
-        ldr     r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
+        ldrh    r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
         ldrb    r2, [rGSU, #FX_R2]                       @ R2 = Y
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
@@ -379,7 +364,7 @@ handle_fx_rpix_4bit:
 handle_fx_plot_8bit:
         ldrb    r2, [rGSU, #FX_R2]                       @ Load Y
         add     rR15, rR15, #1                           @ R15++
-        ldr     vLow, [rGSU, #FX_vScreenHeight]          @ Load screen height
+        ldrh    vLow, [rGSU, #FX_vScreenHeight]          @ Load screen height
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         ldrh    r1, [rGSU, #FX_R1]                       @ Load X
         cmp     r2, vLow                                 @ Test Y > screen height
@@ -461,7 +446,7 @@ handle_fx_plot_8bit.L40:
 
 @ RPIX 8BIT: Reads the color of pixel R1,R2 (X, Y) and stores to DREG.
 handle_fx_rpix_8bit:
-        ldr     r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
+        ldrh    r1, [rGSU, #FX_vScreenHeight]            @ R1 = screen height
         ldrb    r2, [rGSU, #FX_R2]                       @ R2 = Y
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
@@ -518,17 +503,15 @@ handle_fx_rpix_8bit:
 handle_fx_rpix_8bit.return:
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
 @ NOP: Clears flags and advances R15
 handle_fx_nop:
         add     rR15, rR15, #1                           @ R15++
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -539,8 +522,7 @@ handle_fx_cache:
         add     rR15, rR15, #1                           @ R15++
         cmp     r1, r2                                   @ If cache base is incorrect or if cache is disabled, reload
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         beq     dispatch.skip_1                          @ 
         
@@ -561,8 +543,7 @@ handle_fx_lsr:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -580,8 +561,7 @@ handle_fx_rol:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -715,8 +695,7 @@ handle_fx_to_r:
         ldrh    r2, [rSREG]                              @ Load SREG
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         strh    r2, [rGSU, vLow]                         @ Register N = SREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
@@ -738,9 +717,8 @@ handle_fx_to_r14:
 handle_fx_to_r14.b_is_set:
         ldrh    r2, [rSREG]                              @ Load SREG
         ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load GSU.pvRomBank
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         strh    r2, [rGSU, #FX_R14]                      @ R14 = SREG
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         ldrb    vLow, [r1, r2]                           @ READR14: Load GSU.pvRomBank[R14]
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -755,9 +733,8 @@ handle_fx_to_r15:
 @ B is set
         ldrh    rR15, [rSREG]                            @ R15 = SREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ R15 = SREG
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch.skip_1                          @ 
 handle_fx_to_r15.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++
@@ -788,8 +765,7 @@ handle_fx_stw_r:
         lsr     r2, r2, #8                               @ Prep top byte
         strb    r2, [r1, vLow]                           @ Store top byte
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ LOOP: decrement loop counter R12 and branch to R13 on not zero
@@ -844,20 +820,19 @@ handle_fx_alt3:
 handle_fx_ldw_r:
         lsl     vLow, vLow, #1                           @ Double vLow for 16-bit offset
         add     rR15, rR15, #1                           @ R15++
-        ldrh    rSREG, [rGSU, vLow]                      @ Load RAM offset
-        ldr     vLow, [rGSU, #FX_pvRamBank]              @ Load RAM base pointer
+        ldrh    vLow, [rGSU, vLow]                       @ Load RAM offset
+        ldr     rSREG, [rGSU, #FX_pvRamBank]             @ Load RAM base pointer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        eor     r1, rSREG, #1                            @ Flip bottom bit of offset, stored in a separate register
-        strh    rSREG, [rGSU, #FX_vLastRamAdr]           @ Store offset to GSU.vLastRamAdr
-        ldrb    r1, [vLow, r1]                           @ Load top byte
-        ldrb    rSREG, [vLow, rSREG]                     @ Load bottom byte
+        eor     r1, vLow, #1                             @ Flip bottom bit of offset, stored in a separate register
+        strh    vLow, [rGSU, #FX_vLastRamAdr]            @ Store offset to GSU.vLastRamAdr
+        ldrb    r1, [rSREG, r1]                          @ Load top byte
+        ldrb    vLow, [rSREG, vLow]                      @ Load bottom byte
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
-        orr     rSREG, rSREG, r1, lsl #8                 @ Combine bytes into word
-        strh    rSREG, [rDREG]                           @ Store result to DREG
+        orr     vLow, vLow, r1, lsl #8                   @ Combine bytes into word
+        strh    vLow, [rDREG]                            @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ SWAP: swap low and high bytes of SREG, store in DREG
@@ -873,8 +848,7 @@ handle_fx_swap:
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: Branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -888,14 +862,13 @@ handle_fx_color:
         orrne   r2, vLow, r2, lsr #4                     @  V
         tst     r1, #8                                   @ If PLOT_FREEZEHIGH, only update the bottom nibble
         ldrbne  r1, [rGSU, #FX_vColorReg]                @  |
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         andne   r2, r2, #15                              @  |
         bicne   r1, r1, #15                              @  |
         orrne   r2, r1, r2                               @  V
         strb    r2, [rGSU, #FX_vColorReg]                @ Store result to GSU.vColorReg
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ NOT: bitwise NOT of SREG, store in DREG
@@ -911,8 +884,7 @@ handle_fx_not:
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ ADD: SREG + register n, store in DREG
@@ -929,8 +901,7 @@ handle_fx_add_r:
         lsr     r1, r1, #16                              @ Shift result down from top half of register
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -948,8 +919,7 @@ handle_fx_sub_r:
         lsr     r1, r1, #16                              @ Shift result down from top half of register
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -970,8 +940,7 @@ handle_fx_merge:
         strh    r2, [rDREG]                              @ Store result to DREG
         lsl     rARM, rARM, #28                          @ Shift resultant flags into position
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -990,8 +959,7 @@ handle_fx_and_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1026,19 +994,17 @@ handle_fx_sbk:
         eor     r2, r2, #1                               @ Flip bottom bit of offset
         lsr     r1, r1, #8                               @ Shift top byte down
         strb    r1, [vLow, r2]                           @ Store bottom byte
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ LINK: R11 = R15 + immediate
 handle_fx_link_i:
         add     vLow, vLow, rR15                         @ Add R15 and immediate
         add     rR15, rR15, #1                           @ R15++
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    vLow, [rGSU, #FX_R11]                    @ Store R11
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ SEX: sign-extend 8-bit to 16-bit, SREG to DREG
@@ -1052,8 +1018,7 @@ handle_fx_sex:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store value
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1068,8 +1033,7 @@ handle_fx_asr:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1085,18 +1049,16 @@ handle_fx_ror:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
 @ JMP: jump to address of register N. No delay slot.
 handle_fx_jmp_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        ldrh    rR15, [rGSU, vLow]                       @ Load destination from register N
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrh    rR15, [rGSU, vLow]                       @ Load destination from register N
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
         b       dispatch.skip_1                          @ 
 
@@ -1112,14 +1074,13 @@ handle_fx_lob:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
 @ Data table for fx_run_asm
 .L242:
-        .word   GSU
+        .word   GSU + GSU_STRUCT_PTR_OFFSET
         .word   opcode_goto_table
         .word   plot_rpix_handler_table
 
@@ -1149,10 +1110,9 @@ handle_fx_ibt_r:
         sxtb    r2, rPIPE                                @ Sign-extend PIPE into temporary variable
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         uadd16  rR15, rR15, r1                           @ R15++
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         strh    r2, [rGSU, vLow]                         @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch.skip_1                          @ 
@@ -1167,9 +1127,8 @@ handle_fx_ibt_r14:
         ldr     vLow, [rGSU, #FX_pvRomBank]              @ READR14: Load ROM base pointer
         uadd16  rR15, rR15, r1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldrb    vLow, [vLow, r2]                         @ READR14: Load ROM(R14)
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    vLow, [rGSU, #FX_vRomBuffer]             @ READR14: Store to ROMBUFFER
         b       dispatch.skip_1                          @ 
@@ -1199,8 +1158,7 @@ handle_fx_from_r.b_is_set:
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ HIB: logical right-shift register by 8, SREG to DREG
@@ -1216,8 +1174,7 @@ handle_fx_hib:
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1236,8 +1193,7 @@ handle_fx_or_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1248,11 +1204,10 @@ handle_fx_inc_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrh    r2, [rGSU, vLow]                         @ Load value
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
         add     r2, r2, #1                               @ Increment value
         strh    r2, [rGSU, vLow]                         @ Store result
-        msr     cpsr_f, rARM                             @ Load flags into CPSR
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
@@ -1269,11 +1224,10 @@ handle_fx_inc_r14:
         ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
         lsl     r2, r2, #16                              @ Set flags
         movs    vLow, r2                                 @  |
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldrb    r2, [r1, r2, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
         b       dispatch                                 @ 
 
@@ -1293,8 +1247,7 @@ handle_fx_getc:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strb    r2, [rGSU, #FX_vColorReg]                @ Store result to GSU.vColorReg
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ DEC: decrement a register
@@ -1304,11 +1257,10 @@ handle_fx_dec_r:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrh    r2, [rGSU, vLow]                         @ Load value
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        msr     cpsr_f, rARM                             @ Load flags into CPSR
         sub     r2, r2, #1                               @ Decrement value
         strh    r2, [rGSU, vLow]                         @ Store result
-        msr     cpsr_f, rARM                             @ Load flags into CPSR
         lsl     rARM, r2, #16                            @ Set flags
         movs    rARM, rARM                               @  |
         mrs     rARM, cpsr                               @ Read flags from CPSR
@@ -1319,17 +1271,16 @@ handle_fx_dec_r14:
         ldrh    r2, [rGSU, #FX_R14]                      @ Load value from R14
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        sub     r2, r2, #1                               @ Increment value
+        sub     r2, r2, #1                               @ Decrement value
         strh    r2, [rGSU, #FX_R14]                      @ Store result to R14
         msr     cpsr_f, rARM                             @ Load flags into CPSR
         ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM base pointer
         lsl     r2, r2, #16                              @ Set flags
         movs    vLow, r2                                 @  |
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
         ldrb    r2, [r1, r2, lsr #16]                    @ READR14: Load ROM(R14)
         mrs     rARM, cpsr                               @ Read flags from CPSR
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
         b       dispatch                                 @ 
 
@@ -1341,8 +1292,7 @@ handle_fx_getb:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store value to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1352,13 +1302,12 @@ handle_fx_iwt_r:
         uadd16  rR15, rR15, r1                           @ R15++
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         ldrb    r2, [rPRG, rR15]                         @ FETCHPIPE
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         uadd16  rR15, rR15, r1                           @ R15++
         orr     r2, rPIPE, r2, lsl #8                    @ Combine both PIPEs into result
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         strh    r2, [rGSU, vLow]                         @ Store result to register N
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         uadd16  rR15, rR15, r1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         b       dispatch.skip_1                          @ 
@@ -1393,8 +1342,7 @@ handle_fx_iwt_r15:
         ldrb    rPIPE, [rPRG, r1]                        @ FETCHPIPE
         orr     rR15, vLow, r2, lsl #8                   @ Combine both PIPEs into result
         strh    rR15, [rGSU, #FX_R15]                    @ Store result to register 15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch.skip_1                          @ 
 
 @ STB: Store byte in SREG at the RAM location pointed to by register N
@@ -1406,10 +1354,9 @@ handle_fx_stb_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rGSU, #FX_vLastRamAdr]              @ Store destination pointer to GSU.vLastRamAdr
         ldrh    vLow, [rSREG]                            @ Load value from SREG
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        strb    vLow, [r2, r1]                           @ Store value to RAM(register N)
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        strb    vLow, [r2, r1]                           @ Store value to RAM(register N)
         b       dispatch                                 @ 
 
 @ LDB: Load byte from the RAM location pointed to by register N into DREG
@@ -1425,8 +1372,7 @@ handle_fx_ldb_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ 
 
 @ CMODE: set plot option register to the value in SREG
@@ -1437,14 +1383,13 @@ handle_fx_cmode:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         tst     r1, #16                                  @ Test plotOptionReg for screenHeight
         strb    r1, [rGSU, #FX_vPlotOptionReg]           @ Store result
-        ldreq   r2, [rGSU, #FX_vScreenRealHeight]        @ Else, set screenHeight to its real height
+        ldrheq  r2, [rGSU, #FX_vScreenRealHeight]        @ Else, set screenHeight to its real height
         movne   r2, #256                                 @ If PLOT_OBJECT, fake screenHeight as 256
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        str     r2, [rGSU, #FX_vScreenHeight]            @ Store screenHeight
+        strh    r2, [rGSU, #FX_vScreenHeight]            @ Store screenHeight
         bl      fx_computeScreenPointers                 @ Recompute screen ptrs. If regs are changed, be careful!
         ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ IP is call-clobbered
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ rR15 is call-clobbered, so full branch
 
 @ ADC: add-with-carry, SREG + register N, store in DREG
@@ -1464,8 +1409,7 @@ handle_fx_adc_r:
         lsr     r1, r1, #16                              @ Shift result into bottom half of register
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1485,8 +1429,7 @@ handle_fx_sbc_r:
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1505,8 +1448,7 @@ handle_fx_bic_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1542,8 +1484,7 @@ handle_fx_div2:
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1600,8 +1541,7 @@ handle_fx_lms_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rGSU, vLow]                         @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch.skip_1                          @ 
         
 @ LMS: load word from RAM (short address), store in register 14, then READR14
@@ -1620,8 +1560,7 @@ handle_fx_lms_r14:
         strh    r1, [rGSU, $FX_R14]                      @ Store result
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store to ROMBUFFER
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch.skip_1                          @ 
 
 @ LMS: load word from RAM (short address), store in register 15
@@ -1635,8 +1574,7 @@ handle_fx_lms_r15:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldrb    rPIPE, [rPRG, rPIPE]                     @ FETCHPIPE
         strh    rR15, [rGSU, #FX_R15]                    @ Store result
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch.skip_1                          @ 
 
 @ XOR: exclusive OR between SREG and register N, stored in DREG
@@ -1654,8 +1592,7 @@ handle_fx_xor_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result to DREG
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1669,8 +1606,7 @@ handle_fx_getbh:
         orr     r1, r1, r2, lsl #8                       @ Combine both sources
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1734,8 +1670,7 @@ handle_fx_add_i:
         lsr     r1, r1, #16                              @ Shift result to bottom half of register
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1751,8 +1686,7 @@ handle_fx_sub_i:
         lsr     r1, r1, #16                              @ Shift result to bottom half of register
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1767,8 +1701,7 @@ handle_fx_and_i:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1803,8 +1736,7 @@ handle_fx_sms_r:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    vLow, [r1, r2]                           @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch.skip_1                          @ 
 
 @ OR_I: Logically OR SREG and 4-bit immediate, store in DREG
@@ -1819,8 +1751,7 @@ handle_fx_or_i:
         cmp     rDREG, R14_PTR                           @ TESTR14: If DREG == 14, load rombuffer
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1834,8 +1765,7 @@ handle_fx_ramb:
         add     r1, r2, #FX_apvRamBank >> 2              @ Add apvRamBank table offset, pre-shifted down
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldr     r1, [rGSU, r1, lsl #2]                   @ Load pointer at GSU.apvRamBank[GSU.vRamBankReg]
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         str     r1, [rGSU, #FX_pvRamBank]                @ Store to GSU.pvRamBank
         b       dispatch                                 @ 
 
@@ -1849,8 +1779,7 @@ handle_fx_getbl:
         strh    r1, [rDREG]                              @ Store result
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1873,8 +1802,7 @@ handle_fx_sm_r:
         strh    r1, [rSREG, r2]                          @ Store the value
         uadd16  rR15, rR15, rDREG                        @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch.skip_1                          @ 
 
 @ ADC_I: add-with-carry, SREG + 4-bit immediate, store in DREG
@@ -1892,8 +1820,7 @@ handle_fx_adc_i:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1904,8 +1831,7 @@ handle_fx_cmp_r:
         add     rR15, rR15, #1                           @ R15++
         ldrh    r2, [rGSU, vLow]                         @ Load register N
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         lsl     r1, r1, #16                              @ Shift SREG into the upper half of the register
         cmp     r1, r2, lsl #16                          @ Compare to set flags
@@ -1925,8 +1851,7 @@ handle_fx_bic_i:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1960,8 +1885,7 @@ handle_fx_xor_i:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         strh    r1, [rDREG]                              @ Store result
         beq     testr14_clrflags_dispatch                @ TESTR14: branch
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
@@ -1975,8 +1899,7 @@ handle_fx_romb:
         add     r1, r2, #FX_apvRomBank >> 2              @ Add apvRomBank table offset, pre-shifted down
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         ldr     r1, [rGSU, r1, lsl #2]                   @ Load pointer at GSU.apvRomBank[GSU.vRomBankReg]
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         str     r1, [rGSU, #FX_pvRomBank]                @ Store to GSU.pvRomBank
         b       dispatch                                 @ 
 
@@ -1984,10 +1907,9 @@ testr14_clrflags_dispatch:
         ldrh    vLow, [rGSU, #FX_R14]                    @ READR14: Load R14
         ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM pointer
         ldrh    rR15, [rGSU, #FX_R15]                    @ Reload R15
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        ldrb    r2, [r2, vLow]                           @ READR14: Load ROM(R14)
         ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load next opcode destination
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        ldrb    r2, [r2, vLow]                           @ READR14: Load ROM(R14)
         subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store value to ROMBUFFER
@@ -2037,8 +1959,7 @@ handle_fx_ibt_r15:
         uadd16  rR15, rR15, r1                           @ R15++
         sxtb16  r2, rPIPE                                @ Sign-extend PIPE into temporary variable
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         strh    r2, [rGSU, #FX_R15]                      @ Store result
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch.skip_1                          @ 
@@ -2063,6 +1984,19 @@ handle_fx_lm_r15:
         rev16ne rR15, rR15                     @ stall 2 @ Swap the bytes
         strh    rR15, [rGSU, #FX_R15]                    @ Store result
         b       dispatch.skip_1                          @ 
+
+loop_end:
+        sub     rR15, rSREG, rGSU                        @ Save reserved registers
+        asr     rR15, rR15, #1                           @  |
+        strb    rR15, [rGSU, #FX_pvSreg]                 @  |
+        sub     rR15, rDREG, rGSU                        @  |
+        asr     rR15, rR15, #1                           @  |
+        strh    rSTAT, [rGSU, #FX_vStatusReg]            @  |
+        lsr     rARM, rARM, #24                          @  |
+        strb    rARM, [rGSU, #FX_armFlags]               @  |
+        strb    rPIPE, [rGSU, #FX_vPipe]                 @  |
+        strb    rR15, [rGSU, #FX_pvDreg]                 @  V
+        pop     {rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, pc} @ Return
 
     .cfi_endproc
 
