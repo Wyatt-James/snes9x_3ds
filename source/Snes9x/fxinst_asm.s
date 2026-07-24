@@ -1996,9 +1996,9 @@ loop_end:
 
     .cfi_endproc
 
-    .section	.rodata
-    .align	2
-    .type	plot_rpix_handler_table, %object
+    .section    .rodata
+    .align      2
+    .type       plot_rpix_handler_table, %object
 plot_rpix_handler_table:
         .word   handle_fx_plot_2bit
         .word   handle_fx_rpix_2bit
@@ -2010,7 +2010,7 @@ plot_rpix_handler_table:
         .word   handle_fx_rpix_8bit
 
     .data
-    .align	2
-    .type	opcode_goto_table, %object
+    .align      2
+    .type       opcode_goto_table, %object
 opcode_goto_table:
         #include "fxinst_asm_opcode_table.h"
