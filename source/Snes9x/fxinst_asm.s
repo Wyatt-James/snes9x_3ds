@@ -13,7 +13,7 @@
 #define rGOTO  fp
 #define rPRG   ip
 
-@ Constants for a wacky linker optimization. See link.ld for more info. Currently disabled.
+@ Constants for a wacky linker optimization. See link.ld for more info.
 #define R14_PTR #0x00500000
 
 @ R0 contains vLow
@@ -38,15 +38,9 @@
 @ rARM (if overwritten later)
 @ R1, rR15 (reload necessary if modified)
 
-@ WYATT_TODO various optimizations:
-@ - Store some constants in the stack or GSU struct to make reloading them faster? For instance, R0 pointers for SREG and DREG. Cycle timings might work out. Ensure 64-bit alignment and single-cycle issues if so.
-@ - If all handlers were the same size, we could possibly save a load in dispatch and the entirety of rGOTO.
-
-@ WYATT_TODO dynarec note: TESTR14 branch prediction is unsolvable in dynarec because execution must flow forward.
-@ We can emit based on the prior instruction setting R14 or not, and fall back to interpreter for things like
-@ jumps and resuming a session. This should have pretty substantial savings.
-
-@ WYATT_TODO fix stack alignment
+@ Dynarec note: TESTR14 branch prediction is unsolvable in dynarec because execution must flow forward.
+@ We can emit based on the prior instruction setting R14 or not, and fall back to interpreter for things
+@ like jumps and resuming a session. This should have pretty substantial savings.
 
     .section .text.fx_run_asm,"ax",%progbits
     .align    2
@@ -56,7 +50,7 @@
     .type fx_run_asm, %function
     .cfi_startproc
 fx_run_asm:
-        push    {rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, lr}
+        push    {r0, rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, lr}
         ldr     rGSU, .L242                              @ Load GSU pointer
         mov     rVCNT, vLow                              @ Decrement vCounter by 1, move to correct variable
         ldrb    rR15, [rGSU, #FX_vMode]                  @ Load GSU.vMode
@@ -147,8 +141,8 @@ handle_fx_plot_2bit:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         add     rDREG, r1, #1                            @ X++
         strh    rDREG, [rGSU, #FX_R1]                    @  |
-        ldrb    rSREG, [rGSU, #FX_vPlotOptionReg]        @ Load vPlotOptionReg
-        ldrb    vLow, [rGSU, #FX_vColorReg]              @ Load vColorReg. WYATT_TODO check if a condition code would be ideal here
+        ldrbcc  rSREG, [rGSU, #FX_vPlotOptionReg]        @ Load vPlotOptionReg
+        ldrbcc  vLow, [rGSU, #FX_vColorReg]              @ Load vColorReg
         bcs     handle_fx_plot_2bit.return               @ If Y > screen height, return
         tst     rSREG, #2                                @ If PLOT_DITHER, potentially shift color
         uxtb    r1, r1                                   @ Truncate X to 8-bit
@@ -184,7 +178,7 @@ handle_fx_plot_2bit.L15:
         @ vLow is color
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        ldrh    r1, [r2, #0]                             @ Load pixel pair 1. WYATT_TODO fairly likely to be a cache miss
+        ldrh    r1, [r2, #0]                             @ Load pixel pair 1
         tst     vLow, #1                                 @ Pixel conditional
         orrne   r1, r1, rR15                             @  |
         biceq   r1, r1, rR15                             @  |
@@ -248,8 +242,8 @@ handle_fx_plot_4bit:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         add     rDREG, r1, #1                            @ X++
         strh    rDREG, [rGSU, #FX_R1]                    @  |
-        ldrb    vLow, [rGSU, #FX_vPlotOptionReg]         @ Load vPlotOptionReg
-        ldrb    rSREG, [rGSU, #FX_vColorReg]             @ Load vColorReg. WYATT_TODO check if a condition code would be ideal here
+        ldrbcc  vLow, [rGSU, #FX_vPlotOptionReg]         @ Load vPlotOptionReg
+        ldrbcc  rSREG, [rGSU, #FX_vColorReg]             @ Load vColorReg
         bcs     handle_fx_plot_4bit.return               @ If Y > screen height, return
         tst     vLow, #2                                 @ If PLOT_DITHER, potentially shift color
         uxtb    r1, r1                                   @ Truncate X to 8-bit
@@ -285,7 +279,7 @@ handle_fx_plot_4bit.L25:
         @ rSREG is color
 
         @ The pointer seems to always be 2-byte aligned, so this is a free speedup
-        ldrh    r1, [r2, #0]                             @ Load pixel pair 1. WYATT_TODO fairly likely to be a cache miss
+        ldrh    r1, [r2, #0]                             @ Load pixel pair 1
         ldrh    vLow, [r2, #16]                          @ Load pixel pair 2. Up here to avoid a stall.
         tst     rSREG, #1                                @ Pixel conditional
         orrne   r1, r1, rR15                             @  |
@@ -367,7 +361,7 @@ handle_fx_plot_8bit:
         ldrb    rSREG, [rGSU, #FX_vPlotOptionReg]        @ Load vPlotOptionReg
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         add     vLow, r1, #1                             @ X++
-        strh    vLow, [rGSU, #FX_R1]                     @  |
+        strhcc  vLow, [rGSU, #FX_R1]                     @  |
         bcs     handle_fx_plot_8bit.return               @ If Y > screen height, return
         tst     rSREG, #1                                @ If !PLOT_TRANSPARENT, handle pixel rejection
         ldrb    rDREG, [rGSU, #FX_vColorReg]             @ Load vColorReg
@@ -725,12 +719,12 @@ handle_fx_to_r14.b_is_set:
 @ If B flag is set, move SREG to R15 instead
 handle_fx_to_r15:
         tst     rSTAT, #4096                             @ Test B
-        beq     handle_fx_to_r15.b_is_not_set            @ If B is not set, branch. WYATT_TODO stall 2 on mispredict
+        beq     handle_fx_to_r15.b_is_not_set            @ If B is not set, branch
 @ B is set
         ldrh    rR15, [rSREG]                            @ R15 = SREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    rR15, [rGSU, #FX_R15]                    @ R15 = SREG
         ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        strh    rR15, [rGSU, #FX_R15]                    @ R15 = SREG
         b       dispatch.skip_1                          @ 
 handle_fx_to_r15.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++
@@ -1964,7 +1958,7 @@ handle_fx_ibt_r15:
         b       dispatch.skip_1                          @ 
 
 @ LM: Load word from RAM and store it in register 15. The address is fetched from PIPE.
-@ WYATT_TODO untested
+@ Untested. Don't have a game that uses it!
 handle_fx_lm_r15:
         mov     r2, #1                                   @ Prep R15 increment value
         uadd16  rR15, rR15, r2                           @ R15++
@@ -1995,7 +1989,7 @@ loop_end:
         strb    rARM, [rGSU, #FX_armFlags]               @  |
         strb    rPIPE, [rGSU, #FX_vPipe]                 @  |
         strb    rR15, [rGSU, #FX_pvDreg]                 @  V
-        pop     {rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, pc} @ Return
+        pop     {r0, rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, pc} @ Return
 
     .cfi_endproc
 
