@@ -144,6 +144,8 @@ struct FxRegs_s
 
     /* FxChip registers */
     uint16  avReg[16];                 /* 16 Generic registers */
+    /* Cacheline boundary */
+    /* R14 and R15 are on this cacheline */
     uint16  vCacheBaseReg;             /* Cache base address register and enable flag. Bit 0 is 1 if cache is disabled or 0 if enabled. */
     uint16  vLastRamAdr;               /* Last RAM address accessed */
     uint16  vScreenHeight;             /* 128, 160, 192 or 256 (could be overriden by cmode) */
