@@ -776,8 +776,10 @@ static inline void fx_cmode(uint8 unused)
     else
         GSU.vScreenHeight = GSU.vScreenRealHeight;
 
-    // WYATT_TODO shouldn't this reselect the plot functions? Did it before?
-    fx_computeScreenPointers(); // Moving this here increases register pressure too much. Leave it in the other file.
+    if (GSU.vPrevScreenHeight != GSU.vScreenHeight) {
+        GSU.vPrevScreenHeight  = GSU.vScreenHeight;
+        fx_computeScreenPointers(); // Moving this here increases register pressure too much. Leave it in the other file.
+    }
     CLRFLAGS;
     R15++;
     

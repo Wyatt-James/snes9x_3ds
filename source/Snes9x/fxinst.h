@@ -184,7 +184,6 @@ struct FxRegs_s
     uint8 * pvRam;                     /* Pointer to FxRam */
     uint8 * pvRegisters;               /* 768 bytes located in the memory at address 0x3000 */
     /* Cacheline boundary */
-    uint32  vSCBRDirty;                /* if SCBR is written, our cached screen pointers need updating */
     uint32  vCacheFlags;               /* Represents which parts of the cache was written to. One bit, any position. Used only by fx_cache. */
 };
 

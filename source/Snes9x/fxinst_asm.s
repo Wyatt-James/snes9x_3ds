@@ -1374,16 +1374,19 @@ handle_fx_ldb_r:
 @ CMODE: set plot option register to the value in SREG
 @ Call clobbers r0-r3, r12, lr (vLow, pvPrgBank, r2, rR15, r1, reserved)
 handle_fx_cmode:
-        ldrb    r1, [rSREG]                              @ Load result in SREG
+        ldrb    r2, [rSREG]                              @ Load result in SREG
+        ldrh    vLow, [rGSU, #FX_vPrevScreenHeight]      @ Load previous screen height
         add     rR15, rR15, #1                           @ R15++
+        tst     r2, #16                                  @ Test plotOptionReg for screenHeight
+        ldrheq  r1, [rGSU, #FX_vScreenRealHeight]        @ If !PLOT_OBJECT, use real screen height
+        movne   r1, #256                                 @ Else, set to 256
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        tst     r1, #16                                  @ Test plotOptionReg for screenHeight
-        strb    r1, [rGSU, #FX_vPlotOptionReg]           @ Store result
-        ldrheq  r2, [rGSU, #FX_vScreenRealHeight]        @ Else, set screenHeight to its real height
-        movne   r2, #256                                 @ If PLOT_OBJECT, fake screenHeight as 256
+        strb    r2, [rGSU, #FX_vPlotOptionReg]           @ Store plotOptionReg
+        cmp     r1, vLow                                 @ If the height has changed, recompute screen pointers
+        strh    r1, [rGSU, #FX_vScreenHeight]            @ Store screenHeight
+        strh    r1, [rGSU, #FX_vPrevScreenHeight]        @ Store prevScreenHeight
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        strh    r2, [rGSU, #FX_vScreenHeight]            @ Store screenHeight
-        bl      fx_computeScreenPointers                 @ Recompute screen ptrs. If regs are changed, be careful!
+        blne    fx_computeScreenPointers                 @ Recompute screen pointers
         ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ IP is call-clobbered
         ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         b       dispatch                                 @ rR15 is call-clobbered, so full branch

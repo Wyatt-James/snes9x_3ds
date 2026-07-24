@@ -15,6 +15,7 @@
 /* Used for some ASM optimization. See link.ld for more info. */
 struct FxRegs_s GSU __attribute__((section(".gsu_segment")));
 
+#define MIN(a_, b_) ((a_ <= b_) ? a_ : b_)
 #define UNLIKELY(cond_) __builtin_expect(!!(cond_), 0)
 #define FXEMU_ENABLE_CALL_COUNTING 0
 
@@ -25,8 +26,7 @@ enum
     F_fx_updateRamBank,
     F_fx_readRegisterSpace,
     F_fx_dirtySCBR,
-    F_fx_computeScreenPointersY,
-    F_fx_computeScreenPointersN,
+    F_fx_computeScreenPointers,
     F_fx_writeRegisterSpace,
     F_FxReset,
     F_fx_checkStartAddress,
@@ -53,8 +53,7 @@ CallCount callCounts[F_COUNT] = {
     [F_fx_updateRamBank]              = {"fx_updateRamBank             ", 0, 0},
     [F_fx_readRegisterSpace]          = {"fx_readRegisterSpace         ", 0, 0},
     [F_fx_dirtySCBR]                  = {"fx_dirtySCBR                 ", 0, 0},
-    [F_fx_computeScreenPointersY]     = {"fx_computeScreenPointersY    ", 0, 0},
-    [F_fx_computeScreenPointersN]     = {"fx_computeScreenPointersN    ", 0, 0},
+    [F_fx_computeScreenPointers]      = {"fx_computeScreenPointers     ", 0, 0},
     [F_fx_writeRegisterSpace]         = {"fx_writeRegisterSpace        ", 0, 0},
     [F_FxReset]                       = {"FxReset                      ", 0, 0},
     [F_fx_checkStartAddress]          = {"fx_checkStartAddress         ", 0, 0},
@@ -156,6 +155,11 @@ static void fx_readRegisterSpace()
     GSU.vScreenHeight = GSU.vScreenRealHeight = avHeight[i];
     GSU.vMode = pvGsuScmr & 0x03;
 
+    // vMode is constant within a session, so handle this here
+    uint8 vModeAdj = GSU.vMode, vModeAdjOld = GSU.vPrevMode;
+    if (MIN(vModeAdj, 2) != MIN(vModeAdjOld, 2))
+        GSU.vPrevScreenHeight = ~0;
+
     uint32 vScreenSize;
     if(i == 3) vScreenSize = (256/8) * (256/8) * 32;
     else       vScreenSize = (GSU.vScreenHeight/8) * (256/8) * avMult[GSU.vMode];
@@ -167,71 +171,60 @@ static void fx_readRegisterSpace()
     if(GSU.pvScreenBase + vScreenSize > GSU.pvRam + (GSU.nRamBanks * 65536))
         GSU.pvScreenBase =  GSU.pvRam + (GSU.nRamBanks * 65536) - vScreenSize;
 
-    fx_computeScreenPointers ();
+    if (GSU.vPrevScreenHeight != GSU.vScreenHeight) {
+        GSU.vPrevScreenHeight  = GSU.vScreenHeight;
+        fx_computeScreenPointers();
+    }
 }
 
 void fx_dirtySCBR()
 {
     logFunctionCall(F_fx_dirtySCBR);
-    GSU.vSCBRDirty = TRUE;
+    GSU.vPrevScreenHeight = ~0; // Just set an invalid mode
 }
 
 void fx_computeScreenPointers ()
 {
-    uint8 vModeAdj = GSU.vMode, vModeAdjOld = GSU.vPrevMode;
-    if (vModeAdj >= 3)
-        vModeAdj = 2;
-    if (vModeAdjOld >= 3)
-        vModeAdjOld = 2;
+    logFunctionCall(F_fx_computeScreenPointers);
 
-    if (vModeAdj != vModeAdjOld || GSU.vPrevScreenHeight != GSU.vScreenHeight || GSU.vSCBRDirty)
+    uint32 vModeAdj = MIN(GSU.vMode, 2);
+    uint32 s1 = 4 + vModeAdj,
+           s2 = 8 + vModeAdj,
+           s3 = 16 - (7 + vModeAdj);
+    uint8* screenBase = GSU.pvScreenBase;
+
+    /* Make a list of pointers to the start of each screen column */
+    // Case 128 using the doubleshift is 2 more instructions in the
+    // inner loop. The double shift is the same number of
+    // instructions in the loop as without.
+    switch (GSU.vScreenHeight)
     {
-        logFunctionCall(F_fx_computeScreenPointersY);
-        uint32 i;
-        GSU.vSCBRDirty = FALSE;
-
-        uint32 s1 = 4 + vModeAdj,
-               s2 = 8 + vModeAdj,
-               s3 = 16 - (7 + vModeAdj);
-
-        /* Make a list of pointers to the start of each screen column */
-        // Case 128 using the doubleshift is 2 more instructions in the
-        // inner loop. The double shift is the same number of
-        // instructions in the loop as without.
-        switch (GSU.vScreenHeight)
+        default: // Should be unreachable
+        case 128: s3 = 30; // s3 is not used for height 128, so we rightshift enough to zero its result.
+        case 160: s3++;    // 16 - (6 + vModeAdj)
+        case 192:
         {
-            case 128: s3 = 30; // s3 is not used for height 128, so we rightshift enough to zero its result.
-            case 160: s3++;    // 16 - (6 + vModeAdj)
-            case 192:
+            for (uint32 i = 0; i < 32; i++)
             {
-                for (i = 0; i < 32; i++)
-                {
-                    GSU.apvScreen[i] = GSU.pvScreenBase + (i << s1);
-                    GSU.x[i] = (i << s2) + ((i << 16) >> s3);
-                    // Old version: GSU.x[i] = (i << s2) + (i << s3) // (s3 was alone, not subtraced from 16)
-                }
-                break;
+                GSU.apvScreen[i] = screenBase + (i << s1);
+                GSU.x[i] = (i << s2) + ((i << 16) >> s3);
+                // Old version: GSU.x[i] = (i << s2) + (i << s3) // (s3 was alone, not subtraced from 16)
             }
-            case 256:
-            {
-                s1 = 9 + vModeAdj;
-                s2 = 8 + vModeAdj;
-                s3 = 4 + vModeAdj;
-            
-                for (i = 0; i < 32; i++)
-                {
-                    GSU.apvScreen[i] = GSU.pvScreenBase + ((i & 0x10) << s1) + ((i & 0xf) << s2);
-                    GSU.x[i] = ((i & 0x10) << s2) + ((i & 0xf) << s3);
-                }
-                break;
-            }
+            break;
         }
-        GSU.vPrevMode = GSU.vMode;
-        GSU.vPrevScreenHeight = GSU.vScreenHeight;
-    }
-    else
-    {
-        logFunctionCall(F_fx_computeScreenPointersN);
+        case 256:
+        {
+            s1 = 9 + vModeAdj;
+            s2 = 8 + vModeAdj;
+            s3 = 4 + vModeAdj;
+        
+            for (uint32 i = 0; i < 32; i++)
+            {
+                GSU.apvScreen[i] = screenBase + ((i & 0x10) << s1) + ((i & 0xf) << s2);
+                GSU.x[i] = ((i & 0x10) << s2) + ((i & 0xf) << s3);
+            }
+            break;
+        }
     }
 }
 

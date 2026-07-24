@@ -92,7 +92,6 @@ void FX_printGsuOffsets(void)
     append(pvPrgBank);
     append(apvRamBank);
     append(apvRomBank);
-    append(vSCBRDirty);
     append(sregDreg0);
 
     str[sizeof(str) - 1] = '\0';
@@ -153,7 +152,6 @@ ASSERT_GSU_OFFSET(pvRomBank);
 ASSERT_GSU_OFFSET(pvPrgBank);
 ASSERT_GSU_OFFSET(apvRamBank);
 ASSERT_GSU_OFFSET(apvRomBank);
-ASSERT_GSU_OFFSET(vSCBRDirty);
 ASSERT_GSU_OFFSET(sregDreg0);
 
 #endif // PRINT_GSU_OFFSETS
