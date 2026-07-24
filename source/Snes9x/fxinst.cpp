@@ -159,7 +159,7 @@ static inline void fx_stop(uint8 unused)
 
     /* Check if we need to generate an IRQ */
     if(!(GSU.pvRegisters[GSU_CFGR] & 0x80))
-	    SF(IRQ);
+        SF(IRQ);
 
     GSU.vPlotOptionReg = 0;
     PIPE = 1;
@@ -201,7 +201,7 @@ static inline void fx_cache(uint8 unused)
             memcpy(GSU.pvCache,t1,i);
             memcpy(&GSU.pvCache[i],t2,512-i);
         }
-#endif	
+#endif
     }
     R15++;
     CLRFLAGS;
@@ -414,9 +414,9 @@ static inline void fx_loop(uint8 unused)
 
     R12 = r12;
     if(LIKELY( r12 != 0 ))
-	    R15 = R13;
+        R15 = R13;
     else
-	    R15++;
+        R15++;
 
     CLRFLAGS;
     
@@ -497,9 +497,9 @@ static inline void fx_plot_2bit(uint8 unused)
 #endif
 
     if(GSU.vPlotOptionReg & PLOT_DITHER)
-	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg;
+        c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg;
     else
-	    c = GSU.vColorReg;
+        c = GSU.vColorReg;
 
     // Avoid overwriting transparent pixels? Seems like just an optimization
     if( !(GSU.vPlotOptionReg & PLOT_TRANSPARENT) && !(c & 0xf)) 
@@ -573,9 +573,9 @@ static inline void fx_plot_4bit(uint8 unused)
 #endif
 
     if(GSU.vPlotOptionReg & PLOT_DITHER) // Likelihood depends on game
-	    c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg; // About even chance
+        c = (x ^ y) & 1 ? (GSU.vColorReg >> 4) : GSU.vColorReg; // About even chance
     else
-	    c = GSU.vColorReg;
+        c = GSU.vColorReg;
 
     // Alpha cutout mode
     if( !((GSU.vPlotOptionReg & PLOT_TRANSPARENT) || (c & 0xf))) // Unlikely
@@ -750,7 +750,7 @@ static inline void fx_color(uint8 unused)
 {
     uint8 c = (uint8) SREG;
     if(GSU.vPlotOptionReg & PLOT_HIGHNIBBLE)
-	    c = (c & 0xf0) | (c >> 4);
+        c = (c & 0xf0) | (c >> 4);
 
     if(GSU.vPlotOptionReg & PLOT_FREEZEHIGH)
     {
@@ -758,7 +758,7 @@ static inline void fx_color(uint8 unused)
         GSU.vColorReg |= c & 0x0f;
     }
     else
-	    GSU.vColorReg = USEX8(c);
+        GSU.vColorReg = USEX8(c);
 
     CLRFLAGS;
     R15++;
@@ -774,7 +774,7 @@ static inline void fx_cmode(uint8 unused)
     if(GSU.vPlotOptionReg & PLOT_OBJECT)
         GSU.vScreenHeight = 256; /* OBJ Mode (for drawing into sprites) */
     else
-	    GSU.vScreenHeight = GSU.vScreenRealHeight;
+        GSU.vScreenHeight = GSU.vScreenRealHeight;
 
     // WYATT_TODO shouldn't this reselect the plot functions? Did it before?
     fx_computeScreenPointers(); // Moving this here increases register pressure too much. Leave it in the other file.
@@ -1645,7 +1645,7 @@ static inline void fx_getc(uint8 unused)
     uint8 c = GSU.vRomBuffer;
 #endif
     if(GSU.vPlotOptionReg & PLOT_HIGHNIBBLE)
-	    c = (c & 0xf0) | (c >> 4);
+        c = (c & 0xf0) | (c >> 4);
 
     if(GSU.vPlotOptionReg & PLOT_FREEZEHIGH)
     {
@@ -1653,7 +1653,7 @@ static inline void fx_getc(uint8 unused)
         GSU.vColorReg |= c & 0x0f;
     }
     else
-	    GSU.vColorReg = USEX8(c);
+        GSU.vColorReg = USEX8(c);
 
     CLRFLAGS;
     R15++;
@@ -1901,7 +1901,7 @@ void fx_run(uint32 nInstructions)
             goto loop_end;
 
         #include "fxinst_opcode_handlers.inc.c"
-	}
+    }
 
     loop_end:
 
