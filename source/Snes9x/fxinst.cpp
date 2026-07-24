@@ -103,7 +103,7 @@ register uint16* pvDregLocal asm("r10");
 static inline uint16* GETR(size_t reg)
 {
     uint16* ptr;
-    asm ("add %0, %1, %2" : "=r" (ptr) : "r" (&GSU), "iIr" (reg * sizeof(uint16)));
+    asm ("add %0, %1, %2" : "=r" (ptr) : "r" (&GSU), "iIr" (reg * sizeof(uint16) + 4));
     return ptr;
 }
 
@@ -129,11 +129,12 @@ static inline void fx_load_reserved(void)
 
 // register reservations are disabled
 #else
-#define ARMFLAGS (GSU.armFlags)
+uint32 armFlagsLocal;
+#define ARMFLAGS (armFlagsLocal)
 #define PUSH_RESERVED do {} while(0)
 #define POP_RESERVED do {} while(0)
-static inline void fx_save_reserved(void) {} // Stub
-static inline void fx_load_reserved(void) {} // Stub
+static inline void fx_save_reserved(void) {GSU.armFlags = ARMFLAGS >> 24;} // Stub
+static inline void fx_load_reserved(void) {ARMFLAGS = GSU.armFlags << 24;} // Stub
 #endif
 
 /* Set this define if you wish the plot instruction to check for y-pos limits */
