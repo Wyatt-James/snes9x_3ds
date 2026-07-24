@@ -134,7 +134,7 @@ CPPFILES	:= stb_image_wrapper.cpp 3dsmain.cpp 3dsmenu.cpp 3dsopt.cpp \
 			Snes9x/ppu.cpp Snes9x/ppuvsect.cpp Snes9x/dma.cpp Snes9x/data.cpp Snes9x/globals.cpp \
 			Snes9x/fxinst_tests.cpp Snes9x/fxinst_test_framework.cpp \
 			
-SFILES             := Snes9x/fxinst_asm.s
+SFILES             := Snes9x/fxinst_asm.s Snes9x/fxinst_asm_speedhack.s
 PICAFILES          := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.v.pica)))
 SHLISTFILES        := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.shlist)))
 GFXFILES           := $(foreach dir,$(GRAPHICS),$(notdir $(wildcard $(dir)/*.t3s)))

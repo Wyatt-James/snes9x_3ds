@@ -16,6 +16,7 @@
 struct FxRegs_s GSU __attribute__((section(".gsu_segment")));
 
 #define MIN(a_, b_) ((a_ <= b_) ? a_ : b_)
+#define LIKELY(cond_) __builtin_expect(!!(cond_), 1)
 #define UNLIKELY(cond_) __builtin_expect(!!(cond_), 0)
 #define FXEMU_ENABLE_CALL_COUNTING 0
 
@@ -394,7 +395,10 @@ int FxEmulate(uint32 nInstructions)
     /* Execute GSU session */
     CF(IRQ);
 
-    fx_run_asm(nInstructions);
+    if (LIKELY(nInstructions == FX_MAGIC_USE_SPEEDHACK))
+        fx_run_asm_speedhack();
+    else
+        fx_run_asm(nInstructions);
 
     /* Store GSU registers */
     fx_writeRegisterSpace();

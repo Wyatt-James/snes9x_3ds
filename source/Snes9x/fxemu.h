@@ -75,6 +75,9 @@ extern void fx_updateRamBank(uint8 Byte);
 #define FX_BREAKPOINT -1
 #define FX_ERROR_ILLEGAL_ADDRESS -2
 
+/* If passed to FxEmulate, it will run forever. Required for some games. */
+#define FX_MAGIC_USE_SPEEDHACK ((uint32) ~0ULL)
+
 /* Return the number of bytes in an opcode */
 #define OPCODE_BYTES(op) ((((op)>=0x05&&(op)<=0xf)||((op)>=0xa0&&(op)<=0xaf))?2:(((op)>=0xf0)?3:1))
 

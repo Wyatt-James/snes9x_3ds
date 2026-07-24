@@ -355,6 +355,7 @@ extern "C"
 
 void fx_run(uint32 nInstructions);
 void fx_run_asm(uint32 nInstructions);
+void fx_run_asm_speedhack(void);
 
 #ifdef __cplusplus
 } // extern "C"

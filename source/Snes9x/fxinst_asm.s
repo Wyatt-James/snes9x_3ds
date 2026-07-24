@@ -43,7 +43,7 @@
 @ like jumps and resuming a session. This should have pretty substantial savings.
 
     .section .text.fx_run_asm,"ax",%progbits
-    .align    2
+    .align    5
     .global fx_run_asm
     .syntax unified
     .arm
@@ -52,7 +52,9 @@
 fx_run_asm:
         push    {r0, rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, lr}
         ldr     rGSU, .L242                              @ Load GSU pointer
+#ifndef SPEEDHACK_ENABLED
         mov     rVCNT, vLow                              @ Decrement vCounter by 1, move to correct variable
+#endif
         ldrb    rR15, [rGSU, #FX_vMode]                  @ Load GSU.vMode
         ldr     rGOTO, .L242+4                           @ Load GOTO table
         ldr     r2, .L242+8                              @ Load plot/rpix table
@@ -77,6 +79,7 @@ fx_run_asm:
         str     r2, [rGOTO, #304]                        @  V
         ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
 
+#ifndef SPEEDHACK_ENABLED
 @ Dispatch for after instructions that do not run CLRFLAGS
 dispatch_flags:
         ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
@@ -100,6 +103,27 @@ dispatch.skip_1:                                         @ If used, be careful t
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      r1                                       @ Branch to handler
+
+#else
+dispatch_flags:
+        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
+dispatch_flags.skip_1:                                   @ If used, be careful to ensure that R15 is still 16-bit
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+
+@ Dispatch for after instructions that run CLRFLAGS
+dispatch:
+        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
+dispatch.skip_1:                                         @ If used, be careful to ensure that R15 is still 16-bit
+        ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#endif
 
 @ GETBS: get sign extended byte from ROM at address R14
 handle_fx_getbs:
@@ -1896,6 +1920,7 @@ handle_fx_romb:
         str     r1, [rGSU, #FX_pvRomBank]                @ Store to GSU.pvRomBank
         b       dispatch                                 @ 
 
+#ifndef SPEEDHACK_ENABLED
 testr14_clrflags_dispatch:
         ldrh    vLow, [rGSU, #FX_R14]                    @ READR14: Load R14
         ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM pointer
@@ -1910,6 +1935,20 @@ testr14_clrflags_dispatch:
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      r1                                       @ Branch to handler
+#else
+testr14_clrflags_dispatch:
+        ldrh    vLow, [rGSU, #FX_R14]                    @ READR14: Load R14
+        ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM pointer
+        ldrh    rR15, [rGSU, #FX_R15]                    @ Reload R15
+        ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load next opcode destination
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        ldrb    r2, [r2, vLow]                           @ READR14: Load ROM(R14)
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store value to ROMBUFFER
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#endif
 
 @ If (X ^ Y) is odd, use top half of color. Else, use bottom half.
 @ Inlining this or not is a bit of a tossup
@@ -1994,7 +2033,7 @@ loop_end:
     .cfi_endproc
 
     .section    .rodata
-    .align      2
+    .align      5
     .type       plot_rpix_handler_table, %object
 plot_rpix_handler_table:
         .word   handle_fx_plot_2bit
@@ -2007,7 +2046,7 @@ plot_rpix_handler_table:
         .word   handle_fx_rpix_8bit
 
     .data
-    .align      2
+    .align      5
     .type       opcode_goto_table, %object
 opcode_goto_table:
         #include "fxinst_asm_opcode_table.h"
