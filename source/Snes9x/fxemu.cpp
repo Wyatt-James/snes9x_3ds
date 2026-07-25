@@ -122,15 +122,10 @@ static void fx_readRegisterSpace()
 
     // Compliant optimized (0x2cc -> 0x20c)
     /* Update R0-R15 */
-    uint8* p = GSU.pvRegisters;
-    for(int i = 0; i < 16; i++)
-    {
-            GSU.avReg[i] = p[0] | ((uint32)(p[1])) << 8;
-            p += 2;
-    }
+    uint8 *const p = GSU.pvRegisters;
+    memcpy(GSU.avReg, p, sizeof(GSU.avReg)); // Assumes little-endian
 
     /* Update other registers */
-    p = GSU.pvRegisters;
     GSU.vStatusReg    = p[GSU_SFR] | (p[GSU_SFR+1] << 8);
     uint8 vPrgBankReg = GSU.vPrgBankReg = p[GSU_PBR];
     uint8 vRomBankReg = GSU.vRomBankReg = p[GSU_ROMBR];
@@ -233,23 +228,9 @@ void fx_computeScreenPointers ()
 static void fx_writeRegisterSpace()
 {
     logFunctionCall(F_fx_writeRegisterSpace);
-    uint8* p;
+    uint8 *const p = GSU.pvRegisters;
     
-    // Non-compliant optimized (0x118)
-    // WYATT_TODO if I can properly ensure the alignment here, it'd be a decent speedup.
-    // for(int i = 0; i < 16; i++)
-    // {
-    //     *(uint16*) __builtin_assume_aligned(&((uint16*) GSU.pvRegisters)[i], _Alignof(uint16)) = GSU.avReg[i];
-    // }
-    
-    // Compliant Optimized (0x1dc -> 0x19c)
-    p = GSU.pvRegisters;
-    for(int i = 0; i < 16; i++)
-    {
-        uint32 reg = GSU.avReg[i];
-        *p++ = (uint8)reg;
-        *p++ = (uint8)(reg >> 8);
-    }
+    memcpy(p, GSU.avReg, sizeof(GSU.avReg)); // Assumes little-endian
 
     /* Update status register */
     uint16 statusReg = GSU.vStatusReg & ~(FLG_Z | FLG_CY | FLG_S | FLG_OV);
@@ -259,19 +240,16 @@ static void fx_writeRegisterSpace()
     if (GSU.armFlags & (ARM_CARRY >> 24))    statusReg |= FLG_CY;
     GSU.vStatusReg = statusReg;
     
-    p = GSU.pvRegisters;
-    {
-        uint16 vStatusReg = GSU.vStatusReg;
-        p[GSU_SFR]   = (uint8) vStatusReg;
-        p[GSU_SFR+1] = (uint8)(vStatusReg>>8);
-    }
+    uint16 vStatusReg = GSU.vStatusReg;
+    p[GSU_SFR]   = (uint8) vStatusReg;
+    p[GSU_SFR+1] = (uint8)(vStatusReg>>8);
 
     p[GSU_PBR]   = GSU.vPrgBankReg;
     p[GSU_ROMBR] = GSU.vRomBankReg;
     p[GSU_RAMBR] = GSU.vRamBankReg;
     
     {
-        uint16 vCacheBaseReg = GSU.vCacheBaseReg & ~1;
+        uint16 vCacheBaseReg = GSU.vCacheBaseReg & ~1; // Bit 0 is used as a dirty flag
         p[GSU_CBR]   = (uint8) vCacheBaseReg;
         p[GSU_CBR+1] = (uint8)(vCacheBaseReg>>8);
     }
