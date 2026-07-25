@@ -1,6 +1,10 @@
 @ "FX_" offset defines
 #include "fxinst_asm.h"
 
+#ifndef SPEEDHACK_ENABLED
+#define SPEEDHACK_DISABLED
+#endif
+
 #define vLow   r0
 #define rR15   r3
 #define rGSU   r4
@@ -52,7 +56,7 @@
 fx_run_asm:
         push    {r0, rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, lr}
         ldr     rGSU, .L242                              @ Load GSU pointer
-#ifndef SPEEDHACK_ENABLED
+#ifdef SPEEDHACK_DISABLED
         mov     rVCNT, vLow                              @ Decrement vCounter by 1, move to correct variable
 #endif
         ldrb    rR15, [rGSU, #FX_vMode]                  @ Load GSU.vMode
@@ -79,47 +83,47 @@ fx_run_asm:
         str     r2, [rGOTO, #304]                        @  V
         ldr     rPRG, [rGSU, #FX_pvPrgBank]              @ FETCHPIPE: Load GSU.pvPrgBank. Taken from dispatch to save a cycle.
 
-#ifndef SPEEDHACK_ENABLED
+#ifdef SPEEDHACK_ENABLED
 @ Dispatch for after instructions that do not run CLRFLAGS
 dispatch_flags:
-        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
-dispatch_flags.skip_1:                                   @ If used, be careful to ensure that R15 is still 16-bit
+        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
-        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
-        beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      r1                                       @ Branch to handler
 
 @ Dispatch for after instructions that run CLRFLAGS
 dispatch:
-        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
+        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15
 dispatch.skip_1:                                         @ If used, be careful to ensure that R15 is still 16-bit
         ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
-        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
-        beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      r1                                       @ Branch to handler
 
 #else
+
 dispatch_flags:
-        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
+        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15
 dispatch_flags.skip_1:                                   @ If used, be careful to ensure that R15 is still 16-bit
         and     r2, rSTAT, #768                          @ Get opcode mode bits
         orr     r2, rPIPE, r2                            @ Compute opcode
+        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
         ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      r1                                       @ Branch to handler
 
 @ Dispatch for after instructions that run CLRFLAGS
 dispatch:
-        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15. Taken from dispatch to reduce memory stalling
+        ldrh    rR15, [rGSU, #FX_R15]                    @ FETCHPIPE: Load R15
 dispatch.skip_1:                                         @ If used, be careful to ensure that R15 is still 16-bit
         ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load destination handler
+        subs    rVCNT, rVCNT, #1                         @ Decrement vCounter and exit if 0
+        beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      r1                                       @ Branch to handler
@@ -579,7 +583,181 @@ handle_fx_rol:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
+#ifdef SPEEDHACK_ENABLED
 @ BRA: unconditional branch
+handle_fx_bra:
+        add     rR15, rR15, #1                           @ R15++
+        uxth    r2, rR15                                 @ Wrap R15 at 16 bits
+        sxtab16 rR15, rR15, rPIPE                        @ Add PIPE to R15
+        ldrb    rPIPE, [rPRG, r2]                        @ FETCHPIPE
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        strh    rR15, [rGSU, #FX_R15]                    @ Store destination to R15
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+
+@ BGE: branch if greater or equal
+handle_fx_bge:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16lt   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16ge  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BLT: branch if less than
+handle_fx_blt:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16ge   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16lt  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BNE: branch if not equal
+handle_fx_bne:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16eq   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16ne  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BEQ: branch if equal
+handle_fx_beq:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16ne   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16eq  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BPL: branch if positive or zero
+handle_fx_bpl:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16mi   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16pl  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BMI: branch if negative
+handle_fx_bmi:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16pl   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16mi  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BCC: branch if lower (unsigned <)
+handle_fx_bcc:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16cs   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16cc  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BCS: branch if higher or same (unsigned >=)
+handle_fx_bcs:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16cc   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16cs  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BVC: branch if no overflow
+handle_fx_bvc:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16vs   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16vc  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+
+@ BVS: branch if overflow
+handle_fx_bvs:
+        mov        r1, #1                                @ Needed for SXTAB
+        uadd16     rR15, rR15, r1                        @ R15++
+        msr        cpsr_f, rARM                          @ Load flags into CPSR
+        ldrb       vLow, [rPRG, rR15]                    @ FETCHPIPE
+        uadd16vc   rR15, rR15, r1                        @ R15++ if not taken
+        and        r1, rSTAT, #768                       @ Get opcode mode bits
+        orr        r1, vLow, r1                          @ Compute opcode
+        sxtab16vs  rR15, rR15, rPIPE                     @ Handle branch
+        ldr        r1, [rGOTO, r1, lsl #2]               @ Load destination handler
+        strh       rR15, [rGSU, #FX_R15]                 @ Store R15
+        and        vLow, vLow, #15                       @ Compute vLow
+        ldrb       rPIPE, [rPRG, rR15]                   @ FETCHPIPE
+        bx         r1                                    @ Branch to handler
+#else
 handle_fx_bra:
         add     rR15, rR15, #1                           @ R15++
         uxth    r2, rR15                                 @ Wrap R15 at 16 bits
@@ -697,6 +875,7 @@ handle_fx_bvs:
         ldrb       rPIPE, [rPRG, r2]                     @ FETCHPIPE
         strh       rR15, [rGSU, #FX_R15]                 @ Store R15
         b          dispatch_flags.skip_1                 @ 
+#endif
 
 @ TO: set register n as destination register
 @ move one register to another (if B flag is set)
@@ -716,7 +895,17 @@ handle_fx_to_r:
 handle_fx_to_r.b_is_not_set:
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15. vLow cannot be 15, so early store is valid
         add     rDREG, rGSU, vLow, lsl #1                @ DREG = vLow
+#ifdef SPEEDHACK_ENABLED
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        uxth    rR15, rR15                               @ Zero-extend R15
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#else
         b       dispatch_flags                           @ 
+#endif
 
 @ TO_R14: set register 14 as destination register
 @ If B flag is set, move SREG to R14, CLRFLAGS, and READR14 instead
@@ -727,7 +916,17 @@ handle_fx_to_r14:
 @ B is not set
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rDREG, rGSU, #FX_R14                     @ DREG = pointer to R14
+#ifdef SPEEDHACK_ENABLED
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        uxth    rR15, rR15                               @ Zero-extend R15
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#else
         b       dispatch_flags                           @ 
+#endif
 handle_fx_to_r14.b_is_set:
         ldrh    r2, [rSREG]                              @ Load SREG
         ldr     r1, [rGSU, #FX_pvRomBank]                @ READR14: Load GSU.pvRomBank
@@ -754,7 +953,17 @@ handle_fx_to_r15.b_is_not_set:
         add     rR15, rR15, #1                           @ R15++
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rDREG, rGSU, #FX_R15                     @ DREG = pointer to R15
+#ifdef SPEEDHACK_ENABLED
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        uxth    rR15, rR15                               @ Zero-extend R15
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#else
         b       dispatch_flags                           @ 
+#endif
 
 @ WITH: set register n as source and destination register
 handle_fx_with_r:
@@ -763,7 +972,17 @@ handle_fx_with_r:
         add     rDREG, rGSU, vLow, lsl #1                @ Calculate register
         mov     rSREG, rDREG                             @ Copy register to SREG
         orr     rSTAT, rSTAT, #4096                      @ Set flag B
+#ifdef SPEEDHACK_ENABLED
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        uxth    rR15, rR15                               @ Zero-extend R15
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#else
         b       dispatch_flags                           @ 
+#endif
 
 @ STW: store word (16 bits)
 handle_fx_stw_r:
@@ -806,6 +1025,48 @@ handle_fx_loop.loop_end:
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
 
+#ifdef SPEEDHACK_ENABLED
+@ ALT1: set ALT mode 1
+handle_fx_alt1:
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
+        orr     rSTAT, rSTAT, #256                       @ Set ALT1 flag
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        uxth    rR15, rR15                               @ Zero-Extend R15
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+
+@ ALT2: set ALT mode 2
+handle_fx_alt2:
+        add     rR15, rR15, #1                           @ R15++
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
+        orr     rSTAT, rSTAT, #512                       @ Set ALT2 flag
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        uxth    rR15, rR15                               @ Zero-Extend R15
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+
+@ ALT3: set ALT mode 3
+handle_fx_alt3:
+        add     r2, rR15, #1                             @ R15++
+        strh    r2, [rGSU, #FX_R15]                      @ Store R15
+        orr     r1, rPIPE, #768                          @ Compute opcode
+        uxth    rR15, r2                                 @ Wrap R15 at 16 bits
+        ldr     r1, [rGOTO, r1, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bic     rSTAT, rSTAT, #4096                      @ Clear B flag
+        orr     rSTAT, rSTAT, #768                       @ Set ALT1 + ALT2 flags
+        bx      r1                                       @ Branch to handler
+#else
 @ ALT1: set ALT mode 1
 handle_fx_alt1:
         add     rR15, rR15, #1                           @ R15++
@@ -829,6 +1090,7 @@ handle_fx_alt3:
         bic     rSTAT, rSTAT, #4096                      @ Clear B flag
         orr     rSTAT, rSTAT, #768                       @ Set ALT1 + ALT2 flags
         b       dispatch_flags                           @ 
+#endif
 
 @ LDW: load word
 handle_fx_ldw_r:
@@ -1157,7 +1419,17 @@ handle_fx_from_r:
 @ B is not set
         strh    rR15, [rGSU, #FX_R15]                    @ Store R15
         add     rSREG, rGSU, vLow, lsl #1                @ SREG = register N
+#ifdef SPEEDHACK_ENABLED
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        uxth    rR15, rR15                               @ Zero-extend R15
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#else
         b       dispatch_flags                           @ 
+#endif
 handle_fx_from_r.b_is_set:
         lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
@@ -1504,26 +1776,6 @@ handle_fx_div2:
         ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
         bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
         b       dispatch                                 @ 
-
-@ LJMP: set program bank to register N and jump to SREG
-handle_fx_ljmp_r:
-        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        ldrh    r2, [rGSU, vLow]                         @ Load destination ROM bank
-        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
-        mov     vLow, #0                                 @ GSU.vCacheFlags = 0
-        ldrh    rR15, [rSREG]                            @ Load destination R15
-        and     r2, r2, #127                             @ AND bank to 7-bit
-        strb    r2, [rGSU, #FX_vPrgBankReg]              @ Store bank to GSU.vPrgBankReg
-        bic     r1, rR15, #15                            @ R15 & 0xfff0
-        strh    r1, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
-        add     r2, r2, #FX_apvRomBank >> 2              @ Offset magic for apvRomBank, pre-shifted down
-        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
-        ldr     rPRG, [rGSU, r2, lsl #2]                 @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
-        str     vLow, [rGSU, #FX_vCacheFlags]            @ Store GSU.vCacheFlags
-        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
-        str     rPRG, [rGSU, #FX_pvPrgBank]              @ Store GSU.pvPrgBank pointer
-        b       dispatch_flags.skip_1                    @ 
 
 @ LMULT: 16-bit to 32-bit signed multiplication SREG * R6, low result in R4, then high result in DREG.
 handle_fx_lmult:
@@ -1920,7 +2172,20 @@ handle_fx_romb:
         str     r1, [rGSU, #FX_pvRomBank]                @ Store to GSU.pvRomBank
         b       dispatch                                 @ 
 
-#ifndef SPEEDHACK_ENABLED
+#ifdef SPEEDHACK_ENABLED
+testr14_clrflags_dispatch:
+        ldrh    vLow, [rGSU, #FX_R14]                    @ READR14: Load R14
+        ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM pointer
+        ldrh    rR15, [rGSU, #FX_R15]                    @ Reload R15
+        ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load next opcode destination
+        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
+        ldrb    r2, [r2, vLow]                           @ READR14: Load ROM(R14)
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store value to ROMBUFFER
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#else
 testr14_clrflags_dispatch:
         ldrh    vLow, [rGSU, #FX_R14]                    @ READR14: Load R14
         ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM pointer
@@ -1933,19 +2198,6 @@ testr14_clrflags_dispatch:
         strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store value to ROMBUFFER
         beq     loop_end                                 @ 
         and     vLow, rPIPE, #15                         @ Compute vLow
-        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
-        bx      r1                                       @ Branch to handler
-#else
-testr14_clrflags_dispatch:
-        ldrh    vLow, [rGSU, #FX_R14]                    @ READR14: Load R14
-        ldr     r2, [rGSU, #FX_pvRomBank]                @ READR14: Load ROM pointer
-        ldrh    rR15, [rGSU, #FX_R15]                    @ Reload R15
-        ldr     r1, [rGOTO, rPIPE, lsl #2]               @ Load next opcode destination
-        ldrd    rSREG, [rGSU, #FX_sregDreg0]             @ CLRFLAGS: Reset SREG/DREG
-        ldrb    r2, [r2, vLow]                           @ READR14: Load ROM(R14)
-        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
-        and     vLow, rPIPE, #15                         @ Compute vLow
-        strb    r2, [rGSU, #FX_vRomBuffer]               @ READR14: Store value to ROMBUFFER
         ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
         bx      r1                                       @ Branch to handler
 #endif
@@ -1984,6 +2236,53 @@ handle_fx_plot_4bit.handle_dither:
 
 @ ---------- Rare Calls ----------
 @ Down here to keep icache happier
+
+#ifdef SPEEDHACK_ENABLED
+@ LJMP: set program bank to register N and jump to SREG
+handle_fx_ljmp_r:
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrh    r2, [rGSU, vLow]                         @ Load destination ROM bank
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        mov     vLow, #0                                 @ GSU.vCacheFlags = 0
+        ldrh    rR15, [rSREG]                            @ Load destination R15
+        and     r2, r2, #127                             @ AND bank to 7-bit
+        strb    r2, [rGSU, #FX_vPrgBankReg]              @ Store bank to GSU.vPrgBankReg
+        bic     r1, rR15, #15                            @ R15 & 0xfff0
+        strh    r1, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
+        add     r2, r2, #FX_apvRomBank >> 2              @ Offset magic for apvRomBank, pre-shifted down
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        ldr     rPRG, [rGSU, r2, lsl #2]                 @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
+        str     vLow, [rGSU, #FX_vCacheFlags]            @ Store GSU.vCacheFlags
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        and     r2, rSTAT, #768                          @ Get opcode mode bits
+        orr     r2, rPIPE, r2                            @ Compute opcode
+        str     rPRG, [rGSU, #FX_pvPrgBank]              @ Store GSU.pvPrgBank pointer
+        ldr     r1, [rGOTO, r2, lsl #2]                  @ Load destination handler
+        and     vLow, rPIPE, #15                         @ Compute vLow
+        ldrb    rPIPE, [rPRG, rR15]                      @ FETCHPIPE
+        bx      r1                                       @ Branch to handler
+#else
+@ LJMP: set program bank to register N and jump to SREG
+handle_fx_ljmp_r:
+        lsl     vLow, vLow, #1                           @ Shift vLow for 2-byte offset
+        bic     rSTAT, rSTAT, #4864                      @ CLRFLAGS: STAT
+        ldrh    r2, [rGSU, vLow]                         @ Load destination ROM bank
+        mov     rDREG, rGSU                              @ CLRFLAGS: DREG = 0
+        mov     vLow, #0                                 @ GSU.vCacheFlags = 0
+        ldrh    rR15, [rSREG]                            @ Load destination R15
+        and     r2, r2, #127                             @ AND bank to 7-bit
+        strb    r2, [rGSU, #FX_vPrgBankReg]              @ Store bank to GSU.vPrgBankReg
+        bic     r1, rR15, #15                            @ R15 & 0xfff0
+        strh    r1, [rGSU, #FX_vCacheBaseReg]            @ GSU.vCacheBaseReg = R15 & 0xfff0
+        add     r2, r2, #FX_apvRomBank >> 2              @ Offset magic for apvRomBank, pre-shifted down
+        mov     rSREG, rGSU                              @ CLRFLAGS: SREG = 0
+        ldr     rPRG, [rGSU, r2, lsl #2]                 @ Load pointer at GSU.apvRomBank[GSU.vPrgBankReg]
+        str     vLow, [rGSU, #FX_vCacheFlags]            @ Store GSU.vCacheFlags
+        strh    rR15, [rGSU, #FX_R15]                    @ Store R15
+        str     rPRG, [rGSU, #FX_pvPrgBank]              @ Store GSU.pvPrgBank pointer
+        b       dispatch_flags.skip_1                    @ 
+#endif
 
 @ IBT R15: fetch PIPE and store to Register 15
 handle_fx_ibt_r15:
