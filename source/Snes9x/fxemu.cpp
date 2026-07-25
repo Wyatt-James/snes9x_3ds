@@ -138,11 +138,12 @@ static void fx_readRegisterSpace()
     GSU.vCacheBaseReg = p[GSU_CBR] | (p[GSU_CBR+1] << 8) | (GSU.vCacheBaseReg & 1); // Preserve enable flag.
 
     /* Update status register variables */
-    GSU.armFlags &= ~ARM_FLAGS;
-    if(GSU.vStatusReg & FLG_Z)  GSU.armFlags |= ARM_ZERO;
-    if(GSU.vStatusReg & FLG_S)  GSU.armFlags |= ARM_NEGATIVE;
-    if(GSU.vStatusReg & FLG_OV) GSU.armFlags |= ARM_OVERFLOW;
-    if(GSU.vStatusReg & FLG_CY) GSU.armFlags |= ARM_CARRY;
+    uint32 armFlags = 0;
+    if(GSU.vStatusReg & FLG_Z)  armFlags |= ARM_ZERO >> 24;
+    if(GSU.vStatusReg & FLG_S)  armFlags |= ARM_NEGATIVE >> 24;
+    if(GSU.vStatusReg & FLG_OV) armFlags |= ARM_OVERFLOW >> 24;
+    if(GSU.vStatusReg & FLG_CY) armFlags |= ARM_CARRY >> 24;
+    GSU.armFlags = armFlags;
     
     /* Set bank pointers */
     GSU.pvRamBank = GSU.apvRamBank[vRamBankReg & (FX_RAM_BANKS-1)];
@@ -256,10 +257,12 @@ static void fx_writeRegisterSpace()
     CF(CY);
 
     /* Update status register */
-    if (GSU.armFlags & ARM_ZERO)     SF(Z);
-    if (GSU.armFlags & ARM_NEGATIVE) SF(S);
-    if (GSU.armFlags & ARM_OVERFLOW) SF(OV);
-    if (GSU.armFlags & ARM_CARRY)    SF(CY);
+    uint16 statusReg = GSU.vStatusReg & ~(FLG_Z | FLG_CY | FLG_S | FLG_OV);
+    if (GSU.armFlags & (ARM_ZERO >> 24))     statusReg |= FLG_Z;
+    if (GSU.armFlags & (ARM_NEGATIVE >> 24)) statusReg |= FLG_S;
+    if (GSU.armFlags & (ARM_OVERFLOW >> 24)) statusReg |= FLG_OV;
+    if (GSU.armFlags & (ARM_CARRY >> 24))    statusReg |= FLG_CY;
+    GSU.vStatusReg = statusReg;
     
     p = GSU.pvRegisters;
     {
