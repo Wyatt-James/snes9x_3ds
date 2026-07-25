@@ -251,11 +251,6 @@ static void fx_writeRegisterSpace()
         *p++ = (uint8)(reg >> 8);
     }
 
-    CF(Z);
-    CF(S);
-    CF(OV);
-    CF(CY);
-
     /* Update status register */
     uint16 statusReg = GSU.vStatusReg & ~(FLG_Z | FLG_CY | FLG_S | FLG_OV);
     if (GSU.armFlags & (ARM_ZERO >> 24))     statusReg |= FLG_Z;
