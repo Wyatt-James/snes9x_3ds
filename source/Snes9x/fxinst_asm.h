@@ -1,3 +1,6 @@
+#ifndef FXINST_ASM_H
+#define FXINST_ASM_H
+
 // GSU struct offsets. These have to be hard-coded for use in assembly files.
 // If you modify the struct layout, you MUST update these.
 // See fxstatic.cpp and fxinst.h.
@@ -63,3 +66,5 @@
 #define FX_apvRamBank          O_(352)
 #define FX_apvRomBank          O_(368)
 #define FX_sregDreg0           O_(56)
+
+#endif
