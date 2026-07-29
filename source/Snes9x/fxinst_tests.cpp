@@ -440,7 +440,6 @@ FX_Result fxtest_merge(const FX_Gsu* GSUi, const uint16 R7, const uint16 R8)
     // GSU.armFlags |= vZero     ? PACKED_Z : 0;
     // GSU.armFlags <<= ARM_V_SHIFT;
 
-    // WYATT_TODO probably move this to the GSU struct for the actual implementation
     static ALIGNED16 const uint8 flags[16] = {
         0x0, 0x4, 0x6, 0x6,
         0x7, 0x7, 0x7, 0x7,
@@ -745,12 +744,14 @@ FX_Result fxtest_div2(const FX_Gsu* GSUi, const uint16 SREG)
 
     uint32 resultNew;
     asm (
+        "cmn %2, #1\n\t"
+        "moveq %2, #1\n\t"
         "msr cpsr_f, %0\n\t"
         "asrs %1, %2, #1\n\t" // Shift (sets NZC)
         "mrs %0, cpsr\n\t"
         : "+r" (GSU.armFlags),
           "=r" (resultNew)
-        : "r" (SREG == UINT16_MAX ? 1 : SEX16(SREG))
+        : "r" (SEX16(SREG))
         : "cc"
     );
     

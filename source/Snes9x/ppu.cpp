@@ -3250,16 +3250,20 @@ void S9xSuperFXExec ()
 			(Memory.FillRAM [0x3000 + GSU_SCMR] & 0x18) == 0x18)
 		{
 			t3dsLog(&t3dsMain, Snx_Misc);
+
+			#define LIKELY(cond_) __builtin_expect(!!(cond_), 1)
 			
-			if (!Settings.WinterGold||Settings.StarfoxHack)
-				FxEmulate (~0);
+			// Winter Gold needs accurate timings, Star Fox needs the speedhack
+			// Other games just get a nice speedup 
+			if (LIKELY(!Settings.WinterGold||Settings.StarfoxHack))
+				FxEmulate (FX_MAGIC_USE_SPEEDHACK);
 			else
 				FxEmulate ((Memory.FillRAM [0x3000 + GSU_CLSR] & 1) ? 700 : 350); 
 			
 			int GSUStatus = Memory.FillRAM [0x3000 + GSU_SFR] |
 					(Memory.FillRAM [0x3000 + GSU_SFR + 1] << 8);
 					
-			if ((GSUStatus & (FLG_G | FLG_IRQ)) == FLG_IRQ)
+			if (LIKELY((GSUStatus & (FLG_G | FLG_IRQ)) == FLG_IRQ))
 				S9xSetIRQ (GSU_IRQ_SOURCE); // Trigger a GSU IRQ.
 
 			t3dsLog(&t3dsMain, Snx_SuperFX);

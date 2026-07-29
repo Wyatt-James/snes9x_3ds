@@ -131,69 +131,60 @@
 /* Address checking (definately slow) */
 /* #define FX_ADDRESS_CHECK */
 
+/* If you modify anything inside this struct, you MUST update the #defines in fxinst_asm.h. */
+/* You should also probably do a clean build. */
 struct FxRegs_s
 {
+    // 4 bytes of spare space, oooo!
+
+    // color (1)
+    // rombuffer (1)
+    uint8 * pvPrgBank;                 /* Pointer to current program ROM-bank */
+
+
     /* FxChip registers */
-    uint16  avReg[16];        /* 16 Generic registers. WYATT_TODO these should be changed back to U32s containing u16s. ARM11 eats 1 instruction + 1 register penalty for 16-bit loads/stores, while u32s would save at least some of these. */
-    uint16  vCacheBaseReg;    /* Cache base address register. Used only by the fx_cache instruction. */
-    uint16  vLastRamAdr;      /* Last RAM address accessed */
-    uint8   vPlotOptionReg;   /* Plot option register. 5 bits. */
-    uint8   vColorReg;        /* Internal color register. 8 bits. */
-    uint8   vRomBuffer;       /* Current byte read by R14 */
-    uint8   vPrgBankReg;      /* Program bank index register */
-    uint8   vRomBankReg;      /* Rom bank index register */
-    uint8   vRamBankReg;      /* Ram bank index register */
-
-    /* A LUT of flags for fx_merge */
-    uint8 mergeFlagLut[16];
-
-    /* Values with local fast copies */
-    uint8   pvDreg;           /* Index of current destination register */
-    uint8   pvSreg;           /* Index of current source register */
-    uint8   vPipe;            /* Instructionset pipe */
-    uint16  vStatusReg;       /* Status register */
-    uint32  armFlags;          /* ARM-optimized status register */ 
-    
-    /* Other emulator variables */
-    
-    uint32  vCacheFlags;      /* Saying what parts of the cache was written to. One bit, any position. Used only by fx_cache. */
-    uint32  vPipeAdr;         /* The address of where the pipe was read from. Only used for debugging.*/
-    int32   vErrorCode;
-    uint32  vIllegalAddress;
-    
-    uint8   bBreakPoint;
-    uint32  vBreakPoint;
-    uint32  vStepPoint;
-    
-    uint8 * pvRegisters;        /* 768 bytes located in the memory at address 0x3000 */
-    uint32  nRamBanks;          /* Number of 64kb-banks in FxRam (Don't confuse it with SNES-Ram!!!) */
-    uint8 * pvRam;              /* Pointer to FxRam */
-    uint32  nRomBanks;          /* Number of 32kb-banks in Cart-ROM */
-    uint8 * pvRom;              /* Pointer to Cart-ROM */
-
-    uint32  vMode;              /* Color depth/mode */
-    uint32  vPrevMode;          /* Previous depth */
-    uint8 * pvScreenBase;
-    uint8 * apvScreen[32];      /* Pointer to each of the 32 screen colums */
+    uint16  avReg[16];                 /* 16 Generic registers */
+    /* Cacheline boundary */
+    /* R14 and R15 are on this cacheline */
+    uint16  vCacheBaseReg;             /* Cache base address register and enable flag. Bit 0 is 1 if cache is disabled or 0 if enabled. */
+    uint16  vLastRamAdr;               /* Last RAM address accessed */
+    uint16  vScreenHeight;             /* 128, 160, 192 or 256 (could be overriden by cmode) */
+    uint16  vScreenRealHeight;         /* 128, 160, 192 or 256 */
+    uint8   vPlotOptionReg;            /* Plot option register. 5 bits. */
+    uint8   vColorReg;                 /* Internal color register. 8 bits. */
+    uint8   vRomBuffer;                /* Current byte read by R14 */
+    uint8   vPrgBankReg;               /* Program bank index register */
+    uint8 * pvRamBank;                 /* Pointer to current RAM-bank */
+    uint8 * pvRomBank;                 /* Pointer to current ROM-bank */
+    uint16* sregDreg0[2];              /* Speeds up CLRFLAGS. Initialize to &GSU.avReg[0]. Keep this double-aligned! */
+    /* Cacheline boundary */
+    uint8   mergeFlagLut[16];          /* A LUT of flags for fx_merge. */
+    uint16  vStatusReg;                /* Status register */
+    uint16  vPrevScreenHeight;         /* Used to avoid recomputing screen pointers unnecessarily */
+    uint8   vRomBankReg;               /* Rom bank index register */
+    uint8   vRamBankReg;               /* Ram bank index register */
+    uint8   armFlags;                  /* ARM-optimized status register. */
+    uint8   pvDreg;                    /* Index of current destination register */
+    uint8   pvSreg;                    /* Index of current source register */
+    uint8   vPipe;                     /* Instructionset pipe */
+    uint8   vMode;                     /* Color depth/mode */
+    uint8   vPrevMode;                 /* Previous color depth */
+    uint8   nRamBanks;                 /* Number of 64kb-banks in FxRam (Don't confuse it with SNES-Ram!!!). Max 4.  */
+    uint8   nRomBanks;                 /* Number of 32kb-banks in Cart-ROM. Max 20. */
+    uint16  __pad1;
+    /* Cacheline boundary */
+    uint8 * apvScreen[32];             /* Pointer to each of the 32 screen colums */
     int     x[32];
-    uint32  vScreenHeight;      /* 128, 160, 192 or 256 (could be overriden by cmode) */
-    uint32  vScreenRealHeight;  /* 128, 160, 192 or 256 */
-    uint32  vPrevScreenHeight;
-    uint32  vScreenSize;
-    
-    uint8 * pvRamBank;          /* Pointer to current RAM-bank */
-    uint8 * pvRomBank;          /* Pointer to current ROM-bank */
-    uint8 * pvPrgBank;          /* Pointer to current program ROM-bank */
-
     uint8 * apvRamBank[FX_RAM_BANKS];  /* Ram bank table (max 256kb) */
-    uint8 * apvRomBank[256];    /* Rom bank table */
+    uint8 * apvRomBank[256];           /* Rom bank table */
 
-    uint8   bCacheActive;
-    uint8 * pvCache;            /* Pointer to the GSU cache */
-    uint8   avCacheBackup[512]; /* Backup of ROM when the cache has replaced it */
-    uint32  vCounter;
-    uint32  vInstCount;
-    uint32  vSCBRDirty;         /* if SCBR is written, our cached screen pointers need updating */
+    /* Rarely-used values. Keep these separate to improve cache locality in hot code. */
+    uint8 * pvScreenBase;              /* Pointer to base of screen memory. Hot code uses apvScreen instead. */
+    uint8 * pvRom;                     /* Pointer to Cart-ROM */
+    uint8 * pvRam;                     /* Pointer to FxRam */
+    uint8 * pvRegisters;               /* 768 bytes located in the memory at address 0x3000 */
+    /* Cacheline boundary */
+    uint32  vCacheFlags;               /* Represents which parts of the cache was written to. One bit, any position. Used only by fx_cache. */
 };
 
 /* GSU registers */
@@ -283,11 +274,7 @@ struct FxRegs_s
 #define PRGBANK(idx) GSU.pvPrgBank[USEX16(idx)]
 
 /* Update pipe from ROM */
-#if 0
-#define FETCHPIPE { PIPE = PRGBANK(R15); GSU.vPipeAdr = (GSU.vPrgBankReg<<16) + R15; }
-#else
 #define FETCHPIPE { PIPE = PRGBANK(R15); }
-#endif
 
 /* ABS */
 #define ABS(x) ((x)<0?-(x):(x))
@@ -318,7 +305,8 @@ struct FxRegs_s
 #define READR14 GSU.vRomBuffer = ROM(R14)
 
 /* Test and/or read R14 */
-#define TESTR14 if(DREG_PTR == 14) READR14
+/* Usually an order of magnitude more likely to not be taken! */
+#define TESTR14 if(UNLIKELY(DREG_PTR == 14)) READR14
 
 #endif
 
@@ -353,22 +341,25 @@ struct FxRegs_s
 #define CFGR USEX8(GSU.pvRegisters[GSU_CFGR])
 #define CLSR USEX8(GSU.pvRegisters[GSU_CLSR])
 
-#define FX_FUNCTION_RUN 0
-#define FX_FUNCTION_RUN_TO_BREAKPOINT 1
-#define FX_FUNCTION_STEP_OVER 2
+/* Plot Option Register (POR) bits. GSU.vPlotOptionReg. */
+#define PLOT_TRANSPARENT (1U << 0) /* 0x01. If clear, transparent colors will not be drawn. */
+#define PLOT_DITHER      (1U << 1) /* 0x02. If set, draws pixels with a dither pattern, alternating between the top and bottom nibbles of COLOR */
+#define PLOT_HIGHNIBBLE  (1U << 2) /* 0x04. If set, COLR and GETC will replace the color's low nibble with its high nibble */
+#define PLOT_FREEZEHIGH  (1U << 3) /* 0x08. If set, COLR and GETC will only modify the low nibble */
+#define PLOT_OBJECT      (1U << 4) /* 0x10.  */
 
-/* Number of opcode tables */
-#define FX_OPCODE_TABLE_NUM_MODES 4
-#define FX_OPCODE_TABLE_PAGE_SIZE 0x100
-#define FX_OPCODE_TABLE_SIZE (FX_OPCODE_TABLE_NUM_MODES * FX_OPCODE_TABLE_PAGE_SIZE)
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
-extern uint32 (**fx_ppfFunctionTable)(uint32);
-extern void (*fx_ppfOpcodeTable[FX_OPCODE_TABLE_SIZE])();
+void fx_run(uint32 nInstructions);
+void fx_run_asm(uint32 nInstructions);
+void fx_run_asm_speedhack(void);
 
-extern uint32 (*fx_apfFunctionTable[])(uint32);
-extern uint32 (*fx_a_apfFunctionTable[])(uint32);
-extern uint32 (*fx_r_apfFunctionTable[])(uint32);
-extern uint32 (*fx_ar_apfFunctionTable[])(uint32);
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 /* Set this define if branches are relative to the instruction in the delay slot */
 /* (I think they are) */

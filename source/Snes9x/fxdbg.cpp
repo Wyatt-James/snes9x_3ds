@@ -8,6 +8,7 @@
 
 extern const char *fx_apvMnemonicTable[];
 extern struct FxRegs_s GSU;
+static uint32 vPipeAdr;
 
 
 /*
@@ -40,11 +41,11 @@ void FxPipeString(char * pvString)
     uint32 vOpcode = (GSU.vStatusReg & 0x300) | ((uint32)PIPE);
     const char *m = fx_apvMnemonicTable[vOpcode];
     uint8 vPipe1,vPipe2,vByte1,vByte2;
-    uint8 vPipeBank = GSU.vPipeAdr >> 16;
+    uint8 vPipeBank = vPipeAdr >> 16;
 	
     /* The next two bytes after the pipe's address */
-    vPipe1 = GSU.apvRomBank[vPipeBank][USEX16(GSU.vPipeAdr+1)];
-    vPipe2 = GSU.apvRomBank[vPipeBank][USEX16(GSU.vPipeAdr+2)];
+    vPipe1 = GSU.apvRomBank[vPipeBank][USEX16(vPipeAdr+1)];
+    vPipe2 = GSU.apvRomBank[vPipeBank][USEX16(vPipeAdr+2)];
     
     /* The actual next two bytes to be read */
     vByte1 = PRGBANK(USEX16(R15));
@@ -52,7 +53,7 @@ void FxPipeString(char * pvString)
 
     /* Print ROM address of the pipe */
     sprintf(pvString, "%02x:%04x %02x       ",
-	    USEX8(vPipeBank), USEX16(GSU.vPipeAdr), USEX8(PIPE));
+	    USEX8(vPipeBank), USEX16(vPipeAdr), USEX8(PIPE));
     p = &pvString[strlen(pvString)];
  
     /* Check if it's a branch instruction */
