@@ -320,7 +320,7 @@ static inline void fx_bvs(uint8 unused) { BRA_COND( "vs", "vc" ); }
 /* 10-1f(B) - move rn - move one register to another (if B flag is set) */
 static inline void fx_to_r(uint8 reg) {
     ASSUME_REG(0, 13);
-    if(TF(B)) // WYATT_TODO check probability
+    if(TF(B))
     {
         GSU.avReg[reg] = SREG;
         CLRFLAGS;
@@ -336,7 +336,7 @@ static inline void fx_to_r(uint8 reg) {
 /* TO_R14: set register 14 as destination register */
 /* If B flag is set, move SREG to R14 and READR14 instead */
 static inline void fx_to_r14(uint8 unused) {
-    if(TF(B)) { // WYATT_TODO check probability
+    if(TF(B)) {
         R14 = SREG;
         CLRFLAGS;
         READR14;
@@ -351,7 +351,7 @@ static inline void fx_to_r14(uint8 unused) {
 /* TO_R15: Set register 15 as destination register and increment */
 /* If B flag is set, move SREG to R15 instead */
 static inline void fx_to_r15(uint8 unused) {
-    if(TF(B)) { // WYATT_TODO check probability
+    if(TF(B)) {
         R15 = SREG;
         CLRFLAGS;
     }
@@ -506,7 +506,7 @@ static inline void fx_plot_2bit(uint8 unused)
         return;
 
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    uint32 v = 128 >> (x&7); // WYATT_TODO should be 128U
+    uint32 v = 128U >> (x&7);
 
     if(c & 0x01) a[0] |= v;
     else         a[0] &= ~v;
@@ -516,7 +516,6 @@ static inline void fx_plot_2bit(uint8 unused)
     DEFEAT_TAIL_MERGE;
 }
 
-// WYATT_TODO(1 << shift) should be an immediate instead
 #define TESTBIT(offset_, shift_)   \
 asm (                              \
     "tst %1, %2\n\t"               \
@@ -582,7 +581,7 @@ static inline void fx_plot_4bit(uint8 unused)
         return;
 
     a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
-    uint32 v = 128 >> (x&7); // WYATT_TODO should be 128U
+    uint32 v = 128U >> (x&7);
 
     if(c & 0x01) a[0x00] |= v;
     else         a[0x00] &= ~v;
@@ -1202,8 +1201,9 @@ static inline void fx_umult_i(uint8 imm) {
 static inline void fx_sbk(uint8 unused)
 {
     uint16 sReg = SREG;
-    RAM(GSU.vLastRamAdr) = (uint8)sReg; // WYATT_TODO Aliasing issue causes double load for RAM base ptr and vLastRamAdr
-    RAM(GSU.vLastRamAdr^1) = (uint8)(sReg>>8);
+    uint16 lastAdr = GSU.vLastRamAdr;
+    RAM(lastAdr) = (uint8)sReg;
+    RAM(lastAdr^1) = (uint8)(sReg>>8);
     CLRFLAGS;
     R15++;
     
@@ -1405,7 +1405,7 @@ static inline void fx_ibt_r(uint8 reg) {
     ASSUME_REG(0, 15);
     uint8 v = PIPE;
     R15++;
-    FETCHPIPE; // WYATT_TODO Double store
+    FETCHPIPE;
     R15++;
     GSU.avReg[reg] = SEX8(v);
     CLRFLAGS;
@@ -1446,11 +1446,11 @@ static inline void fx_lms_r14(uint8 unused) {
 static inline void fx_sms_r(uint8 reg) {
     ASSUME_REG(0, 15);
     uint16 v = GSU.avReg[reg];
-    GSU.vLastRamAdr = PIPE << 1;
+    uint16 lastRamAdr = GSU.vLastRamAdr = PIPE << 1;
     R15++;
     FETCHPIPE;
-    RAM(GSU.vLastRamAdr) = (uint8)v;
-    RAM(GSU.vLastRamAdr+1) = (uint8)(v>>8); // WYATT_TODO double-loads and stores EVERYWHERE.
+    RAM(lastRamAdr) = (uint8)v;
+    RAM(lastRamAdr+1) = (uint8)(v>>8);
     CLRFLAGS;
     R15++;
     
@@ -1461,7 +1461,7 @@ static inline void fx_sms_r(uint8 reg) {
 /* b0-bf(B) - moves rn - move register to register, and set flags, (if B flag is set) */
 static inline void fx_from_r(uint8 reg) {
     ASSUME_REG(0, 15);
-    if(TF(B)) { // WYATT_TODO mark as unlikely
+    if(UNLIKELY(TF(B))) {
         uint32 tmp, v = GSU.avReg[reg];
         ARMFLAGS &= ~(ARM_NEGATIVE | ARM_ZERO | ARM_OVERFLOW);
         asm (
@@ -1884,11 +1884,6 @@ void fx_run(uint32 nInstructions)
     opcode_goto_table[0x04c] = opcode_goto_table[0x24c] = plot_rpix_handler_table[vMode][0],
     opcode_goto_table[0x14c] = opcode_goto_table[0x34c] = plot_rpix_handler_table[vMode][1];
 
-    // WYATT_TODO we could reintroduce the while(1) loop in another
-    // translation unit to speed up star fox. In d3c1796, I found
-    // that it dropped star fox's control select screen from
-    // ~5.15ms to ~4.9ms. For an area without much GSU action,
-    // that's pretty good.
     uint32 vCounter = nInstructions;
     READR14;
     while(LIKELY(vCounter-- > 0))
