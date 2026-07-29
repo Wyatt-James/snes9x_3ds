@@ -10,9 +10,12 @@
  * but I'm not sure that this is possible.
  */
 
+/*
+ *  IF YOU MODIFY THIS, YOU MUST ALSO MODIFY THE CONSTANT IN FXINST_ASM.S ACCORDINGLY
+ */
 
 SECTIONS
 {
-  .gsu_segment 0x004FFFE0  : {KEEP(*(.bss))}
+  .gsu_segment 0x009FFFE0  : {KEEP(*(.bss))}
 }
 

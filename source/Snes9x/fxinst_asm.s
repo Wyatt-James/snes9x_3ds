@@ -18,7 +18,8 @@
 #define rPRG   ip
 
 @ Constants for a wacky linker optimization. See link.ld for more info.
-#define R14_PTR #0x00500000
+@ THIS MUST BE KEPT UP-TO-DATE WITH THE CONSTANT IN LINK.LD
+#define R14_PTR #0x00A00000
 
 @ R0 contains vLow
 @ R1 contains the dispatch branch destination after interpreter

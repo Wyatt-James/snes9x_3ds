@@ -3,7 +3,7 @@
 // Uncomment this to convert before releasing this to remove
 // all the debugging stuff.
 //
-// #define RELEASE
+#define RELEASE
 
 // This prevents these flags from accidentally leaking into release builds.
 #ifndef RELEASE
