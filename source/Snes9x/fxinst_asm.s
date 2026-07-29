@@ -57,7 +57,7 @@ fx_run_asm:
         push    {r0, rGSU, rVCNT, rSTAT, rARM, rSREG, rDREG, rPIPE, rGOTO, lr}
         ldr     rGSU, .L242                              @ Load GSU pointer
 #ifdef SPEEDHACK_DISABLED
-        mov     rVCNT, vLow                              @ Decrement vCounter by 1, move to correct variable
+        mov     rVCNT, r0                                @ Decrement vCounter by 1, move to correct variable
 #endif
         ldrb    rR15, [rGSU, #FX_vMode]                  @ Load GSU.vMode
         ldr     rGOTO, .L242+4                           @ Load GOTO table
