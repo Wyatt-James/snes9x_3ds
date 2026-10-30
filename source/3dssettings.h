@@ -35,12 +35,12 @@
 #define HOTKEY_FAST_FORWARD_HOLD    8
 #define HOTKEYS_COUNT   9
 
-#define OPACITY_STEPS               20
+#define OPACITY_STEPS               17
 #define SCANLINE_INTENSITY_MAX      8   // 47% brightness
 
 #define MENU_ENTRY_CONTEXT_MENU     -2
 #define MENU_CONTINUE_GAME          -3
-#define MENU_SUBPAGE_ITEM_INFO      -4
+#define MENU_ENTRY_ITEM_INFO        -4
 #define MENU_ENTER_SUBPAGE          -100
 
 namespace Setting {
@@ -60,10 +60,14 @@ namespace Setting {
     };
 
     enum class ThumbnailMode {
+        // Values are stored in the config; append only.
         None,
-        Boxart,
+        BoxartPAL,     // the former single "boxart" type
         Title,
         Gameplay,
+        BoxartUS,
+        BoxartJapan,
+        Count
     };
 
     enum class AssetMode {
@@ -82,7 +86,6 @@ namespace Setting {
     enum class Font {
         Tempesta,
         Ronda,
-        Arial,
     };
 
     enum class Framerate {
@@ -166,7 +169,7 @@ typedef struct {
     bool                GameOverlayAutoFit;
     int                 ScanlineIntensity;      // 0 - Off, 1..SCANLINE_INTENSITY_MAX - dark-row alpha
     Setting::AssetMode  GameScreenBg;
-    int                 GameScreenBgOpacity;    // 20 - Maxium opacity
+    int                 GameScreenBgOpacity;    // OPACITY_STEPS = maximum opacity
     Setting::AssetMode  SecondScreenBg;
     int                 SecondScreenBgOpacity;
 
@@ -216,7 +219,7 @@ typedef struct {
     int                 AudioBuffer;            // wavebuf depth: 0=Low(4), 1=Normal(8), 2=High(16)
 
     bool                AutoSavestate;          // Automatically save the the current state when the emulator is closed or the game is changed
-    bool                SaveStateScreenshots;   // Opt-in: save a screenshot next to each savestate
+    bool                SaveStateScreenshots;   // Opt-in: store a thumbnail in each slot savestate
 
     int                 SRAMSaveInterval;       // SRAM Save Interval
                                                 //   1 - 1 second.
@@ -259,18 +262,11 @@ typedef struct {
     int                 StretchHeight;
     long                TicksPerFrame;
 
-    bool                TurboMode;             // Effective fast-forward state (toggle and/or hold hotkeys)
-
     bool                LayerEnabled[8];       // Debug: per-layer enable toggle, index = LAYER_ID
                                                // (BG0-3, OBJ, Backdrop, Color Math, Brightness).
                                                // All true by default.
 
-    bool                isNew3DS;
-    bool                isRomFsLoaded;
-    bool                isRomLoaded;
     bool                isDirty;               // needs saving to disk
-    bool                cheatsDirty;
-    bool                menuTabDirty[4];
 } S9xSettings3DS;
 
 extern S9xSettings3DS settings3DS;

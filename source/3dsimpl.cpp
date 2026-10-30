@@ -30,6 +30,7 @@
 #include "3dsui_img.h"
 #include "3dsinput.h"
 #include "3dsimpl.h"
+#include "3dssave.h"
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
 
@@ -38,93 +39,10 @@
 #include "shader_mode7_shbin.h"
 #include "shader_screen_shbin.h"
 
-bool slotHasSavestate[SAVESLOTS_MAX];
-
 S9xScreenshot screenshot = {0};
 bool skipNextFpsUpdate = false;
 
 extern SCheatData Cheat;
-
-static void impl3dsGetStateScreenshotDir(char* out, size_t bufferSize)
-{
-    char basename[NAME_MAX + 1];
-    utils3dsGetBasename(Memory.ROMFilename, basename, sizeof(basename), false);
-    snprintf(out, bufferSize, "%s/savestates/screenshots/%s", settings3DS.RootDir, basename);
-}
-
-static void impl3dsGetStateScreenshotPath(int slotNumber, char* out, size_t bufferSize)
-{
-    char dir[PATH_MAX];
-    impl3dsGetStateScreenshotDir(dir, sizeof(dir));
-    snprintf(out, bufferSize, "%s/%d.png", dir, slotNumber);
-}
-
-static bool impl3dsSlotHasSavestate(int slotNumber)
-{
-    char path[PATH_MAX], ext[16];
-    snprintf(ext, sizeof(ext), ".%d.frz", slotNumber);
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ext, "savestates");
-    return IsFileExists(path);
-}
-
-void impl3dsGetScreenshotPath(ScreenshotType type, int slotNumber, char* out, size_t bufferSize)
-{
-    if (type == SCREENSHOT_SAVESTATE) {
-        impl3dsGetStateScreenshotPath(slotNumber, out, bufferSize);
-        return;
-    }
-
-    time_t rawtime = time(NULL);
-    struct tm* t = localtime(&rawtime);
-    char suffix[64];
-    strftime(suffix, sizeof(suffix), ".%Y%m%d_%H%M%S.png", t);
-    file3dsGetRelatedPath(Memory.ROMFilename, out, bufferSize, suffix, "screenshots");
-}
-
-void impl3dsEnsureStateScreenshotDir()
-{
-    char dir[PATH_MAX];
-    impl3dsGetStateScreenshotDir(dir, sizeof(dir));
-    mkdir(dir, 0777);
-}
-
-void impl3dsDeleteStateScreenshots()
-{
-    char dir[PATH_MAX];
-    impl3dsGetStateScreenshotDir(dir, sizeof(dir));
-
-    DIR* d = opendir(dir);
-    if (d) {
-        struct dirent* entry;
-
-        while ((entry = readdir(d)) != NULL) {
-            if (entry->d_name[0] == '.')
-                continue;
-
-            char path[PATH_MAX];
-            size_t dirLen = strlen(dir);
-            size_t nameLen = strlen(entry->d_name);
-            if (dirLen + 1 + nameLen >= sizeof(path))
-                continue;
-
-            memcpy(path, dir, dirLen);
-            path[dirLen] = '/';
-            memcpy(path + dirLen + 1, entry->d_name, nameLen + 1);
-            remove(path);
-        }
-
-        closedir(d);
-        rmdir(dir);
-    }
-
-    img3dsInvalidateStateScreenshot();
-}
-
-static void impl3dsResetScreenshotTarget()
-{
-    screenshot.type = SCREENSHOT_DEFAULT;
-    screenshot.slot = 0;
-}
 
 typedef Result (*GSP_CacheCallback)(const void* addr, u32 size);
 
@@ -188,16 +106,16 @@ bool impl3dsInitialize()
 		SGPUTexture *texture = &GPU3DS.textures[id];
 
 		if (!gpu3dsAllocVramTextureAndTarget(&GPU3DS.textures[id], &vramTexConfig[i])) {
-        	log3dsWrite("Unable to allocate vram texture %s", utils3dsTextureIDToString(id));
+        	log3dsWrite("Unable to allocate vram texture %s", gpu3dsTextureIDToString(id));
 
         	return false;
 		}
 
 		log3dsWrite("ingame vram texture \"%s\" dim: %dx%d, size:%.2fkb, format: %s",
-			utils3dsTextureIDToString(texture->id),
+			gpu3dsTextureIDToString(texture->id),
 			texture->tex.width, texture->tex.height,
 			(float)texture->tex.size / 1024,
-			utils3dsTexColorToString(texture->tex.fmt)
+			gpu3dsTexColorToString(texture->tex.fmt)
 		);
 	}
 
@@ -219,16 +137,16 @@ bool impl3dsInitialize()
 		SGPUTexture *texture = &GPU3DS.textures[id];
 
 		if (!gpu3dsAllocLinearTexture(&GPU3DS.textures[id], &lramTexConfig[i])) {
-        	log3dsWrite("Unable to allocate linear ram texture %s", utils3dsTextureIDToString(id));
+        	log3dsWrite("Unable to allocate linear ram texture %s", gpu3dsTextureIDToString(id));
 
         	return false;
 		}
 
 		log3dsWrite("ingame linear ram texture \"%s\" dim: %dx%d, size:%.2fkb, format: %s",
-			utils3dsTextureIDToString(texture->id),
+			gpu3dsTextureIDToString(texture->id),
 			texture->tex.width, texture->tex.height,
 			(float)texture->tex.size / 1024,
-			utils3dsTexColorToString(texture->tex.fmt)
+			gpu3dsTexColorToString(texture->tex.fmt)
 		);
 	}
 
@@ -282,7 +200,7 @@ bool impl3dsInitialize()
 			}
 			
 			log3dsWrite("[%s] size: %.2fkb, vertex size: %dbytes, stride: %d, total attributes: %d",
-				utils3dsVboIDToString(id),
+				gpu3dsVboIDToString(id),
 				(float)listInfos[i].sizeInBytes / 1024,
 				listInfos[i].vertexSize,
 				stride,
@@ -465,9 +383,9 @@ void impl3dsUpdateUiAssets() {
         int settingValue;
         const char* folderName;
     } assets[] = {
-        { UI_OVERLAY,   static_cast<int>(settings3DS.GameOverlay),      "overlays" },
-        { UI_BG_GAME,   static_cast<int>(settings3DS.GameScreenBg),     "backgrounds/game_screen" },
-        { UI_BG_SECOND, static_cast<int>(settings3DS.SecondScreenBg),   "backgrounds/second_screen"  }
+        { UI_OVERLAY,   static_cast<int>(settings3DS.GameOverlay),      OVERLAYS_DIR },
+        { UI_BG_GAME,   static_cast<int>(settings3DS.GameScreenBg),     GAME_SCREEN_BG_DIR },
+        { UI_BG_SECOND, static_cast<int>(settings3DS.SecondScreenBg),   SECOND_SCREEN_BG_DIR }
     };
 
     char fileName[PATH_MAX];
@@ -479,14 +397,49 @@ void impl3dsUpdateUiAssets() {
         if (mode == Setting::AssetMode::Adaptive || mode == Setting::AssetMode::CustomOnly) {
             file3dsGetRelatedPath(Memory.ROMFilename, fileName, sizeof(fileName), ".png", asset.folderName, true);    
 			
-			// load custom asset
-            externalAssetActive = img3dsLoadAsset(asset.id, fileName);
+            if (file3dsGetFileInfo(fileName).exists)
+                externalAssetActive = img3dsLoadAsset(asset.id, fileName);
         }
 
         if (!externalAssetActive) {
             // load default asset
             img3dsLoadAsset(asset.id);
         }
+    }
+}
+
+void impl3dsLoadCheats()
+{
+    char path[PATH_MAX];
+    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".chx", CHEATS_DIR, true);
+    if (file3dsGetFileInfo(path).exists)
+        S9xLoadCheatTextFile(path);
+    S9xInitCheatData();
+    S9xApplyCheats();
+}
+
+void impl3dsReloadCheats()
+{
+    if (!session3DS.isRomLoaded)
+        return;
+
+    S9xRemoveCheats();
+    impl3dsLoadCheats();
+    session3DS.cheatsDirty = false;
+}
+
+static void impl3dsCacheRomAssetInfo(const char *romFilePath)
+{
+    static const struct { const char *ext; const char *folderName; } assets[] = {
+        { ".png", GAME_SCREEN_BG_DIR },
+        { ".png", SECOND_SCREEN_BG_DIR },
+        { ".chx", CHEATS_DIR },
+    };
+
+    char path[PATH_MAX];
+    for (const auto& asset : assets) {
+        file3dsGetRelatedPath(romFilePath, path, sizeof(path), asset.ext, asset.folderName, true);
+        file3dsGetFileInfo(path);
     }
 }
 
@@ -499,13 +452,14 @@ bool impl3dsLoadROM(char *romFilePath)
     ra3dsUnloadGame();
     ra3dsCloseBadgeCache(); // drop the previous game's badge cache handle
 
+    impl3dsCacheRomAssetInfo(romFilePath);
     bool loaded = Memory.LoadROM(romFilePath);
 
     if(loaded) {
         log3dsWrite("ROM loaded: %s", romFilePath);
 
         char path[PATH_MAX];
-        file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
+        sav3dsGetSRAMPath(path, sizeof(path));
 
         if (path[0] != '\0') {
             Memory.LoadSRAM (path);
@@ -532,99 +486,6 @@ void impl3dsResetConsole()
 	ra3dsReset();
 	gpu3dsInitializeMode7Vertexes();
 	snd3dsResumeMixing();
-}
-
-// Based on broken savestate samples: 
-// SPC left IPL, DSP still in reset shape, 
-// no keyed channels -> loads with broken audio.
-bool impl3dsHasBrokenAudioStateSignature()
-{
-    if (APU.ShowROM)
-        return false;
-
-    if (APU.DSP[APU_FLG] != (APU_MUTE | APU_ECHO_DISABLED))
-        return false;
-
-    if (APU.KeyedChannels != 0)
-        return false;
-
-    for (int i = 0; i < 0x80; i++) {
-        if (i == APU_FLG)
-            continue;
-        if (APU.DSP[i] != 0) return false;
-    }
-
-    return true;
-}
-
-// Logs APU/CPU state when a save or load hits the broken-audio signature.
-// `tag` is the call site, e.g. "save-menu slot=3" or "load-auto".
-void impl3dsLogBrokenAudioSignatureContext(const char *tag, const char *savestatePath)
-{
-	if (!savestatePath || savestatePath[0] == '\0') {
-		return;
-	}
-
-	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s.broken-audio.log", savestatePath);
-
-	FILE *fp = file3dsOpen(path, "a");
-	if (!fp) {
-		log3dsWrite("[APU-WARN %s] failed to open file: %s", tag, path);
-		return;
-	}
-
-	int nonZeroDspCount = 0;
-	for (int i = 0; i < 0x80; i++) {
-		if (APU.DSP[i] != 0) {
-			nonZeroDspCount++;
-		}
-	}
-
-	fprintf(fp, "[APU-WARN %s] state matches broken-audio signature\n", tag);
-	fprintf(fp, "  APU: PC=%04X Cycles=%ld KeyedChannels=%02X ShowROM=%d\n",
-	        (unsigned)(IAPU.PC - IAPU.RAM),
-	        (long)APU.Cycles,
-	        (unsigned)APU.KeyedChannels,
-	        (int)APU.ShowROM);
-	fprintf(fp, "  DSP[FLG]=%02X DSP[KON]=%02X DSP[KOFF]=%02X DSP[ENDX]=%02X\n",
-	        (unsigned)APU.DSP[APU_FLG],
-	        (unsigned)APU.DSP[APU_KON],
-	        (unsigned)APU.DSP[APU_KOFF],
-	        (unsigned)APU.DSP[APU_ENDX]);
-	fprintf(fp, "  DSP[EON]=%02X DSP[NON]=%02X DSP[PMON]=%02X NonZeroDSP=%d\n",
-	        (unsigned)APU.DSP[APU_EON],
-	        (unsigned)APU.DSP[APU_NON],
-	        (unsigned)APU.DSP[APU_PMON],
-	        nonZeroDspCount);
-	fprintf(fp, "  SPC RAM[$F0..F3]=%02X %02X %02X %02X\n",
-	        (unsigned)IAPU.RAM[0xF0], (unsigned)IAPU.RAM[0xF1],
-	        (unsigned)IAPU.RAM[0xF2], (unsigned)IAPU.RAM[0xF3]);
-	fprintf(fp, "  $2140..$2143=%02X %02X %02X %02X\n",
-	        (unsigned)Memory.FillRAM[0x2140], (unsigned)Memory.FillRAM[0x2141],
-	        (unsigned)Memory.FillRAM[0x2142], (unsigned)Memory.FillRAM[0x2143]);
-	fprintf(fp, "\n");
-	file3dsClose(fp);
-}
-
-static void impl3dsReportBrokenAudioQuick(bool saveMode, int slot)
-{
-	char tag[32];
-	char path[PATH_MAX], ext[16];
-
-	snprintf(tag, sizeof(tag), "%s-hotkey slot=%d", saveMode ? "save" : "load", slot);
-	snprintf(ext, sizeof(ext), ".%d.frz", slot);
-	file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ext, "savestates");
-	impl3dsLogBrokenAudioSignatureContext(tag, path);
-
-	if (saveMode) {
-		char message[128];
-		snprintf(message, sizeof(message), "Unable to save into Slot #%d! Possible SPC audio issue detected. Try again", slot);
-		notif3dsTrigger(Notif::Misc, Notif::Type::Error,
-		                NOTIF_DEFAULT_DURATION, message);
-	} else {
-		notif3dsTrigger(Notif::BrokenAudioLoad, Notif::Type::Warning);
-	}
 }
 
 // applies the provided cache operation (flush or invalidate) to the correct memory.
@@ -724,7 +585,8 @@ bool impl3dsPauseAnimationRunning() {
 }
 
 static void impl3dsSceneRenderEye(bool firstFrame, bool paused, float pauseProgress, SVertexList *list,
-	const GameScreenViewport &gameScreenViewport, bool drawBackground, bool balancedFilterEnabled, float xOffset) {
+	const GameScreenViewport &gameScreenViewport, bool drawBackground, bool balancedFilterEnabled, float xOffset,
+	bool drawOverlays = true) {
 
 	gpu3dsSetDefaultRenderState(SPROGRAM_SCREEN, false);
 
@@ -773,7 +635,7 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, float pauseProgr
 		gpu3dsDraw(list, NULL, list->count);
 	}
 
-	if (!screenshot.dirty) {
+	if (drawOverlays) {
 		img3dsDrawScanlines(
 			gameScreenViewport.sx0, gameScreenViewport.sy0,
 			gameScreenViewport.sx1, gameScreenViewport.sy1,
@@ -782,14 +644,7 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, float pauseProgr
 		img3dsDrawGameOverlay(UI_OVERLAY, gameScreenViewport.sWidth, gameScreenViewport.cHeight);
 
 		if (paused) {
-			// dim overlay
-			u32 dimAlpha = (u32)(0xAA * pauseProgress + 0.5f);
-			gpu3dsAddQuadRect(0, 0, settings3DS.GameScreenWidth, SCREEN_HEIGHT, 0, 0, 0, dimAlpha);
-			GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_COLOR;
-			GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_ENABLED;
-			gpu3dsDraw(list, NULL, list->count);
-
-			img3dsDrawPause(UI_PAUSE, xOffset, pauseProgress, PAUSE_ANIMATION_Y_OFFSET * (1.0f - pauseProgress));
+			img3dsDrawPause(UI_PAUSE, pauseProgress, PAUSE_ANIMATION_Y_OFFSET * (1.0f - pauseProgress));
 		}
 
 		notif3dsDraw(UI_NOTIF_MSG);
@@ -799,17 +654,18 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, float pauseProgr
 	}
 }
 
-void impl3dsSceneRender(bool firstFrame, bool paused) {
+void impl3dsSceneRender(bool firstFrame, bool paused, const ScreenshotRegion* screenshotRegion) {
 	SVertexList *list = &GPU3DS.vertices[VBO_SCREEN];
     GameScreenViewport gameScreenViewport = {0};
-	float pauseProgress = impl3dsGetPauseAnimationProgress(paused);
+	// A screenshot render must not reset the menu's pause animation.
+	float pauseProgress = screenshotRegion ? 1.0f : impl3dsGetPauseAnimationProgress(paused);
 
-    if (screenshot.dirty) {
-		gameScreenViewport.sWidth = screenshot.width;
-		gameScreenViewport.sHeight = screenshot.height;
-		gameScreenViewport.cHeight = screenshot.height;
-		gameScreenViewport.sx0 = screenshot.x;
-	 	gameScreenViewport.sy0 = screenshot.y;
+    if (screenshotRegion) {
+		gameScreenViewport.sWidth = screenshotRegion->width;
+		gameScreenViewport.sHeight = screenshotRegion->height;
+		gameScreenViewport.cHeight = screenshotRegion->height;
+		gameScreenViewport.sx0 = screenshotRegion->x;
+		gameScreenViewport.sy0 = screenshotRegion->y;
         gameScreenViewport.sx1 = gameScreenViewport.sx0 + gameScreenViewport.sWidth;
         gameScreenViewport.sy1 = gameScreenViewport.sy0 + gameScreenViewport.cHeight;
         gameScreenViewport.tx0 = 0.0f;
@@ -818,7 +674,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
         gameScreenViewport.ty1 = static_cast<float>(PPU.ScreenHeight);
 
         GPU3DS.activeSide = GFX_LEFT;
-        impl3dsSceneRenderEye(firstFrame, paused, pauseProgress, list, gameScreenViewport, false, false, 0.0f);
+        impl3dsSceneRenderEye(firstFrame, paused, pauseProgress, list, gameScreenViewport, false, false, 0.0f, false);
 		
         return;
     }
@@ -886,7 +742,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	bool renderRightEye = iod != 0.0f;
 
 	bool balancedFilterEnabled =
-		settings3DS.ScreenFilter == Setting::ScreenFilter::Balanced && !screenshot.dirty &&
+		settings3DS.ScreenFilter == Setting::ScreenFilter::Balanced &&
 		(settings3DS.ScreenStretch != Setting::ScreenStretch::None || settings3DS.Overscan);
 
 	if (drawBackground) {
@@ -910,6 +766,8 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 // Executes one frame.
 //---------------------------------------------------------
 
+#define SD_WRITE_FAIL_NOTIF_LIMIT 3
+
 // Whether the previous iteration emulated a frame that still needs drawing.
 static bool pendingSnesDraw = false;
 
@@ -918,11 +776,22 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	if (firstFrame)
 		pendingSnesDraw = false;
 
+	sav3dsProcessSaveCompletion(false);
+
+	if (session3DS.sdWriteFailPending &&
+		session3DS.sdWriteFailNotifCount < SD_WRITE_FAIL_NOTIF_LIMIT) {
+		session3DS.sdWriteFailPending = false;
+		session3DS.sdWriteFailNotifCount++;
+		notif3dsTrigger(Notif::Misc, Notif::Type::Error, 3000, "Writing to SD card failed!");
+	}
+
 	notif3dsTick();
 	notif3dsSync();
 
 	// Draw the previous frame before resetting its layer list and PPU.
-	gpu3dsFrameBegin(screenshot.dirty ? C3D_FRAME_SYNCDRAW : 0, pendingSnesDraw);
+	const ScreenshotRegion* screenshotRegion = screenshot.pending ? &screenshot.region : nullptr;
+	GPU3DS.screenshotScale = screenshotRegion ? screenshotRegion->scale : 0.0f;
+	gpu3dsFrameBegin(screenshotRegion ? C3D_FRAME_SYNCDRAW : 0, pendingSnesDraw);
 		if (pendingSnesDraw) {
 			t3dsStartTimer(TIMER_DRAW_SNES_SCREEN);
     		gpu3dsDrawSnesScreen();
@@ -931,28 +800,18 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 
 		if (firstFrame || pendingSnesDraw) {
 			t3dsStartTimer(TIMER_DRAW_SCENE);
-    		impl3dsSceneRender(firstFrame);
+			impl3dsSceneRender(firstFrame, false, screenshotRegion);
 			t3dsStopTimer(TIMER_DRAW_SCENE);
 		}
 	gpu3dsFrameEnd();
+	GPU3DS.screenshotScale = 0.0f;
 
 	// Keep the CPU-heavy achievement check after GPU submission.
 	ra3dsDoFrame();
 
 	// Screenshots require a queued display transfer.
-	if (screenshot.dirty && pendingSnesDraw) {
-		char path[PATH_MAX];
-
-		bool success = impl3dsTakeScreenshot(path, sizeof(path), false);
-
-		if (screenshot.type != SCREENSHOT_SAVESTATE) {
-			if (success) {
-				notif3dsTrigger(Notif::Screenshot, Notif::Type::Success);
-			} else {
-				notif3dsTrigger(Notif::Misc, Notif::Type::Error, NOTIF_DEFAULT_DURATION, "Failed to save screenshot!");
-			}
-		}
-	}
+	if (screenshot.pending && pendingSnesDraw)
+		sav3dsTakeScreenshot();
 
 	if (firstFrame)
 		Memory.ApplySpeedHackPatches();
@@ -975,197 +834,22 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 }
 
 
-//---------------------------------------------------------
-// This is called when the user chooses to save the state.
-// This function should save the state into a file whose
-// name contains the slot number. This will return
-// true if the state is saved successfully.
-//---------------------------------------------------------
-bool impl3dsSaveStateSlot(int slotNumber)
-{
-    char path[PATH_MAX], ext[16];
-    snprintf(ext, sizeof(ext), ".%d.frz", slotNumber);
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ext, "savestates");
-
-    if (impl3dsSaveState(path)) {
-        log3dsWrite("saving to slot %d succeeded", slotNumber);
-
-        impl3dsUpdateSlotState(slotNumber);
-        return true;
-    }
-    
-    log3dsWrite("saving to slot %d failed", slotNumber);
-    return false;
-}
-
-bool impl3dsSaveStateAuto()
-{
-    if (!settings3DS.isRomLoaded || !settings3DS.AutoSavestate) 
-        return true;
-
-    char path[PATH_MAX];
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".auto.frz", "savestates");
-
-    // Do not override previous .auto.frz here
-    if (impl3dsHasBrokenAudioStateSignature()) {
-        impl3dsLogBrokenAudioSignatureContext("save-auto", path);
-        return true;
-    }
-	
-    return impl3dsSaveState(path);
-}
-
-bool impl3dsSaveState(const char* filename)
-{
-    if (filename == nullptr || filename[0] == '\0') {
-        return false;
-    }
-
-	return Snapshot(filename);
-}
-
-//---------------------------------------------------------
-// This is called when the user chooses to load the state.
-// This function should save the state into a file whose
-// name contains the slot number. This will return
-// true if the state is loaded successfully.
-//---------------------------------------------------------
-bool impl3dsLoadStateSlot(int slotNumber)
-{
-    char path[PATH_MAX], ext[16];
-    snprintf(ext, sizeof(ext), ".%d.frz", slotNumber);
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ext, "savestates");
-
-    bool success = impl3dsLoadState(path);
-    
-    if (success) {
-        log3dsWrite("loading slot %d succeeded", slotNumber);
-    } else {
-        log3dsWrite("loading slot %d failed", slotNumber);
-    }
-    
-    return success;
-}
-
-bool impl3dsLoadStateAuto()
-{
-    char path[PATH_MAX];
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".auto.frz", "savestates");
-
-    bool success = impl3dsLoadState(path);
-    if (success && impl3dsHasBrokenAudioStateSignature()) {
-        impl3dsLogBrokenAudioSignatureContext("load-auto", path);
-        notif3dsTrigger(Notif::BrokenAudioLoad, Notif::Type::Warning);
-    }
-
-    return success;
-}
-
-bool impl3dsLoadState(const char* filename)
-{
-    if (filename == nullptr || filename[0] == '\0') {
-        return false;
-    }
-
-	bool success = S9xLoadSnapshot(filename);
-	if (success)
-	{
-		gpu3dsInitializeMode7Vertexes();
-	}
-	return success;
-}
-
-void impl3dsQuickSaveLoad(bool saveMode) {
-    // quick load during AutoSaveSRAM may cause data abort exception
-    // so we use snd3DS.generateSilence as flag here
-    if (snd3DS.generateSilence) return;
-
-    if (settings3DS.CurrentSaveSlot <= 0) {
-        settings3DS.CurrentSaveSlot = 1;
-    }
-
-    snd3dsDrainMixing();
-
-	if (saveMode && impl3dsHasBrokenAudioStateSignature()) {
-		impl3dsReportBrokenAudioQuick(true, settings3DS.CurrentSaveSlot);
-		snd3dsResumeMixing();
-		return;
-	}
-
-	// Saving can take a few seconds and freezes the main loop, so show its
-	// persistent in-progress notification in the last frame before starting it.
-	if (saveMode) {
-		notif3dsTriggerPersistent(Notif::SavingState, Notif::Type::Success);
-		notif3dsSync();
-		gpu3dsFrameBegin(0, true);
-		impl3dsSceneRender(true, false);
-		gpu3dsFrameEnd();
-	}
-
-    bool success = saveMode ? impl3dsSaveStateSlot(settings3DS.CurrentSaveSlot) : impl3dsLoadStateSlot(settings3DS.CurrentSaveSlot);
-
-	snd3dsResumeMixing();
-
-	if (saveMode && success && settings3DS.SaveStateScreenshots) {
-		char screenshotPath[PATH_MAX];
-		screenshot.type = SCREENSHOT_SAVESTATE;
-		screenshot.slot = settings3DS.CurrentSaveSlot;
-		impl3dsTakeScreenshot(screenshotPath, sizeof(screenshotPath), true);
-	}
-
-	// result notification last, so the save + screenshot time doesn't eat its duration
-	if (success) {
-		if (!saveMode && impl3dsHasBrokenAudioStateSignature()) {
-			impl3dsReportBrokenAudioQuick(false, settings3DS.CurrentSaveSlot);
-		} else {
-			Notif::Event event = saveMode ? Notif::SaveState : Notif::LoadState;
-			notif3dsTrigger(event, Notif::Type::Success);
-		}
-	} else {
-		char message[64];
-		const char* action = saveMode ? "save into" : "load from";
-
-		snprintf(message, sizeof(message), "Unable to %s Slot #%d!", action, settings3DS.CurrentSaveSlot);
-		notif3dsTrigger(Notif::Misc, Notif::Type::Error, NOTIF_DEFAULT_DURATION, message);
-	}
-
-    skipNextFpsUpdate = true;
-}
-
 void impl3dsSaveCheats()
 {
-    if (!settings3DS.cheatsDirty || !settings3DS.isRomLoaded || Cheat.num_cheats == 0) return;
+    if (!session3DS.cheatsDirty || !session3DS.isRomLoaded) return;
 
     char path[PATH_MAX];
-    
-    // try .chx first
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".chx", "cheats", true);
-    if (!S9xSaveCheatTextFile(path)) {
-        // fallback to .cht
-        file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".cht", "cheats", true);
-        S9xSaveCheatFile(path);
+    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".chx", CHEATS_DIR, true);
+
+    // Only deleting the last cheat leaves a dirty, empty list.
+    if (Cheat.num_cheats == 0) {
+        if (remove(path) == 0)
+            file3dsSetFileInfo(path, { false, 0 });
+    } else {
+        S9xSaveCheatTextFile(path);
     }
 
-    settings3DS.cheatsDirty = false;
-}
-
-bool impl3dsSlotHasState(int slotNumber) {
-	return slotHasSavestate[slotNumber - 1];
-}
-
-void impl3dsUpdateSlotState(int slotNumber) {
-    slotHasSavestate[slotNumber - 1] = impl3dsSlotHasSavestate(slotNumber);
-    menu3dsMarkTabDirty(TAB_EMULATOR);
-}
-
-void impl3dsSelectSaveSlot(int direction) {
-	if (direction == 1)
-		settings3DS.CurrentSaveSlot = settings3DS.CurrentSaveSlot % SAVESLOTS_MAX + 1;
-	else
-		settings3DS.CurrentSaveSlot = settings3DS.CurrentSaveSlot <= 1 ? SAVESLOTS_MAX : settings3DS.CurrentSaveSlot - 1;
-
-	menu3dsMarkTabDirty(TAB_EMULATOR);
-	notif3dsTrigger(Notif::SlotChanged, Notif::Type::Info);
+    session3DS.cheatsDirty = false;
 }
 
 void impl3dsSwapJoypads() {
@@ -1173,81 +857,94 @@ void impl3dsSwapJoypads() {
     notif3dsTrigger(Notif::ControllerSwapped, Notif::Type::Info);
 }
 
-void impl3dsPrepareScreenshot(float scale, bool centered) {
-	if (screenshot.dirty) return;
-
-	screenshot.dirty = true;
-	screenshot.scale = scale;
-	screenshot.width = SNES_WIDTH * scale;
-	screenshot.height = PPU.ScreenHeight * scale;
+static ScreenshotRegion impl3dsGetScreenshotRegion(float scale, bool centered) {
+	ScreenshotRegion screenshotRegion;
+	screenshotRegion.scale = scale;
+	screenshotRegion.width = SNES_WIDTH * scale;
+	screenshotRegion.height = PPU.ScreenHeight * scale;
 
 	if (centered) {
-        screenshot.x = (settings3DS.GameScreenWidth - screenshot.width) / 2;
-		screenshot.y = (SCREEN_HEIGHT - screenshot.height) / 2;
+        screenshotRegion.x = (settings3DS.GameScreenWidth - screenshotRegion.width) / 2;
+		screenshotRegion.y = (SCREEN_HEIGHT - screenshotRegion.height) / 2;
 	} else {
-        screenshot.x = settings3DS.GameScreenWidth - screenshot.width;
-		screenshot.y = SCREEN_HEIGHT - screenshot.height;
+        screenshotRegion.x = settings3DS.GameScreenWidth - screenshotRegion.width;
+		screenshotRegion.y = SCREEN_HEIGHT - screenshotRegion.height;
 	}
-
+	return screenshotRegion;
 }
 
-bool impl3dsTakeScreenshot(char *path, size_t bufferSize, bool renderFrame) {
-	if (snd3DS.generateSilence) {
-		// don't leave a savestate target sticky for the next (manual) screenshot
-		impl3dsResetScreenshotTarget();
-		return false;
-	}
+void impl3dsPrepareScreenshot(float scale, bool centered) {
+	if (screenshot.pending) return;
 
-	snd3dsDrainMixing();
+	screenshot.region = impl3dsGetScreenshotRegion(scale, centered);
+	screenshot.pending = true;
+}
 
-	// savestate screenshots are captured at half size (128x112 from 256x224)
-	bool isSavestate = screenshot.type == SCREENSHOT_SAVESTATE;
-
-	if (renderFrame) {
-		impl3dsPrepareScreenshot(isSavestate ? 0.5f : 1.0f);
-    	gpu3dsFrameBegin(0, true);
+// Selects the captured framebuffer for gfxGetFramebuffer.
+static void impl3dsReadBackScreenshotFrame(const ScreenshotRegion* screenshotRegion) {
+	if (screenshotRegion) {
+		GPU3DS.screenshotScale = screenshotRegion->scale;
+		gpu3dsFrameBegin(0, true);
 
 		if (settings3DS.Mode7BilinearFilter) {
 			gpu3dsDrawSnesScreen();
 		}
 
-    	impl3dsSceneRender(true, false);
+		impl3dsSceneRender(true, false, screenshotRegion);
 		gpu3dsFrameEnd();
+		GPU3DS.screenshotScale = 0.0f;
 	}
-
-	impl3dsGetScreenshotPath(screenshot.type, screenshot.slot, path, bufferSize);
 
     // Wait for the display transfer (PPF) event that C3D_FrameEnd queued.
     // Callers must ensure a frame was actually rendered before this point —
     // if no display transfer is pending, gspWaitForEvent will block forever.
-    gspWaitForEvent(GSPGPU_EVENT_PPF, GPU3DS.isReal3DS);
+    gspWaitForEvent(GSPGPU_EVENT_PPF, device3DS.isReal3DS);
 
     // Undo the buffer swap that C3D_FrameEnd performed internally
     // so gfxGetFramebuffer returns the buffer the GPU just wrote to.
     gfxScreenSwapBuffers(settings3DS.GameScreen, false);
 
-    bool isWide = gfxIsWide();
-    impl3dsInvalidateScreen(settings3DS.GameScreen, false, isWide);
+    impl3dsInvalidateScreen(settings3DS.GameScreen, false, gfxIsWide());
+}
 
-    bool success = img3dsSaveScreenRegion(path, screenshot.width, screenshot.height, screenshot.x, screenshot.y, settings3DS.GameScreen, isWide);
-	log3dsWrite("screenshot saved %s: %s", path, success ? "v" : "x");
-
-	if (success && isSavestate) {
-		img3dsInvalidateStateScreenshot();
-	}
-
-	screenshot.dirty = false;
-	impl3dsResetScreenshotTarget();
-	snd3dsResumeMixing();
-
+static void impl3dsFinishScreenshot(bool renderFrame) {
 	if (renderFrame) {
 		GPU3DS.gameScreenBufferDesync = true;
 		menu3dsSetScreenDirty();
 	}
 
     skipNextFpsUpdate = true;
+}
 
-	return success;
+void impl3dsCaptureScreenshot(u8* pixels, bool renderFrame, int* width, int* height) {
+	if (renderFrame) {
+		impl3dsPrepareScreenshot();
+	}
+	const ScreenshotRegion screenshotRegion = screenshot.region;
+	screenshot.pending = false;
+
+	impl3dsReadBackScreenshotFrame(renderFrame ? &screenshotRegion : nullptr);
+
+	img3dsCaptureScreenRegion(pixels, screenshotRegion.width, screenshotRegion.height, screenshotRegion.x, screenshotRegion.y, settings3DS.GameScreen, gfxIsWide());
+	impl3dsFinishScreenshot(renderFrame);
+
+	*width = screenshotRegion.width;
+	*height = screenshotRegion.height;
+}
+
+bool impl3dsCaptureThumbnail(u16* pixels, size_t pixelsCapacity, int* width, int* height) {
+	ScreenshotRegion screenshotRegion = impl3dsGetScreenshotRegion(0.5f, true);
+	if ((size_t)screenshotRegion.width * screenshotRegion.height * sizeof(u16) > pixelsCapacity) {
+		return false;
+	}
+
+	impl3dsReadBackScreenshotFrame(&screenshotRegion);
+	img3dsCaptureScreenRegionRgb565(pixels, screenshotRegion.width, screenshotRegion.height, screenshotRegion.x, screenshotRegion.y, settings3DS.GameScreen, gfxIsWide());
+	impl3dsFinishScreenshot(true);
+
+	*width = screenshotRegion.width;
+	*height = screenshotRegion.height;
+	return true;
 }
 
 //=============================================================================
@@ -1341,7 +1038,7 @@ void S9xAutoSaveSRAM (void)
     snd3DS.generateSilence = true;
 
 	char path[PATH_MAX];
-	file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
+	sav3dsGetSRAMPath(path, sizeof(path));
 
 	if (path[0] != '\0') {
 		Memory.SaveSRAM (path);
@@ -1543,7 +1240,7 @@ uint32 S9xReadJoypad (int which1_0_to_4)
 		if (settings3DS.Turbo[i] && buttons3dsPressed[i]) { 		\
 			if (!prevConsoleButtonPressed[i]) 						\
 			{ 														\
-				prevConsoleButtonPressed[i] = 11 - turbo[i]; 		\
+				prevConsoleButtonPressed[i] = 9 - turbo[i];  		\
 			} 														\
 			else 													\
 			{ 														\

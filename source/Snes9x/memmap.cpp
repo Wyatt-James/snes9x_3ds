@@ -733,21 +733,7 @@ again:
     //FreeSDD1Data ();
     InitROM (Tales);
 
-	// Updated to load cheats from a text file.
-	// The text file takes priority over the original
-	// binary format file.
-	//
-
-	char path[PATH_MAX];
-	file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".chx", "cheats", true);
-	
-	if (!S9xLoadCheatTextFile(path)) {
-		file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".cht", "cheats", true);
-		S9xLoadCheatFile (path);
-	}
-
-	S9xInitCheatData ();
-	S9xApplyCheats ();
+	impl3dsLoadCheats ();
 
 	S9xReset ();
 
@@ -1357,12 +1343,12 @@ bool8 CMemory::LoadSRAM (const char *filename)
     return (TRUE);
 }
 
-bool8 CMemory::SaveSRAM (const char *filename)
+uint32 CMemory::PrepareSRAMSave ()
 {
   if(Settings.SuperFX && Memory.ROMType < 0x15)
-    return TRUE;
+    return 0;
   if(Settings.SA1 && Memory.ROMType == 0x34)
-    return TRUE;
+    return 0;
 
   int size = Memory.SRAMSize ?
     (1 << (Memory.SRAMSize + 3)) * 128 : 0;
@@ -1375,6 +1361,13 @@ bool8 CMemory::SaveSRAM (const char *filename)
   if (size > 0x20000)
     size = 0x20000;
 
+  return size;
+}
+
+bool8 CMemory::SaveSRAM (const char *filename)
+{
+  uint32 size = PrepareSRAMSave ();
+
   if (size)
   {
 	BufferedFileWriter stream;
@@ -1383,8 +1376,9 @@ bool8 CMemory::SaveSRAM (const char *filename)
     {
       stream.write((char *) ::SRAM, size);
       
-      // flush before we handle RTC
-      stream.close(); 
+      // Close before writing RTC data.
+      if (stream.close() != 0)
+        return (FALSE);
 
       if(Settings.SPC7110RTC)
       {

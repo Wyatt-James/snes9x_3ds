@@ -25,8 +25,9 @@ typedef struct
     int blue[MAX_ALPHA + 1][32];
 } SAlpha;
 
-static u8 *fontWidthArray[] = { fontTempestaWidth, fontRondaWidth, fontArialWidth };
-static u8 *fontBitmapArray[] = { fontTempestaBitmap, fontRondaBitmap, fontArialBitmap };
+static u8 *fontWidthArray[] = { fontTempestaWidth, fontRondaWidth };
+static u8 *fontBitmapArray[] = { fontTempestaBitmap, fontRondaBitmap };
+static const int fontCount = sizeof(fontBitmapArray) / sizeof(fontBitmapArray[0]);
 
 static u8 *fontBitmap;
 static u8 *fontWidth;
@@ -66,7 +67,7 @@ void ui3dsPrepare()
         }
     }
 
-    for (int f = 0; f < 3; f++)
+    for (int f = 0; f < fontCount; f++)
     {
         fontBitmap = fontBitmapArray[f];
         fontWidth = fontWidthArray[f];
@@ -106,7 +107,7 @@ void ui3dsSetFont()
 {
     int fontIndex = static_cast<int>(settings3DS.Font);
 
-    if (fontIndex >= 0 && fontIndex < 3)
+    if (fontIndex >= 0 && fontIndex < fontCount)
     {
         fontBitmap = fontBitmapArray[fontIndex];
         fontWidth = fontWidthArray[fontIndex];
@@ -431,20 +432,25 @@ void ui3dsEllipsize(const char *src, char *dst, size_t dstSize, int maxWidth, in
 {
     if (dstSize == 0) return;
 
-    if (ui3dsGetStringWidth(src, 0, 0xffff, destHeight) <= maxWidth) {
-        snprintf(dst, dstSize, "%s", src);
-        return;
-    }
-
     const char *ellipsis = "\205";
     int ellipsisWidth = ui3dsGetStringWidth(ellipsis, 0, 0xffff, destHeight);
+    float scale = (float)ui3dsClampDestHeight(destHeight) / fontHeight;
 
-    int len = static_cast<int>(strlen(src));
-    int keep = 0;
-    for (int i = 0; i < len; i++) {
-        if (ui3dsGetStringWidth(src, 0, i, destHeight) + ellipsisWidth > maxWidth)
+    // Find the ellipsis cutoff without truncating text that still fits.
+    int width = 0;
+    int keep = -1;
+    for (int i = 0; src[i]; i++) {
+        u8 c = src[i] == '\n' ? ' ' : (u8)src[i];
+        width += ui3dsCharAdvance(c, scale);
+        if (keep < 0 && width + ellipsisWidth > maxWidth)
+            keep = i;
+        if (width > maxWidth)
             break;
-        keep = i + 1;
+    }
+
+    if (width <= maxWidth) {
+        snprintf(dst, dstSize, "%s", src);
+        return;
     }
 
     if (keep + 1 >= static_cast<int>(dstSize))
