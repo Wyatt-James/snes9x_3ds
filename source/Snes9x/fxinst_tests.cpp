@@ -179,10 +179,11 @@ FX_Result fxtest_swap(const FX_Gsu* GSUi, const uint16 SREG)
     asm ("rev16 %0, %1":"=r"(resultNew):"r"(SREG));
     asm (
         "msr cpsr_f, %0\n\t"
-        "movs %0, %1\n\t"
+        "ror %0, %1, #8\n\t"
+        "movs %0, %0\n\t"
         "mrs %0, cpsr\n\t"
         : "+r" (GSU.armFlags)
-        : "r" (resultNew | (resultNew << 16))
+        : "r" (SREG)
         : "cc"
     );
 
@@ -281,10 +282,10 @@ FX_Result fxtest_add_i(const FX_Gsu* GSUi, const uint16 SREG, const uint8 imm)
 
     uint32 resultNew;
     asm (
-        "adds %1, %2, %3, lsl #16\n\t"
+        "adds %1, %3, %2, lsl #16\n\t"
         "mrs %0, cpsr"
         : "=r" (GSU.armFlags), "=r" (resultNew)
-        : "r" (SREG << 16), "r" (imm)
+        : "r" (SREG), "r" (imm << 16)
         : "cc"
     );
     resultNew >>= 16;
@@ -384,10 +385,10 @@ FX_Result fxtest_sub_i(const FX_Gsu* GSUi, const uint16 SREG, const uint8 imm)
 
     uint32 resultNew;
     asm (
-        "subs %1, %2, %3, lsl #16\n\t"
+        "rsbs %1, %3, %2, lsl #16\n\t"
         "mrs %0, cpsr"
         : "=r" (GSU.armFlags), "=r" (resultNew)
-        : "r" ((SREG << 16)), "r" (imm)
+        : "r" (SREG), "r" (imm << 16)
         : "cc"
     );
     resultNew >>= 16;
@@ -905,8 +906,8 @@ FX_Result fxtest_from_r(const FX_Gsu* GSUi, const uint16 v1)
     uint32 tmp, resultNew = v1;
     GSU.armFlags &= ~(ARM_NEGATIVE | ARM_ZERO | ARM_OVERFLOW);
     asm (
-        "lsls %1, %2, #24\n\t"
-        "orrmi %0, %0, %5\n\t"
+        "tst %2, #128\n\t"
+        "orrne %0, %0, %5\n\t"
         "lsls %1, %2, #16\n\t"
         "orrmi %0, %0, %3\n\t"
         "orreq %0, %0, %4\n\t"

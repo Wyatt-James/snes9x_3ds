@@ -28,7 +28,7 @@ handle_fx_plot_8bit.common2:
         ldr     r2, [r2, #FX_apvScreen]                  @ Screen
         ldr     r1, [r1, #FX_x]                          @ X
         mov     rR15, #128                               @ Mask
-        lsr     rR15, rR15, rSREG                        @ Mask
+        lsr     rR15, rR15, rSREG              @ stall 1 @ Mask
         add     r2, r1, r2                               @ Pixel 0 pointer
         orr     rR15, rR15, rR15, lsl #8                 @ Duplicate mask to both bytes of reg
 
