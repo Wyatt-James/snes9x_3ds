@@ -2571,6 +2571,7 @@ void emulatorLoop()
 
         updateProfilingOutput(++totalFrames);
 
+        t3dsCount(skipDrawing ? TIMER_SKIPPED_FRAMES : TIMER_DRAWN_FRAMES);
         t3dsStartTimer(TIMER_RUN_ONE_FRAME);
         impl3dsRunOneFrame(firstFrame, skipDrawing);
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);

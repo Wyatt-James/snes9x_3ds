@@ -12,14 +12,16 @@ static const bool writeToLogFile = false;
 
 TimerConfig TimerConfigs[TIMER_COUNT] = {
     [TIMER_S9X_MAIN_LOOP]       = { "S9xMainLoop     ", true },
-    [TIMER_S9X_SUPER_FX]        = { "S9xSuperFX      ", false },
-    [TIMER_S9X_UPDATE_SCREEN]   = { "S9xUpdateScreen ", false },
-    [TIMER_DRAW]                = { "gpu3dsDraw      ", false },
-    [TIMER_DRAW_M7_TEXTURE]     = { "draw M7 texture ", false },
+    [TIMER_S9X_SUPER_FX]        = { "S9xSuperFX      ", true },
+    [TIMER_S9X_UPDATE_SCREEN]   = { "S9xUpdateScreen ", true },
+    [TIMER_DRAW]                = { "gpu3dsDraw      ", true },
+    [TIMER_DRAW_M7_TEXTURE]     = { "draw M7 texture ", true },
     [TIMER_DRAW_SNES_SCREEN]    = { "draw SNES screen", true },
-    [TIMER_DRAW_SCENE]          = { "draw scene      ", false },
-    [TIMER_GPU_WAIT]            = { "gpuWait         ", false },
-    [TIMER_FLUSH]               = { "flush           ", false },
+    [TIMER_DRAW_SCENE]          = { "draw scene      ", true },
+    [TIMER_GPU_WAIT]            = { "gpuWait         ", true },
+    [TIMER_FLUSH]               = { "flush           ", true },
+    [TIMER_SKIPPED_FRAMES]      = { "skipped frames  ", true },
+    [TIMER_DRAWN_FRAMES]        = { "drawn frames    ", true },
     [TIMER_RUN_ONE_FRAME]       = { "runOneFrame     ", true }
 };
 
@@ -27,6 +29,8 @@ static const TimerBucket coreTimers[] = {
     TIMER_S9X_MAIN_LOOP,
     TIMER_S9X_SUPER_FX,
     TIMER_S9X_UPDATE_SCREEN,
+    TIMER_SKIPPED_FRAMES,
+    TIMER_DRAWN_FRAMES,
 };
 
 double t3dsTicksToMs(u64 ticks) {
@@ -75,7 +79,6 @@ void t3dsPrintTimer(TimerBucket bucket, int totalFrames) {
             double totalMs = t3dsTicksToMs(t3dsTimers[bucket].totalTicks);
             double avg = totalMs / calls;
             double msPerFrame = totalMs / totalFrames;
-            bool highFreq = calls > totalFrames * 2;
 
             if (bucket == TIMER_RUN_ONE_FRAME) {
                 // paceFrame() is called after t3dsStopTimer(TIMER_RUN_ONE_FRAME)
@@ -87,14 +90,10 @@ void t3dsPrintTimer(TimerBucket bucket, int totalFrames) {
                 snprintf(logBuffer, sizeof(logBuffer),
                     "%s: calls:%d",
                     t3dsTimers[bucket].name, calls);
-            } else if (highFreq) {
-                snprintf(logBuffer, sizeof(logBuffer),
-                    "%s: ms/f:%.2f calls:%d",
-                    t3dsTimers[bucket].name, msPerFrame, calls);
             } else {
                 snprintf(logBuffer, sizeof(logBuffer),
-                    "%s: avg:%.3fms calls:%d",
-                    t3dsTimers[bucket].name, avg, calls);
+                    "%s: %.2fms/f calls:%d",
+                    t3dsTimers[bucket].name, msPerFrame, calls);
             }
         }
 
@@ -107,6 +106,7 @@ void t3dsPrintTimer(TimerBucket bucket, int totalFrames) {
 
 void t3dsPrintTimers(int totalFrames) {
     #ifndef PROFILING_DISABLED
+        printf("\n");
         for (int i = 0; i < TIMER_COUNT; ++i) {
             t3dsPrintTimer((TimerBucket)i, totalFrames);
         }
