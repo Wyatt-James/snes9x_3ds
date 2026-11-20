@@ -77,7 +77,7 @@ typedef struct {
     SVector4i	Position;
 } SMode7TileVertex;
 
-typedef enum 
+enum // LAYER_ID
 {
     LAYER_BG0,
     LAYER_BG1,
@@ -87,8 +87,10 @@ typedef enum
     LAYER_BACKDROP,
     LAYER_COLOR_MATH, // main target
     LAYER_BRIGHTNESS, // main target
-    LAYER_WINDOW_LR, // depth target
-} LAYER_ID; // keep this order!
+    LAYER_WINDOW_LR,  // depth target
+};                    // keep this order!
+
+typedef u8 LAYER_ID;
 
 typedef enum
 {

@@ -100,7 +100,7 @@ void gpu3dsAdjustLayerSectionLimits(SLayerList *list) {
     u16 sectionsToReduce = newSectionsMax - allowedSectionsMax;
     u16 reducedSections = 0;
 
-    LAYER_ID order[6] = {
+    static const LAYER_ID order[6] = {
         LAYER_COLOR_MATH,
         LAYER_OBJ,
         LAYER_BG3,
@@ -466,7 +466,7 @@ void gpu3dsDrawSnesScreen() {
     list->layersTotalByTarget[TARGET_SNES_SUB] = 0;
     list->layersTotalByTarget[TARGET_SNES_MAIN] = 0;
 
-    LAYER_ID drawOrder[8] = {
+    static const LAYER_ID drawOrder[8] = {
         LAYER_BACKDROP,
         LAYER_OBJ,
         LAYER_BG0,
