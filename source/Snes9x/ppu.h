@@ -63,7 +63,7 @@ struct InternalPPU {
 #endif
     bool8  DoubleHeightPixels;
     bool8  Interlace;
-    bool8  InterlaceSprites;
+    bool8  InterlaceSprites; // Must be 0 or 1
     bool8  DoubleWidthPixels;
     int    RenderedScreenHeight;
     int    RenderedScreenWidth;

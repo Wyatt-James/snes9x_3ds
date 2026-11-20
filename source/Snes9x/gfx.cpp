@@ -1177,7 +1177,7 @@ uint8 OBJOnLine[SNES_HEIGHT_EXTENDED][128];
 
 void S9xSetupOBJ ()
 {
-    static const int sizes[8][4] = {
+    static const int8 sizes[8][4] = {
         {8, 8, 16, 16},
         {8, 8, 32, 32},
         {8, 8, 64, 64},
@@ -1189,16 +1189,12 @@ void S9xSetupOBJ ()
     };
     
     int index = PPU.OBJSizeSelect > 7 ? 5 : PPU.OBJSizeSelect;
+	int shift = IPPU.InterlaceSprites;
     int SmallWidth = sizes[index][0];
-    int SmallHeight = sizes[index][1];
     int LargeWidth = sizes[index][2];
-    int LargeHeight = sizes[index][3];
+    int SmallHeight = sizes[index][1] >> shift;
+    int LargeHeight = sizes[index][3] >> shift;
 
-	if (IPPU.InterlaceSprites)
-	{
-		SmallHeight >>= 1;
-		LargeHeight >>= 1;
-	}
 	#ifdef MK_DEBUG_RTO
 		if(Settings.BGLayering) fprintf(stderr, "Sizes are %dx%d and %dx%d\n", SmallWidth, SmallHeight, LargeWidth, LargeHeight);
 	#endif
