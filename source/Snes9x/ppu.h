@@ -67,11 +67,11 @@ struct InternalPPU {
     bool8  DoubleWidthPixels;
     int    RenderedScreenHeight;
     int    RenderedScreenWidth;
-    uint32 Red [256];
-    uint32 Green [256];
-    uint32 Blue [256];
+    uint8  Red [256];
+    uint8  Green [256];
+    uint8  Blue [256];
     uint8  *XB;
-    uint16 ScreenColors [256];
+    uint16 ScreenColors [256]; // RGBA5551
     int	   PreviousLine;
     int	   CurrentLine;
     int	   Controller;

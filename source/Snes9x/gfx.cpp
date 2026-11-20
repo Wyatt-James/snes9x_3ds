@@ -596,6 +596,7 @@ void S9xUpdatePalettes()
 {
 	if (IPPU.ColorsChanged)
 	{
+		IPPU.ColorsChanged = false;
 		// Bug fix: Use the palette as is it at the start of the
 		// drawing of the screen instead of at the end.
 		// 
@@ -616,7 +617,6 @@ void S9xUpdatePalettes()
 				IPPU.ScreenColors [cgaddr] = finalColor;
 			}
 		}
-		IPPU.ColorsChanged = false;
 
 		S9xUpdateVerticalSectionValue(&IPPU.BackdropColorSections, IPPU.ScreenColors[0]);
 	}		
