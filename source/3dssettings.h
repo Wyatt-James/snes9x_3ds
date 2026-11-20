@@ -41,6 +41,7 @@
 #define MENU_ENTRY_CONTEXT_MENU     -2
 #define MENU_CONTINUE_GAME          -3
 #define MENU_ENTRY_ITEM_INFO        -4
+#define MENU_ENTRY_OPEN_FOLDER      -5
 #define MENU_ENTER_SUBPAGE          -100
 
 namespace Setting {
@@ -62,11 +63,11 @@ namespace Setting {
     enum class ThumbnailMode {
         // Values are stored in the config; append only.
         None,
-        BoxartPAL,     // the former single "boxart" type
+        CoverPAL,
         Title,
         Gameplay,
-        BoxartUS,
-        BoxartJapan,
+        CoverUS,
+        CoverJapan,
         Count
     };
 
@@ -164,6 +165,10 @@ typedef struct {
     char RAUsername[32];
     char RAToken[64];
 
+    // --- ONLINE UPDATER ---
+    bool UpdaterAutoCheck;      // check for an emulator update at start
+    char UpdaterSkippedTag[32]; // declined at start; not offered there again
+
     // --- OSD & VIDEO ---
     Setting::AssetMode  GameOverlay;
     bool                GameOverlayAutoFit;
@@ -215,21 +220,16 @@ typedef struct {
 
     int                 Volume;                 // 0: 100%, 1: 125%, 2: 150%, 3: 175%, 4: 200%
     int                 GlobalVolume;
+    int                 Msu1Volume;             // 0: 25% ... 3: 100% ... 7: 200%
+    int                 GlobalMsu1Volume;
 
     int                 AudioBuffer;            // wavebuf depth: 0=Low(4), 1=Normal(8), 2=High(16)
 
     bool                AutoSavestate;          // Automatically save the the current state when the emulator is closed or the game is changed
-    bool                SaveStateScreenshots;   // Opt-in: store a thumbnail in each slot savestate
-
-    int                 SRAMSaveInterval;       // SRAM Save Interval
-                                                //   1 - 1 second.
-                                                //   2 - 10 seconds
-                                                //   3 - 60 seconds
-                                                //   4 - Never
-
-    bool                ForceSRAMWriteOnPause;  // If the SRAM should be written to SD even when no change was detected.
-                                                // Some games (eg. Yoshi's Island) don't detect SRAM writes correctly.
-
+    bool                SaveStateScreenshots;   // Store a thumbnail in each slot savestate
+    bool                OverwriteSavestatesWithoutAsking;   // Opt-in: skip confirmation dialog
+    bool                OverwriteAssetsWithoutAsking;       // Opt-in: skip confirmation dialog
+    
     // --- CONTROLS ---
     std::array<::ButtonMapping<1>, HOTKEYS_COUNT> ButtonHotkeys;
     std::array<::ButtonMapping<1>, HOTKEYS_COUNT> GlobalButtonHotkeys;
@@ -265,8 +265,8 @@ typedef struct {
     bool                LayerEnabled[8];       // Debug: per-layer enable toggle, index = LAYER_ID
                                                // (BG0-3, OBJ, Backdrop, Color Math, Brightness).
                                                // All true by default.
+    bool                LayerSkipVertexBuild;  // Debug: disabled layers also skip vertex building
 
-    bool                isDirty;               // needs saving to disk
 } S9xSettings3DS;
 
 extern S9xSettings3DS settings3DS;

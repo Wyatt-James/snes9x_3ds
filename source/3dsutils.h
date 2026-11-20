@@ -26,11 +26,13 @@ typedef enum {
 
 typedef struct {
     EMUSTATE            emulatorState;
+    bool                resumeAfterSuspend;
     bool                isRomFsLoaded;
     bool                isRomLoaded;
     bool                turboMode;             // fast-forward state
     bool                cheatsDirty;
     bool                menuTabDirty[4];
+    bool                saveSlotHotkeyUsed;    // Next menu open moves the Save and Load cursor to the current slot.
     bool                sdWriteFailPending;    // Write-mode open/close failure not shown yet.
     int                 sdWriteFailNotifCount;
 } SSession3DS;

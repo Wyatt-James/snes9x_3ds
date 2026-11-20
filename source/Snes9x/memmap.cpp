@@ -22,6 +22,7 @@
 #include "spc7110.h"
 #include "seta.h"
 #include "bsx.h"
+#include "msu1.h"
 
 #include "3dsimpl.h"
 #include "3dsra.h"
@@ -50,6 +51,16 @@ static uint8 bytes0x2000 [0x2000];
 static inline uint8 *MapBytes0x2000Window()
 {
 	return reinterpret_cast<uint8 *>(reinterpret_cast<uintptr_t>(bytes0x2000) - 0x6000u);
+}
+
+// Memory.SRAM is 128 KB (size 7); cap larger header sizes to it.
+static uint32 SRAMMaskForSize (uint8 size)
+{
+	if (size == 0)
+		return 0;
+	if (size > 7)
+		size = 7;
+	return ((1 << (size + 3)) * 128) - 1;
 }
 
 int is_bsx(unsigned char *);
@@ -477,6 +488,9 @@ bool8 CMemory::LoadROM (const char *filename)
 
 	// Clear previous ROM cheats to prevent stale cheats affecting the next game.
 	S9xDeleteCheats();
+
+	Settings.MSU1 = FALSE;
+	S9xMSU1Shutdown ();
 	
 	ExtendedFormat=NOPE;
 
@@ -734,6 +748,8 @@ again:
     InitROM (Tales);
 
 	impl3dsLoadCheats ();
+
+	Settings.MSU1 = S9xMSU1Init (ROMFilename);
 
 	S9xReset ();
 
@@ -1260,10 +1276,7 @@ void CMemory::InitROM (bool8 Interleaved)
 		*p = 0;
 	}
 	
-	{
-		SRAMMask = Memory.SRAMSize ?
-			((1 << (Memory.SRAMSize + 3)) * 128) - 1 : 0;
-	}
+	SRAMMask = SRAMMaskForSize (Memory.SRAMSize);
 
 	IAPU.OneCycle = ONE_APU_CYCLE;
 	Settings.Shutdown = Settings.ShutdownMaster;
@@ -2698,7 +2711,7 @@ const char * CMemory::StaticRAMSize (void)
 	if (SRAMSize > 16)
 		strcpy(str, "Corrupt");
 	else
-		sprintf(str, "%dKbits", 8 * (SRAMMask + 1) / 1024);
+		sprintf(str, "%dKbits", SRAMSize ? 1 << (SRAMSize + 3) : 0);
 
 	return (str);
 }
@@ -2778,8 +2791,8 @@ const char * CMemory::KartContents (void)
 	else
 		strcpy(chip, "");
 
-	//if (Settings.MSU1)
-	//	sprintf(chip + strlen(chip), "+MSU-1");
+	if (Settings.MSU1)
+		sprintf(chip + strlen(chip), "+MSU-1");
 
 	sprintf(str, "%s%s", contents[(ROMType & 0xf) % 3], chip);
 
@@ -3717,8 +3730,7 @@ void CMemory::ApplyROMFixes ()
     if (strcmp (ROMName, "HITOMI3") == 0)
     {
 		Memory.SRAMSize = 1;
-		SRAMMask = Memory.SRAMSize ?
-			((1 << (Memory.SRAMSize + 3)) * 128) - 1 : 0;
+		SRAMMask = SRAMMaskForSize (Memory.SRAMSize);
     }
 
 	//for (int i = 0; i < 1000; i++)

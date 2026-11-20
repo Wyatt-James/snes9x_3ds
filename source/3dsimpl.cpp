@@ -29,6 +29,7 @@
 #include "3dsui_notif.h"
 #include "3dsui_img.h"
 #include "3dsinput.h"
+#include "3dsmsu.h"
 #include "3dsimpl.h"
 #include "3dssave.h"
 #include "3dsimpl_tilecache.h"
@@ -62,8 +63,6 @@ typedef struct {
 
 void setDepthBufferByTex(C3D_RenderTarget* target, C3D_Tex* depthTex)
 {
-    if (!target || !depthTex) return;
-
 	C3D_FrameBufDepth(&target->frameBuf, depthTex->data, GPU_RB_DEPTH24_STENCIL8);
 	target->ownsDepth = true;
 }
@@ -461,9 +460,7 @@ bool impl3dsLoadROM(char *romFilePath)
         char path[PATH_MAX];
         sav3dsGetSRAMPath(path, sizeof(path));
 
-        if (path[0] != '\0') {
-            Memory.LoadSRAM (path);
-        }
+        Memory.LoadSRAM (path);
 
         // ensure controller is always set to player 1 when rom has loaded
         Settings.SwapJoypads = 0;
@@ -481,11 +478,9 @@ bool impl3dsLoadROM(char *romFilePath)
 //---------------------------------------------------------
 void impl3dsResetConsole()
 {
-	snd3dsDrainMixing();
 	S9xReset();
 	ra3dsReset();
 	gpu3dsInitializeMode7Vertexes();
-	snd3dsResumeMixing();
 }
 
 // applies the provided cache operation (flush or invalidate) to the correct memory.
@@ -493,8 +488,6 @@ static void impl3dsApplyCacheOp(gfxScreen_t screen, bool isStereo, bool isWide, 
 {
     u16 w, h;
     u8* fb = gfxGetFramebuffer(screen, GFX_LEFT, &w, &h);
-    
-    if (!fb) return;
 
     u32 bpp = 0;
     switch (gfxGetScreenFormat(screen)) 
@@ -514,9 +507,7 @@ static void impl3dsApplyCacheOp(gfxScreen_t screen, bool isStereo, bool isWide, 
 
     if (screen == GFX_TOP && isStereo && !isWide) {
         u8* fbRight = gfxGetFramebuffer(screen, GFX_RIGHT, &w, &h);
-        if (fbRight) {
-            cacheOp(fbRight, dataSize);
-        }
+        cacheOp(fbRight, dataSize);
     }
 }
 
@@ -550,10 +541,8 @@ void impl3dsClearTopFramebuffers()
     // clear both double-buffered pages
     for (int page = 0; page < 2; page++) {
         u8 *fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
-        if (fb) {
-            memset(fb, 0, dataSize);
-            GSPGPU_FlushDataCache(fb, dataSize);
-        }
+        memset(fb, 0, dataSize);
+        GSPGPU_FlushDataCache(fb, dataSize);
         gfxScreenSwapBuffers(GFX_TOP, false);
     }
 }
@@ -730,11 +719,14 @@ void impl3dsSceneRender(bool firstFrame, bool paused, const ScreenshotRegion* sc
     gameScreenViewport.sx1 = gameScreenViewport.sx0 + gameScreenViewport.sWidth;
     gameScreenViewport.sy1 = gameScreenViewport.sy0 + gameScreenViewport.cHeight;
 	
-    // Start half a pixel in from the edges so linear filtering can't leave a thin line
-    gameScreenViewport.tx0 = 0.5f;
-    gameScreenViewport.tx1 = static_cast<float>(GPU3DSExt.renderWidth) - 0.5f;
-    gameScreenViewport.ty0 = static_cast<float>(cropTopSource) + (cropTopSource == 0 ? 0.5f : 0.0f);
-    gameScreenViewport.ty1 = static_cast<float>(PPU.ScreenHeight - cropBottomSource) - (cropBottomSource == 0 ? 0.5f : 0.0f);
+    // Half-texel inset on scaled axes avoids linear edge lines.
+	// 1:1 axes need exact edges.
+    float insetX = gameScreenViewport.sWidth == GPU3DSExt.renderWidth ? 0.0f : 0.5f;
+    float insetY = gameScreenViewport.sHeight == PPU.ScreenHeight && !overscanActive ? 0.0f : 0.5f;
+    gameScreenViewport.tx0 = insetX;
+    gameScreenViewport.tx1 = static_cast<float>(GPU3DSExt.renderWidth) - insetX;
+    gameScreenViewport.ty0 = static_cast<float>(cropTopSource) + (cropTopSource == 0 ? insetY : 0.0f);
+    gameScreenViewport.ty1 = static_cast<float>(PPU.ScreenHeight - cropBottomSource) - (cropBottomSource == 0 ? insetY : 0.0f);
 
 	bool isFullScreen = gameScreenViewport.sWidth >= settings3DS.GameScreenWidth && gameScreenViewport.cHeight >= SCREEN_HEIGHT;
 	bool drawBackground = !isFullScreen;
@@ -771,6 +763,17 @@ void impl3dsSceneRender(bool firstFrame, bool paused, const ScreenshotRegion* sc
 // Whether the previous iteration emulated a frame that still needs drawing.
 static bool pendingSnesDraw = false;
 
+bool impl3dsHasPendingSnesDraw() {
+	return pendingSnesDraw;
+}
+
+// Waits until the previous frame is on screen, so a capture can't draw into the visible buffer.
+// Call after gpu3dsFrameBegin, which waits for that frame to finish.
+static void impl3dsWaitForPendingPresent() {
+	if (gspIsPresentPending(settings3DS.GameScreen))
+		gpu3dsWaitForVBlank(settings3DS.GameScreen);
+}
+
 void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 {
 	if (firstFrame)
@@ -791,7 +794,10 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	// Draw the previous frame before resetting its layer list and PPU.
 	const ScreenshotRegion* screenshotRegion = screenshot.pending ? &screenshot.region : nullptr;
 	GPU3DS.screenshotScale = screenshotRegion ? screenshotRegion->scale : 0.0f;
-	gpu3dsFrameBegin(screenshotRegion ? C3D_FRAME_SYNCDRAW : 0, pendingSnesDraw);
+	gpu3dsFrameBegin(0, pendingSnesDraw);
+		if (screenshotRegion)
+			impl3dsWaitForPendingPresent();
+
 		if (pendingSnesDraw) {
 			t3dsStartTimer(TIMER_DRAW_SNES_SCREEN);
     		gpu3dsDrawSnesScreen();
@@ -821,7 +827,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	IPPU.RenderThisFrame = !skipDrawingFrame;
 	pendingSnesDraw = !skipDrawingFrame;
 
-	gpu3dsPrepareSnesScreenForNextFrame();
+	if (!skipDrawingFrame || firstFrame)
+		gpu3dsPrepareSnesScreenForNextFrame();
 
 	t3dsStartTimer(TIMER_S9X_MAIN_LOOP);
 	if (!Settings.SA1)
@@ -829,6 +836,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	else
 		S9xMainLoopWithSA1();
 	t3dsStopTimer(TIMER_S9X_MAIN_LOOP);
+
+	msu3dsEmulatedFrame();
 
 	ra3dsDrainEvents();
 }
@@ -885,6 +894,7 @@ static void impl3dsReadBackScreenshotFrame(const ScreenshotRegion* screenshotReg
 	if (screenshotRegion) {
 		GPU3DS.screenshotScale = screenshotRegion->scale;
 		gpu3dsFrameBegin(0, true);
+		impl3dsWaitForPendingPresent();
 
 		if (settings3DS.Mode7BilinearFilter) {
 			gpu3dsDrawSnesScreen();
@@ -895,14 +905,12 @@ static void impl3dsReadBackScreenshotFrame(const ScreenshotRegion* screenshotReg
 		GPU3DS.screenshotScale = 0.0f;
 	}
 
-    // Wait for the display transfer (PPF) event that C3D_FrameEnd queued.
-    // Callers must ensure a frame was actually rendered before this point —
-    // if no display transfer is pending, gspWaitForEvent will block forever.
-    gspWaitForEvent(GSPGPU_EVENT_PPF, device3DS.isReal3DS);
+    // Wait until the frame and its display transfer are complete.
+	gpu3dsWaitForRenderQueue();
 
     // Undo the buffer swap that C3D_FrameEnd performed internally
     // so gfxGetFramebuffer returns the buffer the GPU just wrote to.
-    gfxScreenSwapBuffers(settings3DS.GameScreen, false);
+    gfxScreenSwapBuffers(settings3DS.GameScreen, gpu3dsGetIOD() != 0.0f);
 
     impl3dsInvalidateScreen(settings3DS.GameScreen, false, gfxIsWide());
 }
@@ -1029,9 +1037,6 @@ bool8 S9xDeinitUpdate (int width, int height, bool8 sixteen_bit)
 
 void S9xAutoSaveSRAM (void)
 {
-    // Ensure that the timer is reset
-    //
-    //CPU.AccumulatedAutoSaveTimer = 0;
     CPU.SRAMModified = false;
 
     // generate silence instead of stopping NDSP
@@ -1040,8 +1045,12 @@ void S9xAutoSaveSRAM (void)
 	char path[PATH_MAX];
 	sav3dsGetSRAMPath(path, sizeof(path));
 
-	if (path[0] != '\0') {
-		Memory.SaveSRAM (path);
+	// SaveSRAM also returns FALSE when the cart has nothing to save.
+	if (!Memory.SaveSRAM (path) && Memory.PrepareSRAMSave ()) {
+		log3dsWrite("SRAM save failed: %s", path);
+		// Mark SRAM dirty so the next save retries.
+		CPU.SRAMModified = TRUE;
+		session3DS.sdWriteFailPending = true;
 	}
 
     // instead of starting NDSP, we continue to mix 
@@ -1080,10 +1089,9 @@ const char * S9xGetFilenameInc (const char *ex)
 	_splitpath(Memory.ROMFilename, drive, dir, fname, ext);
 
 	do {
-		const char *suffix = ex ? ex : "";
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wformat-truncation"
-		int written = snprintf(s, sizeof(s), "%s/%s.%03u%s", dir, fname, i++, suffix);
+		int written = snprintf(s, sizeof(s), "%s/%s.%03u%s", dir, fname, i++, ex);
 		#pragma GCC diagnostic pop
 		if (written < 0 || (size_t) written >= sizeof(s)) {
 			s[0] = '\0';
@@ -1128,19 +1136,13 @@ const char *S9xBasename (const char *f)
     if ((p = strrchr (f, '/')) != NULL || (p = strrchr (f, '\\')) != NULL)
 	return (p + 1);
 
-    if ((p = strrchr (f, SLASH_CHAR)))
-        return (p + 1);
-
     return (f);
 }
 
 
-bool8 S9xOpenSnapshotFile (const char *filename, bool8 read_only, STREAM *file)
+bool8 S9xOpenSnapshotFile (const char *filename, STREAM *file)
 {
-    char s[PATH_MAX + 1];
-    snprintf(s, PATH_MAX + 1, "%s", filename);
-
-    if ((*file = file3dsOpen(s, read_only ? "rb" : "wb")))
+    if ((*file = file3dsOpen(filename, "rb")))
     {
         return (TRUE);
     }

@@ -37,7 +37,8 @@ static bool updaterConfirmDialog(SMenuTab& dialogTab, bool& isDialog, int& curre
 {
     int result = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, message,
                                    Themes[(int)settings3DS.Theme].dialogColorWarn,
-                                   menu3dsMakePickerOptions({ "Yes", "No" }), 1, fadeIn, 2, 3);
+                                   menu3dsMakePickerOptions({ "Yes", "No" }), 1, fadeIn,
+                                   "", true);
     return result == 0;
 }
 
@@ -51,6 +52,7 @@ struct DownloadProgressContext {
     u64 speedShownTime = 0;
     u32 speedKBps = 0;
     bool showTransfer = true;
+    const char *note = NULL;
 };
 
 static bool updaterOnDownloadProgress(const char *label, u32 downloaded, u32 total, void *userData)
@@ -66,7 +68,7 @@ static bool updaterOnDownloadProgress(const char *label, u32 downloaded, u32 tot
     }
 
     bool started = total || downloaded;
-    char text[160];
+    char text[256];
     u32 percent = total ? (u32)((u64)downloaded * 100 / total) : 0;
     char size[24] = "";
     if(total >= 1024 * 1024)
@@ -88,7 +90,8 @@ static bool updaterOnDownloadProgress(const char *label, u32 downloaded, u32 tot
     char speed[24] = "";
     if(context->speedKBps)
         snprintf(speed, sizeof(speed), " (%lu KB/s)", (unsigned long)context->speedKBps);
-    snprintf(text, sizeof(text), "%s%s: %lu%%%s\nPress [B] to cancel.", label, size,
+    snprintf(text, sizeof(text), "%s%s%s%s: %lu%%%s",
+        context->note ? context->note : "", context->note ? "\n\n" : "", label, size,
         (unsigned long)(percent > 100 ? 100 : percent), speed);
     menu3dsDrawSplash();
     if(started && context->dialogTab->DialogText != text) {
@@ -107,7 +110,7 @@ static void updaterShowResultDialog(SMenuTab& dialogTab, bool& isDialog, int& cu
     menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, message,
                       success ? Themes[(int)settings3DS.Theme].dialogColorSuccess
                               : Themes[(int)settings3DS.Theme].dialogColorWarn,
-                      menu3dsMakeOptionsForOk(), -1, false, 2, 3);
+                      menu3dsMakeOptionsForOk(), -1, false);
     menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
 }
 
@@ -123,7 +126,7 @@ static void updaterShowDownloadFailure(SMenuTab& dialogTab, bool& isDialog, int&
     case UPDATER_DOWNLOAD_NO_CONNECTION:
         message = "Could not reach the server. Check the network connection."; break;
     case UPDATER_DOWNLOAD_NOT_FOUND:
-        message = "The update source does not have this file."; break;
+        message = "Not found on the server."; break;
     default:
         message = "Download failed."; break;
     }
@@ -131,24 +134,23 @@ static void updaterShowDownloadFailure(SMenuTab& dialogTab, bool& isDialog, int&
 }
 
 static void updaterShowWaitDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab,
-                                  std::vector<SMenuTab>& menuTabs, const char *status,
-                                  bool fadeIn = false)
+                                  std::vector<SMenuTab>& menuTabs, const char *title, const char *status,
+                                  bool fadeIn = false, bool sequence = false)
 {
-    char message[160];
-    snprintf(message, sizeof(message), "%s\nPress [B] to cancel.", status);
-    menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Online Updater", message,
+    menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, status,
                       Themes[(int)settings3DS.Theme].dialogColorInfo,
-                      std::vector<SMenuItem>(), -1, fadeIn, 2, 3);
+                      std::vector<SMenuItem>(), -1, fadeIn, "Press [B] to cancel.", sequence);
 }
 
 static void updaterShowProgressDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab,
-                                      std::vector<SMenuTab>& menuTabs, const char *label,
-                                      bool showTransfer = true, bool fadeIn = false)
+                                      std::vector<SMenuTab>& menuTabs, const char *title,
+                                      const char *label, bool showTransfer = true, bool fadeIn = false,
+                                      const char *note = NULL)
 {
-    char status[96];
-    snprintf(status, sizeof(status), "%s: %s", label,
-             showTransfer ? "connecting..." : "downloading...");
-    updaterShowWaitDialog(dialogTab, isDialog, currentMenuTab, menuTabs, status, fadeIn);
+    char status[256];
+    snprintf(status, sizeof(status), "%s%s%s: %s", note ? note : "", note ? "\n\n" : "",
+             label, showTransfer ? "connecting..." : "downloading...");
+    updaterShowWaitDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, status, fadeIn, true);
 }
 
 enum AppUpdateMode {
@@ -165,22 +167,28 @@ static AppUpdateMode appUpdateMode()
 static void formatAssetDate(time_t timestamp, char *output, size_t size)
 {
     if(!timestamp || !utils3dsGetFormattedDate(timestamp, output, size, "%Y-%m-%d"))
-        snprintf(output, size, "unknown date");
+        snprintf(output, size, "Date unknown");
 }
 
-static void publishedDate(u32 published, char *output, size_t size)
+static void assetDates(const char *path, u32 published, char *output, size_t size)
 {
-    char date[32];
-    formatAssetDate((time_t)published, date, sizeof(date));
-    snprintf(output, size, "%c %s", UI_ICON_CLOUD, date);
+    const FileInfo& local = file3dsGetFileInfo(path);
+    if(!local.exists && !published) {
+        snprintf(output, size, "N/A");
+        return;
+    }
+
+    char localDate[32] = "N/A", onlineDate[32] = "N/A";
+    if(local.exists)
+        formatAssetDate((time_t)local.mtime, localDate, sizeof(localDate));
+    if(published)
+        formatAssetDate((time_t)published, onlineDate, sizeof(onlineDate));
+    snprintf(output, size, "%s%c%s", localDate, UI_TEXT_SECTION_SEPARATOR, onlineDate);
 }
 
-static void localMarkedLabel(const char *label, const char *path, char *output, size_t size)
+static std::string assetDatesHeader(void)
 {
-    if(file3dsGetFileInfo(path).exists)
-        snprintf(output, size, "%s %c", label, UI_ICON_CHECKMARK);
-    else
-        snprintf(output, size, "%s", label);
+    return std::string("On SD since") + UI_TEXT_SECTION_SEPARATOR + "Published";
 }
 
 static UpdaterGameAssets pageGameAssets = {};
@@ -188,43 +196,34 @@ static UpdaterGameAssets pageGameAssets = {};
 struct AssetDownload {
     char source[PATH_MAX];
     char target[PATH_MAX];
+    const char *title = "Online Updater";
     const char *label;
-    u32 published;
     bool inPlace = false;       // bypasses the temporary file; small files, no transfer status
     char replacePromptPrefix[64];
 };
 
-// Asks before replacing an existing file. Returns false when declined;
-// otherwise *result holds the download outcome.
+// Asks before replacing an existing file, unless OverwriteAssetsWithoutAsking is set.
+// Returns false when declined; otherwise *result holds the download outcome.
 static bool runAssetDownload(const AssetDownload& asset, UpdaterDownloadResult *result,
                              SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab,
                              std::vector<SMenuTab>& menuTabs)
 {
-    FileInfo local = file3dsGetFileInfo(asset.target);
+    bool askFirst = file3dsGetFileInfo(asset.target).exists && !settings3DS.OverwriteAssetsWithoutAsking;
 
-    if(local.exists) {
-        // Local and remote dates are informational.
-        char localDate[40] = "", remoteDate[32];
-        if(local.mtime) {
-            char date[32];
-            formatAssetDate((time_t)local.mtime, date, sizeof(date));
-            snprintf(localDate, sizeof(localDate), " (%s)", date);
-        }
-
-        formatAssetDate((time_t)asset.published, remoteDate, sizeof(remoteDate));
+    if(askFirst) {
         char prompt[256];
         snprintf(prompt, sizeof(prompt),
-                 "%s already on your SD card%s. Replace with version from %s?",
-                 asset.replacePromptPrefix, localDate, remoteDate);
+                 "%s already on your SD card.\nReplace with the online version?",
+                 asset.replacePromptPrefix);
         if(!updaterConfirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-                                 "Online Updater", prompt)) {
+                                 asset.title, prompt)) {
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
             return false;
         }
     }
 
-    updaterShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs, asset.label,
-                              !asset.inPlace, !local.exists);
+    updaterShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs, asset.title,
+                              asset.label, !asset.inPlace, !askFirst);
 
     *result = UPDATER_DOWNLOAD_FAILED;
     char url[PATH_MAX * 2];
@@ -241,28 +240,23 @@ static bool runAssetDownload(const AssetDownload& asset, UpdaterDownloadResult *
     }
 
     if(*result == UPDATER_DOWNLOAD_OK)
-        menu3dsMarkTabDirty(currentMenuTab);   // refreshes the checkmarks
+        menu3dsMarkTabDirty(currentMenuTab);   // refreshes the local dates
     return true;
 }
 
-static void showAssetResult(UpdaterDownloadResult result, const char *operation,
+static void showAssetResult(UpdaterDownloadResult result, const char *title,
                             const char *successHint, SMenuTab& dialogTab, bool& isDialog,
                             int& currentMenuTab, std::vector<SMenuTab>& menuTabs)
 {
     if(result != UPDATER_DOWNLOAD_OK) {
-        updaterShowDownloadFailure(dialogTab, isDialog, currentMenuTab, menuTabs, "Online Updater",
-                                   result);
+        updaterShowDownloadFailure(dialogTab, isDialog, currentMenuTab, menuTabs, title, result);
         return;
     }
 
     char message[256];
-    snprintf(message, sizeof(message), "%s complete.", operation);
-    if(successHint) {
-        size_t used = strlen(message);
-        snprintf(message + used, sizeof(message) - used, "\n%s", successHint);
-    }
-    updaterShowResultDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Online Updater",
-                            message, true);
+    snprintf(message, sizeof(message), "Downloaded.%s%s",
+             successHint ? "\n" : "", successHint ? successHint : "");
+    updaterShowResultDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, message, true);
 }
 
 static void chooseThumbnailUpdate(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab,
@@ -273,19 +267,21 @@ static void chooseThumbnailUpdate(SMenuTab& dialogTab, bool& isDialog, int& curr
         return;
     std::vector<std::string> options, dates;
     for(int i = 0; i < manifest.count; ++i) {
-        char path[PATH_MAX], label[64], date[40];
+        char path[PATH_MAX], description[64];
         file3dsGetThumbnailCachePath(manifest.variants[i].mode, path, sizeof(path));
-        localMarkedLabel(file3dsThumbnailLabel(manifest.variants[i].mode), path, label, sizeof(label));
-        publishedDate(manifest.variants[i].published, date, sizeof(date));
-        options.emplace_back(label);
-        dates.emplace_back(date);
+        assetDates(path, manifest.variants[i].published, description, sizeof(description));
+        options.emplace_back(file3dsThumbnailLabel(manifest.variants[i].mode));
+        dates.emplace_back(description);
     }
 
-    const char *message = "Pick a thumbnail type to download. Each is 10-15 MB\n(1000 games) and takes about 1-2 minutes.";
+    const char *message = "Each type has 1000 thumbnails, one per game, 10-15 MB total.";
+
+    std::vector<SMenuItem> items = menu3dsMakePickerOptions(options, dates);
+    items.insert(items.begin(), SMenuItem(nullptr, MenuItemType::Header2, "Type", assetDatesHeader()));
 
     int selection = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Game Thumbnails", message,
                                       Themes[(int)settings3DS.Theme].dialogColorInfo,
-                                      menu3dsMakePickerOptions(options, dates), -1, true, 2, 5);
+                                      items);
 
     menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
 
@@ -297,11 +293,9 @@ static void chooseThumbnailUpdate(SMenuTab& dialogTab, bool& isDialog, int& curr
     AssetDownload asset = {};
     snprintf(asset.source, sizeof(asset.source), "%s", variant.source);
     file3dsGetThumbnailCachePath(variant.mode, asset.target, sizeof(asset.target));
+    asset.title = "Game Thumbnails";
     asset.label = label;
-    asset.published = variant.published;
     snprintf(asset.replacePromptPrefix, sizeof(asset.replacePromptPrefix), "%s is", label);
-    char operation[48];
-    snprintf(operation, sizeof(operation), "%s update", label);
 
     // Only the selected type's cache is open in the reader, and an open file cannot be replaced.
     bool selected = variant.mode == settings3DS.GameThumbnailType;
@@ -315,7 +309,7 @@ static void chooseThumbnailUpdate(SMenuTab& dialogTab, bool& isDialog, int& curr
         img3dsOpenThumbnailCache();
 
     if(!declined)
-        showAssetResult(result, operation,
+        showAssetResult(result, asset.title,
                         selected ? NULL : "You can select it under Emulator \273 Game Thumbnail.",
                         dialogTab, isDialog, currentMenuTab, menuTabs);
 }
@@ -338,17 +332,28 @@ static void reloadSecondScreenBackground(void)
 }
 
 struct GameAsset {
+    const char *title;
     const char *dir;
     const char *ext;
     const char *replacePromptPrefix;
-    const char *operation;
     void (*reload)(void);   // after a successful download
+    const Setting::AssetMode *mode;
+    const char *successHint;
 };
 
 static const GameAsset gameScreenAsset = {
-    GAME_SCREEN_BG_DIR, ".png", "Game Screen BG is", "Game screen BG update", reloadGameScreenBackground };
+    "Game Screen BG", GAME_SCREEN_BG_DIR, ".png", "Game Screen BG is", reloadGameScreenBackground,
+    &settings3DS.GameScreenBg, "You can select it under Settings \273 Game Screen BG." };
 static const GameAsset secondScreenAsset = {
-    SECOND_SCREEN_BG_DIR, ".png", "Second Screen BG is", "Second Screen BG update", reloadSecondScreenBackground };
+    "Second Screen BG", SECOND_SCREEN_BG_DIR, ".png", "Second Screen BG is", reloadSecondScreenBackground,
+    &settings3DS.SecondScreenBg, "You can select it under Settings \273 Second Screen BG." };
+
+static const char *gameAssetHint(const GameAsset& kind)
+{
+    if(kind.mode && (*kind.mode == Setting::AssetMode::Adaptive || *kind.mode == Setting::AssetMode::CustomOnly))
+        return NULL;
+    return kind.successHint;
+}
 
 static void gameAssetTarget(const GameAsset& kind, char *output, size_t size)
 {
@@ -369,8 +374,8 @@ static void runGameAssetUpdate(const GameAsset& kind, UpdaterAssetGroup group, c
     AssetDownload asset = {};
     gameAssetTarget(kind, asset.target, sizeof(asset.target));
     snprintf(asset.source, sizeof(asset.source), "%s/%s%s", updaterAssetGroupPath(group), name, kind.ext);
+    asset.title = kind.title;
     asset.label = label;
-    asset.published = published;
     asset.inPlace = true;
     snprintf(asset.replacePromptPrefix, sizeof(asset.replacePromptPrefix), "%s", kind.replacePromptPrefix);
 
@@ -379,7 +384,7 @@ static void runGameAssetUpdate(const GameAsset& kind, UpdaterAssetGroup group, c
         return;
     if(result == UPDATER_DOWNLOAD_OK)
         kind.reload();
-    showAssetResult(result, kind.operation, NULL, dialogTab, isDialog, currentMenuTab, menuTabs);
+    showAssetResult(result, kind.title, gameAssetHint(kind), dialogTab, isDialog, currentMenuTab, menuTabs);
 }
 
 static void runGameScreenBackgroundUpdate(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab,
@@ -391,7 +396,7 @@ static void runGameScreenBackgroundUpdate(SMenuTab& dialogTab, bool& isDialog, i
 
 // All variants share one target file.
 static const struct { UpdaterAssetGroup group; const char *label; } secondScreenVariants[] = {
-    { UPDATER_ASSET_SECOND_SCREEN_COVER_ART,      "Cover"            },
+    { UPDATER_ASSET_SECOND_SCREEN_COVER_ART,      "Cover Art"        },
     { UPDATER_ASSET_SECOND_SCREEN_CONSOLE_EU_JP,  "Console (EU/JP)"  },
     { UPDATER_ASSET_SECOND_SCREEN_CONSOLE_US,     "Console (USA)"    },
 };
@@ -414,8 +419,8 @@ static void chooseSecondScreenBackgroundUpdate(SMenuTab& dialogTab, bool& isDial
     for(size_t i = 0; i < sizeof(secondScreenVariants) / sizeof(secondScreenVariants[0]); ++i) {
         if(game->published[secondScreenVariants[i].group]) {
             available.push_back((int)i);
-            char date[40];
-            publishedDate(game->published[secondScreenVariants[i].group], date, sizeof(date));
+            char date[32];
+            formatAssetDate((time_t)game->published[secondScreenVariants[i].group], date, sizeof(date));
             labels.emplace_back(secondScreenVariants[i].label);
             dates.emplace_back(date);
         }
@@ -427,9 +432,9 @@ static void chooseSecondScreenBackgroundUpdate(SMenuTab& dialogTab, bool& isDial
     if(available.size() > 1) {
         selection = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
                                       "Second Screen BG",
-                                      "Choose a variant first. Only one is kept on the SD card, so downloading another variant replaces the current one.",
+                                      "Choose a variant for this game.\nDownloading a different variant replaces the current image.",
                                       Themes[(int)settings3DS.Theme].dialogColorInfo,
-                                      menu3dsMakePickerOptions(labels, dates), -1, true, 2, 4);
+                                      menu3dsMakePickerOptions(labels, dates));
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
         if(selection < 0 || selection >= (int)available.size())
             return;
@@ -447,7 +452,8 @@ static void reloadCheats(void)
 }
 
 static const GameAsset cheatAsset = {
-    CHEATS_DIR, ".chx", "Cheats for this game are", "Cheat update", reloadCheats };
+    "Cheats", CHEATS_DIR, ".chx", "Cheats for this game are", reloadCheats,
+    NULL, "You'll find them in the Cheats tab." };
 
 static void runCheatUpdate(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab,
                            std::vector<SMenuTab>& menuTabs)
@@ -456,21 +462,22 @@ static void runCheatUpdate(SMenuTab& dialogTab, bool& isDialog, int& currentMenu
                        dialogTab, isDialog, currentMenuTab, menuTabs);
 }
 
-static void installAppUpdate(const UpdaterAppInfo& info, SMenuTab& dialogTab,
+// Returns false when the user declines.
+static bool installAppUpdate(const UpdaterAppInfo& info, SMenuTab& dialogTab,
                              bool& isDialog, int& currentMenuTab,
                              std::vector<SMenuTab>& menuTabs)
 {
     DownloadProgressContext progress = { &dialogTab, &isDialog, &currentMenuTab, &menuTabs };
     AppUpdateMode mode = appUpdateMode();
 
-    char prompt[160];
-    if(mode == APP_UPDATE_REPLACE_3DSX)
-        snprintf(prompt, sizeof(prompt), "Download version %s? The emulator will close afterwards. Restart it from the Homebrew Launcher.", info.tag);
-    else
-        snprintf(prompt, sizeof(prompt), "Download and install version %s? The emulator will restart afterwards.", info.tag);
-    if(!updaterConfirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "App Update", prompt)) {
+    char title[48];
+    snprintf(title, sizeof(title), "Update to %s", info.tag);
+    const char *question = "Download and install?";
+    char prompt[sizeof(info.notes) + 32];
+    snprintf(prompt, sizeof(prompt), "%s%s%s", info.notes, info.notes[0] ? "\n\n" : "", question);
+    if(!updaterConfirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, prompt)) {
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-        return;
+        return false;
     }
 
     char target[PATH_MAX], url[512];
@@ -483,20 +490,23 @@ static void installAppUpdate(const UpdaterAppInfo& info, SMenuTab& dialogTab,
         snprintf(target, sizeof(target), "%s/updates/%s", settings3DS.RootDir, packageName);
     }
 
-    snprintf(url, sizeof(url), "https://github.com/matbo87/snes9x_3ds/releases/download/%s/%s",
-             info.tag, packageName);
-    char label[48];
-    snprintf(label, sizeof(label), "Downloading %s", info.tag);
-    updaterShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs, label);
+    updaterBuildLatestReleaseUrl(packageName, url, sizeof(url));
+    const char *label = "Downloading";
+    progress.note = mode == APP_UPDATE_REPLACE_3DSX
+        ? "After the download finishes, the emulator will close.\nReopen it from the Homebrew Launcher."
+        : "After the download finishes, the update will install\nand the emulator will restart.";
+    updaterShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, label,
+                              true, false, progress.note);
     UpdaterDownloadResult result = updaterDownloadToFile(url, target, false, label,
                                                          updaterOnDownloadProgress, &progress);
     if(result != UPDATER_DOWNLOAD_OK) {
-        updaterShowDownloadFailure(dialogTab, isDialog, currentMenuTab, menuTabs, "App Update", result);
-        return;
+        updaterShowDownloadFailure(dialogTab, isDialog, currentMenuTab, menuTabs, title, result);
+        return true;
     }
 
     if(mode == APP_UPDATE_INSTALL_CIA) {
         dialogTab.DialogText.assign("Installing...");
+        dialogTab.DialogHint.clear();
         menu3dsDrawEverything(dialogTab, isDialog, currentMenuTab, menuTabs);
         menu3dsSwapBuffersAndWaitForVBlank();
 
@@ -506,21 +516,21 @@ static void installAppUpdate(const UpdaterAppInfo& info, SMenuTab& dialogTab,
         if(!updaterInstallCia(target, &titleId, updaterOnDownloadProgress, &installProgress)) {
             char message[PATH_MAX + 96];
             snprintf(message, sizeof(message),
-                     "Installation failed. The CIA was saved to\n%s\nInstall it with a CIA installer such as FBI.",
-                     target);
-            updaterShowResultDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "App Update", message, false);
-            return;
+                     "Installation failed.\nOpen the downloaded file in FBI to install it manually:\n%s",
+                     file3dsDisplayPath(target));
+            updaterShowResultDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, message, false);
+            return true;
         }
         remove(target);
 
         if(!titleId || !updaterLaunchTitle(titleId)) {
             char message[96];
-            snprintf(message, sizeof(message), "Installed %s. The emulator will close.",
-                     info.tag);
-            updaterShowResultDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "App Update", message, true);
+            snprintf(message, sizeof(message), "Update installed. Reopen the emulator from the HOME Menu.");
+            updaterShowResultDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, message, true);
         }
     }
     session3DS.emulatorState = EMUSTATE_END;
+    return true;
 }
 
 static bool syncPartFailed(void)
@@ -538,7 +548,7 @@ static bool runSync(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab,
     if(!updaterSyncPending())
         return true;
 
-    updaterShowWaitDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Checking for online content...", true);
+    updaterShowWaitDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Online Updater", "Checking for online content...", true);
     DownloadProgressContext context = { &dialogTab, &isDialog, &currentMenuTab, &menuTabs };
     context.showTransfer = false;
     bool cancelled = false;
@@ -557,7 +567,7 @@ static void showSyncFailed(SMenuTab& dialogTab, bool& isDialog, int& currentMenu
                            std::vector<SMenuTab>& menuTabs)
 {
     updaterShowResultDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Online Updater",
-                            "Could not check for online content. Check the network connection and try again.",
+                            "Check failed. Make sure you're online and try again.",
                             false);
 }
 
@@ -582,20 +592,18 @@ static void addGameAssetItem(SMenuTab& tab, int& currentMenuTab, std::vector<SMe
                              const GameAsset& kind, const char *label, u32 published,
                              GameAssetAction action)
 {
-    char path[PATH_MAX], text[64];
+    char path[PATH_MAX], description[64];
     gameAssetTarget(kind, path, sizeof(path));
-    localMarkedLabel(label, path, text, sizeof(text));
+    assetDates(path, published, description, sizeof(description));
     if(!published) {
-        tab.MenuItems.emplace_back(nullptr, MenuItemType::Disabled, text, "missing");
+        tab.MenuItems.emplace_back(nullptr, MenuItemType::Disabled, label, description);
         return;
     }
 
-    char date[40];
-    publishedDate(published, date, sizeof(date));
     tab.MenuItems.emplace_back([&menuTabs, &currentMenuTab, action](int) {
         SMenuTab dialogTab; bool isDialog = false;
         action(dialogTab, isDialog, currentMenuTab, menuTabs);
-    }, MenuItemType::Action, text, date);
+    }, MenuItemType::Action, label, description);
 }
 
 static void addGameAssetItems(SMenuTab& tab, int& currentMenuTab, std::vector<SMenuTab>& menuTabs)
@@ -626,31 +634,23 @@ static void addThumbnailItems(SMenuTab& tab, int& currentMenuTab, std::vector<SM
         return;
     }
 
-    const UpdaterCacheManifest *manifest = updaterCacheManifest();
-    u32 newest = 0;
-    for(int i = 0; i < manifest->count; ++i)
-        if(manifest->variants[i].published > newest)
-            newest = manifest->variants[i].published;
-
-    char date[40];
-    publishedDate(newest, date, sizeof(date));
     tab.MenuItems.emplace_back([&menuTabs, &currentMenuTab](int) {
         SMenuTab dialogTab; bool isDialog = false;
         chooseThumbnailUpdate(dialogTab, isDialog, currentMenuTab, menuTabs);
-    }, MenuItemType::Action, "  Game Thumbnails", date);
+    }, MenuItemType::Action, "  Game Thumbnails", "");
 }
 
 static void addAppUpdateItems(SMenuTab& tab, int& currentMenuTab, std::vector<SMenuTab>& menuTabs)
 {
     if(updaterSyncState(UPDATER_SYNC_APP) != UPDATER_SYNC_DONE) {
-        addRetryItem(tab, currentMenuTab, menuTabs, "  Could not check for app update");
+        addRetryItem(tab, currentMenuTab, menuTabs, "  Could not check for emulator update");
         return;
     }
 
     const UpdaterAppInfo *info = updaterAppUpdateInfo();
     if(!info->available) {
-        tab.MenuItems.emplace_back(nullptr, MenuItemType::Disabled,
-                                   "  App is up to date", "");
+        tab.MenuItems.emplace_back(nullptr, MenuItemType::Note,
+                                   "  Emulator is up to date", "");
         return;
     }
     char label[64];
@@ -673,25 +673,29 @@ static void populateOnlineUpdaterPage(SMenuTab& tab, int& currentMenuTab,
     tab.MenuItems.clear();
 
     tab.MenuItems.emplace_back(nullptr, MenuItemType::Action, menu3dsSubPageBackLabel(), "");
-    tab.MenuItems.emplace_back(nullptr, MenuItemType::Header2, "", "");
+    tab.MenuItems.emplace_back([](int val) {
+        settings3DS.OverwriteAssetsWithoutAsking = val != 0;
+    }, MenuItemType::Checkbox, "  Overwrite files without asking", "", settings3DS.OverwriteAssetsWithoutAsking);
+    tab.MenuItems.emplace_back(nullptr, MenuItemType::Disabled, "", "");
 
     if(updaterRomPath()) {
-        tab.MenuItems.emplace_back(nullptr, MenuItemType::Header2, "Current Game", "");
+        std::string columns;
+        if(updaterSyncState(UPDATER_SYNC_GAMES) == UPDATER_SYNC_DONE)
+            columns = assetDatesHeader();
+        tab.MenuItems.emplace_back(nullptr, MenuItemType::Header2, "Current Game", columns);
         addGameAssetItems(tab, currentMenuTab, menuTabs);
-        tab.MenuItems.emplace_back(nullptr, MenuItemType::Header2, "", "");
+        tab.MenuItems.emplace_back(nullptr, MenuItemType::Disabled, "", "");
     }
 
     tab.MenuItems.emplace_back(nullptr, MenuItemType::Header2, "Appearance", "");
     addThumbnailItems(tab, currentMenuTab, menuTabs);
+    tab.MenuItems.emplace_back(nullptr, MenuItemType::Disabled, "", "");
 
-    tab.MenuItems.emplace_back(nullptr, MenuItemType::Header2, "App Update", "");
+    tab.MenuItems.emplace_back(nullptr, MenuItemType::Header2, "Emulator Update", "");
     addAppUpdateItems(tab, currentMenuTab, menuTabs);
-
-    tab.MenuItems.emplace_back(nullptr, MenuItemType::Header2, "", "");
-    char legend[64];
-    snprintf(legend, sizeof(legend), "  %c on SD card  \267  %c latest online version",
-             UI_ICON_CHECKMARK, UI_ICON_CLOUD);
-    tab.MenuItems.emplace_back(nullptr, MenuItemType::Disabled, legend, "");
+    tab.MenuItems.emplace_back([](int val) {
+        settings3DS.UpdaterAutoCheck = val != 0;
+    }, MenuItemType::Checkbox, "  Check on launch", "", settings3DS.UpdaterAutoCheck);
 
     if(resetPage) {
         tab.subPage = { SUBPAGE_ONLINE_UPDATER, 0, {}, tab.SelectedItemIndex, tab.FirstItemIndex };
@@ -700,11 +704,16 @@ static void populateOnlineUpdaterPage(SMenuTab& tab, int& currentMenuTab,
     }
 }
 
+enum AutoCheckState { AUTO_CHECK_NONE, AUTO_CHECK_PENDING, AUTO_CHECK_READY };
+static AutoCheckState autoCheck = AUTO_CHECK_NONE;
+
 } // namespace
 
 void updater3dsOpenPage(SMenuTab& tab, int& currentMenuTab, std::vector<SMenuTab>& menuTabs)
 {
     SMenuTab dialogTab; bool isDialog = false;
+
+    autoCheck = AUTO_CHECK_NONE;
 
     if(!runSync(dialogTab, isDialog, currentMenuTab, menuTabs)) {
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
@@ -729,5 +738,45 @@ void updater3dsOpenPage(SMenuTab& tab, int& currentMenuTab, std::vector<SMenuTab
 void updater3dsRefreshPage(SMenuTab& tab, int& currentMenuTab, std::vector<SMenuTab>& menuTabs)
 {
     populateOnlineUpdaterPage(tab, currentMenuTab, menuTabs, false);
-    tab.MakeSureSelectionIsOnScreen(menu3dsGetListVisibleItems(tab), 2);
+}
+
+void updater3dsStartAutoCheck(void)
+{
+    if(!settings3DS.UpdaterAutoCheck)
+        return;
+    updaterBeginAppCheck();
+    autoCheck = AUTO_CHECK_PENDING;
+}
+
+bool updater3dsPollAutoCheck(bool canShow)
+{
+    if(autoCheck != AUTO_CHECK_PENDING)
+        return autoCheck == AUTO_CHECK_READY;
+    if(!canShow) {
+        autoCheck = AUTO_CHECK_NONE;
+        return false;
+    }
+
+    http3dsDrainCompletions();
+    UpdaterSyncState state = updaterSyncState(UPDATER_SYNC_APP);
+    if(state == UPDATER_SYNC_PENDING)
+        return false;
+
+    const UpdaterAppInfo *info = updaterAppUpdateInfo();
+    bool show = state == UPDATER_SYNC_DONE && info->available
+        && strcmp(info->tag, settings3DS.UpdaterSkippedTag) != 0;
+    autoCheck = show ? AUTO_CHECK_READY : AUTO_CHECK_NONE;
+    return show;
+}
+
+void updater3dsShowAutoCheck(int& currentMenuTab, std::vector<SMenuTab>& menuTabs)
+{
+    if(autoCheck != AUTO_CHECK_READY)
+        return;
+    autoCheck = AUTO_CHECK_NONE;
+
+    const UpdaterAppInfo *info = updaterAppUpdateInfo();
+    SMenuTab dialogTab; bool isDialog = false;
+    if(!installAppUpdate(*info, dialogTab, isDialog, currentMenuTab, menuTabs))
+        snprintf(settings3DS.UpdaterSkippedTag, sizeof(settings3DS.UpdaterSkippedTag), "%s", info->tag);
 }

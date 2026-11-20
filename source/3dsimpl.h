@@ -93,7 +93,6 @@ void impl3dsResetConsole();
 void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame);
 
 
-const char *S9xGetFilename ();
 const char *S9xGetFilenameInc (const char *);
 const char *S9xBasename (const char *f);
 uint32 S9xReadJoypad (int which1_0_to_4);
@@ -125,5 +124,6 @@ void impl3dsClearTopFramebuffers();
 // screenshotRegion overrides the viewport and suppresses overlays.
 void impl3dsSceneRender(bool firstFrame, bool paused = false, const ScreenshotRegion* screenshotRegion = nullptr);
 bool impl3dsPauseAnimationRunning();
+bool impl3dsHasPendingSnesDraw();
 
 #endif

@@ -35,7 +35,7 @@
 static rc_client_t *raClient = NULL;
 
 static char raLastError[160] = {0};
-static const char RA_NO_WIFI[] = "No Wifi connection.";
+static const char RA_NO_WIFI[] = "No Wi-Fi connection.";
 static RaPending raPending = RA_PENDING_NONE;
 static bool raUiDirty = false;
 
@@ -389,7 +389,6 @@ static void raStoreCredentials(const char *username, const char *token)
     settings3DS.RAUsername[sizeof(settings3DS.RAUsername) - 1] = '\0';
     strncpy(settings3DS.RAToken, token ? token : "", sizeof(settings3DS.RAToken) - 1);
     settings3DS.RAToken[sizeof(settings3DS.RAToken) - 1] = '\0';
-    settings3DS.isDirty = true;
 }
 
 //---------------------------------------------------------
@@ -417,7 +416,6 @@ static void raLoginCallback(int result, const char *errorMessage, rc_client_t *c
         if(result == RC_INVALID_CREDENTIALS || result == RC_EXPIRED_TOKEN ||
            result == RC_ACCESS_DENIED) {
             settings3DS.RAToken[0] = '\0';
-            settings3DS.isDirty = true;
         }
     }
 }
@@ -744,7 +742,11 @@ void ra3dsDrainEvents()
         char title[128];
         glyph3dsEncodeUtf8(title, sizeof(title), game && game->title ? game->title : "");
         char desc[64];
-        if(summary.total > 0)
+        int active = summary.total - summary.unsupported;
+        if(active > 0 && rc_client_get_encore_mode_enabled(raClient))
+            snprintf(desc, sizeof(desc), "Encore Mode  \267  %s%d achievement%s active",
+                     active > 1 ? "All " : "", active, active > 1 ? "s" : "");
+        else if(summary.total > 0)
             snprintf(desc, sizeof(desc), "%c %d/%d  \267  %c %d/%d",
                      ra3dsTag(RA_TAG_ACHIEVEMENTS).glyph, summary.unlocked, summary.total,
                      ra3dsTag(RA_TAG_POINTS).glyph, summary.pointsUnlocked, summary.pointsTotal);

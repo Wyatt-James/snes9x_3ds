@@ -17,7 +17,7 @@ void img3dsDrawGameOverlay(SGPU_TEXTURE_ID textureId, int sWidth, int sHeight);
 void img3dsDrawScanlines(float sx0, float sy0, float sx1, float sy1, int sWidth, int cHeight);
 void img3dsUpdateScanlineTexture();
 
-// switch between Cache Files (e.g. Boxart -> Title)
+// switch between Cache Files (e.g. Cover -> Title)
 // closes old file, opens new one, reloads index
 void img3dsOpenThumbnailCache();
 
@@ -28,7 +28,7 @@ void img3dsCloseThumbnailCache();
 bool img3dsLoadThumb(const char* fullRomName);
 
 // Loads the slot thumbnail through the per-slot cache keyed by .frz path.
-bool img3dsLoadStateThumbnail(int slot);
+bool img3dsLoadStateThumbnail(int slot, bool cachedOnly = false);
 // Copies pixels into the cache; NULL caches a missing thumbnail.
 void img3dsSetStateThumbnail(int slot, const u16* pixels, int width, int height);
 // Forces a disk read on the next load of an occupied slot.

@@ -52,7 +52,7 @@ typedef struct {
     Tex3DS_SubTexture subTex;
     AssetDimensions defaultDim;
     AssetDimensions activeDim;
-    char defaultSrc[PATH_MAX];    // path to default PNG (romfs or sdmc _default.png)
+    char defaultSrc[PATH_MAX];    // path to default PNG (romfs or sdmc defaults dir)
     char customPath[PATH_MAX];    // last attempted per-game custom PNG path
     bool customIsActive;          // true if per-game custom PNG is currently active
     bool customLoadFailed;        // true if last customPath load attempt failed
@@ -221,21 +221,20 @@ bool img3dsAllocVramTextures() {
     return true;
 }
 
-// check for _default.png overrides on sdmc and update defaultSrc if found
 static void img3dsSetDefaultSources() {
     const struct {
         SGPU_TEXTURE_ID id;
-        const char* folder;
+        const char* fileName;
     } overrides[] = {
-        { UI_OVERLAY,   OVERLAYS_DIR },
-        { UI_BG_GAME,   GAME_SCREEN_BG_DIR },
-        { UI_BG_SECOND, SECOND_SCREEN_BG_DIR }
+        { UI_OVERLAY,   "overlay.png" },
+        { UI_BG_GAME,   "game_screen.png" },
+        { UI_BG_SECOND, "second_screen.png" }
     };
 
     char overridePath[PATH_MAX];
 
     for (const auto& item : overrides) {
-        snprintf(overridePath, sizeof(overridePath), "sdmc:/3ds/snes9x_3ds/%s/_default.png", item.folder);
+        snprintf(overridePath, sizeof(overridePath), "%s/%s/%s", settings3DS.RootDir, DEFAULTS_DIR, item.fileName);
 
         if (IsFileExists(overridePath)) {
             int idx = item.id - UI_TEXTURE_START;
@@ -793,7 +792,7 @@ bool img3dsLoadThumb(const char* romName) {
     return imgCacheLoad(&thumbReader, id);
 }
 
-bool img3dsLoadStateThumbnail(int slot) {
+bool img3dsLoadStateThumbnail(int slot, bool cachedOnly) {
     if (!sav3dsSlotHasState(slot)) {
         return false;
     }
@@ -806,9 +805,12 @@ bool img3dsLoadStateThumbnail(int slot) {
     u16* pixels = img3dsStateThumbPixels(slot);
 
     if (entry.key != key) {
+        if (cachedOnly)
+            return false;
+
         int width, height;
         entry.key = key;
-        entry.valid = sav3dsReadThumbnail(path, pixels, SAVE_THUMBNAIL_PIXELS_SIZE, &width, &height);
+        entry.valid = sav3dsReadThumbnail(path, pixels, &width, &height);
         entry.width = entry.valid ? width : 0;
         entry.height = entry.valid ? height : 0;
         img3dsDropDisplayedThumbnail(key);

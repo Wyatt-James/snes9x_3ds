@@ -8,6 +8,7 @@
 
 #include "3ds.h"
 #include "3dssound.h"
+#include "3dsmsu.h"
 #include "3dstimer.h"
 #include "3dsimpl.h"
 #include "3dslog.h"
@@ -116,6 +117,8 @@ void snd3dsMixSamples()
         snd3DS.fillBlock = (snd3DS.fillBlock + 1) % snd3DS.waveBufCount;
     }
 
+    msu3dsMixerTick();
+
     LightLock_Unlock(&snd3DS.snesAccessLock);
 }
 
@@ -211,9 +214,6 @@ void snd3dsStopPlaying()
 // Pause the mixing thread from touching SNES state.
 // Sets generateSilence so the next iteration emits zeros,
 // then takes/releases the lock to wait out any iteration already in flight.
-//
-// Replaces the prior 30ms svcSleepThread, which a slow mix
-// iteration could outrun and crash on ROM switch.
 //---------------------------------------------------------
 void snd3dsDrainMixing()
 {

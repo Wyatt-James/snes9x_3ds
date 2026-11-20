@@ -27,6 +27,7 @@
 #include "srtc.h"
 #include "sdd1.h"
 #include "spc7110.h"
+#include "msu1.h"
 #include "bufferedfilewriter.h"
 
 #include "3dsimpl.h"
@@ -437,6 +438,22 @@ static FreezeData SnapS7RTC [] = {
 	{OFFSET (last_used),4,INT_V}
 };
 
+#undef OFFSET
+#define OFFSET(f) Offset(f,struct SMSU1Snapshot *)
+
+static FreezeData SnapMSU1 [] = {
+    {OFFSET (Status), 1, INT_V},
+    {OFFSET (Volume), 1, INT_V},
+    {OFFSET (TrackLoaded), 1, INT_V},
+    {OFFSET (TrackLatch), 2, INT_V},
+    {OFFSET (CurrentTrack), 2, INT_V},
+    {OFFSET (ResumeTrack), 4, INT_V},
+    {OFFSET (ResumeOffset), 4, INT_V},
+    {OFFSET (DataOffsetLatch), 4, INT_V},
+    {OFFSET (DataOffset), 4, INT_V},
+    {OFFSET (AudioOffset), 4, INT_V}
+};
+
 static char ROMFilename [_MAX_PATH];
 
 void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, FreezeData *fields,
@@ -484,31 +501,6 @@ static uint8 *UnfreezeAllocBlock (STREAM stream, const char *name, int *sizeOut)
     return (block);
 }
 
-bool8 Snapshot (const char *filename)
-{
-    return (S9xFreezeGame (filename));
-}
-
-bool8 S9xFreezeGame (const char *filename)
-{
-    BufferedFileWriter stream;
-
-    if (stream.open(filename, "wb"))
-    {
-        S9xPrepareSoundForSnapshotSave (FALSE);
-        
-        S9xFreezeToStream (stream);
-
-        // Close while muted to avoid audio stutter.
-        bool8 saved = stream.close() == 0;
-
-        S9xPrepareSoundForSnapshotSave (TRUE);
-        
-        return (saved);
-    }
-    return (FALSE);
-}
-
 // Returns the state size, or 0 if it doesn't fit.
 size_t S9xFreezeToMemory (uint8 *buffer, size_t capacity)
 {
@@ -532,7 +524,7 @@ bool8 S9xUnfreezeGame (const char *filename)
 {
 	
     STREAM snapshot = NULL;
-    if (S9xOpenSnapshotFile (filename, TRUE, &snapshot))
+    if (S9xOpenSnapshotFile (filename, &snapshot))
     {
 		int result;
 		if ((result = S9xUnfreezeFromStream (snapshot)) != SUCCESS)
@@ -643,6 +635,12 @@ void S9xFreezeToStream (BufferedFileWriter& stream)
 	if(Settings.SPC7110RTC)
 	{
 		FreezeStruct (stream, "RTC", &rtc_f9, SnapS7RTC, COUNT (SnapS7RTC));
+	}
+	if (Settings.MSU1)
+	{
+		SMSU1Snapshot msu1Snapshot;
+		S9xMSU1Capture (&msu1Snapshot);
+		FreezeStruct (stream, "MSU", &msu1Snapshot, SnapMSU1, COUNT (SnapMSU1));
 	}
 
 	// Optional RetroAchievements progress block.
@@ -763,6 +761,14 @@ int S9xUnfreezeFromStream (STREAM stream)
         }
 
         if (Settings.SPC7110RTC) S9xUpdateRTC();
+
+        // Savestates without an MSU block (older ones, or from a non-MSU-1 game) leave the
+        // chip as reset above.
+        {
+            SMSU1Snapshot msu1Snapshot;
+            if (UnfreezeStruct (stream, "MSU", &msu1Snapshot, SnapMSU1, COUNT (SnapMSU1)) == SUCCESS && Settings.MSU1)
+                S9xMSU1Restore (&msu1Snapshot);
+        }
 
         result = SUCCESS;
 

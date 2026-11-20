@@ -14,7 +14,7 @@
 
 enum class FileEntryType { ParentDirectory, ChildDirectory, File };
 
-#define PARENT_DIRECTORY_LABEL "  ... Parent Directory"
+#define PARENT_DIRECTORY_LABEL "  ... Parent Folder"
 
 #define DIRECTORY_CACHE_THRESHOLD 50
 #define DIRECTORY_CACHE_VERSION 1
@@ -23,6 +23,7 @@ enum class FileEntryType { ParentDirectory, ChildDirectory, File };
 #define SECOND_SCREEN_BG_DIR    "backgrounds/second_screen"
 #define OVERLAYS_DIR            "overlays"
 #define CHEATS_DIR              "cheats"
+#define DEFAULTS_DIR            "defaults"
 
 #define CACHE_LINE_SIZE     32
 
@@ -93,6 +94,7 @@ void file3dsGoToChildDirectory(const char* childDir);
 void file3dsSetDefaultDir(bool clear);
 void file3dsSetCurrentDir(const char* targetDir = NULL);
 char *file3dsGetCurrentDir(void);
+const char *file3dsDisplayPath(const char *path);
 void file3dsGetCurrentDirName(char* output, size_t bufferSize);
 int file3dsGetCurrentDirRomCount(void);
 void file3dsGetCurrentDirCacheName(char* output, size_t bufferSize);
@@ -101,6 +103,14 @@ bool file3dsIsCurrentDirLoadedFromCache();
 void file3dsDeleteCurrentDirCache();
 
 bool file3dsGetFiles(std::vector<DirectoryEntry>& files, std::vector<SMenuTab>& menuTabs, bool showCachingIndicator = false);
+
+// Lists childDir into files and enters it.
+// A folder with exactly one ROM plus .msu or .pcm files is started instead:
+// fills msu1RomPath with "<childDir>/<rom>", stays in the current directory and returns true.
+// A msu1 folder with more than one ROM opens like any other folder.
+bool file3dsOpenChildDirectory(const char* childDir, std::vector<DirectoryEntry>& files, std::vector<SMenuTab>& menuTabs,
+                               char* msu1RomPath, size_t msu1RomPathSize);
+void file3dsSetMsu1RomPath(const char* path);
 bool file3dsThumbnailsAvailableByType(Setting::ThumbnailMode mode);
 void file3dsSetThumbnailTypeAvailable(Setting::ThumbnailMode mode, bool available);
 const char* file3dsThumbnailCacheName(Setting::ThumbnailMode mode);

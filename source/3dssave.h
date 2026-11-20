@@ -31,13 +31,17 @@ void sav3dsQuickLoad();
 
 // Defers until the worker is idle; SPC7110 RTC saves synchronously.
 void sav3dsRequestSRAMSave();
+// Writes SRAM unconditionally
+void sav3dsSaveSRAMOnUnload();
 
 // Captures the queued hotkey frame and writes asynchronously; refuses while a job is active.
 void sav3dsTakeScreenshot();
 // Renders a frame and writes synchronously; returns the PNG path in path.
 bool sav3dsTakeMenuScreenshot(char* path, size_t bufferSize);
 
-bool sav3dsIsSaveInProgress();
+bool sav3dsIsSRAMSaveInProgress();
+// Whether pausing should write SRAM.
+bool sav3dsSRAMNeedsPauseSave();
 // Quick saves and screenshots block hotkeys and defer menu entry; SRAM jobs don't.
 bool sav3dsIsQuickSaveOrScreenshotInProgress();
 // Main thread only; waitForCompletion waits for the active job and any deferred SRAM write.
@@ -49,7 +53,7 @@ void sav3dsSelectSlot(int direction);
 
 void sav3dsGetSlotPath(int slotNumber, char* out, size_t bufferSize);
 void sav3dsGetSRAMPath(char* out, size_t bufferSize);
-// Reads swizzled RGB565 pixels; capacity is in bytes.
-bool sav3dsReadThumbnail(const char* path, u16* pixels, size_t capacity, int* width, int* height);
+// Reads swizzled RGB565 pixels into a SAVE_THUMBNAIL_PIXELS_SIZE buffer.
+bool sav3dsReadThumbnail(const char* path, u16* pixels, int* width, int* height);
 
 #endif
