@@ -225,13 +225,12 @@ bool gpu3dsAllocVertexList(SVertexListInfo *info)
         AttrInfo_AddLoader(&list->attrInfo, i, info->attrFormat[i].format, info->attrFormat[i].count);
     }
     
-    list->data_base = linearAlloc(info->sizeInBytes);
-    list->data = list->data_base;
+    list->data = linearAlloc(info->sizeInBytes);
     list->vertexSize = info->vertexSize;
     list->sizeInBytes = info->sizeInBytes;
     list->count = 0;
     list->from = 0;
-    list->flip = 1;
+    list->flip = 0;
 
     return true;
 }
@@ -240,19 +239,25 @@ void gpu3dsDeallocVertexList(SVertexList *list)
 {
     if (list == nullptr)
         return;
+    
+    void* ptr = list->data;
+    // Restore original pointer
+    if (list->flip) {
+        ptr -= list->sizeInBytes / 2;
+    }
 
-    linearFree(list->data_base);
+    linearFree(list->data);
 }
 
 void gpu3dsPrepareListForNextFrame(SVertexList *list, bool swap)
 {
     if (swap) {
         if (list->flip)
-            list->data = (void *)((u32)(list->data_base) + list->sizeInBytes / 2);
+            list->data -= list->sizeInBytes / 2;
         else
-            list->data = list->data_base;
-            
-        list->flip = 1 - list->flip;
+            list->data += list->sizeInBytes / 2;
+
+        list->flip = !list->flip;
     }
 
     list->count = 0;
@@ -409,11 +414,11 @@ void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
     gpu3dsSetAttributeBuffers(list);
 
     if (indices != NULL) {
-        C3D_DrawElements(list->primitive, count, C3D_UNSIGNED_SHORT, indices);
+        C3D_DrawElements((GPU_Primitive_t) list->primitive, count, C3D_UNSIGNED_SHORT, indices);
     } else if (from >= 0) {
-        C3D_DrawArrays(list->primitive, from, count);
+        C3D_DrawArrays((GPU_Primitive_t) list->primitive, from, count);
     } else {
-        C3D_DrawArrays(list->primitive, list->from, list->count);
+        C3D_DrawArrays((GPU_Primitive_t) list->primitive, list->from, list->count);
 
         list->from += list->count;
         list->count = 0;

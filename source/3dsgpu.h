@@ -212,19 +212,18 @@ typedef struct
 
 typedef struct
 {
-    C3D_AttrInfo        attrInfo;
-
-    void                *data;
-    void                *data_base;
+    void                *data; // base + flip offset
     
     u32                 sizeInBytes;
     u32                 vertexSize;
     int                 count;
     int                 from;
     
-    GPU_Primitive_t     primitive;
-    SGPU_VBO_ID         id;
+    u16                 primitive; // GPU_Primitive_t
+    u8                  id;        // SGPU_VBO_ID
     bool                flip;
+
+    C3D_AttrInfo        attrInfo;
 } SVertexList;
 
 typedef union {
@@ -419,14 +418,14 @@ static inline void gpu3dsApplyRenderState(SGPURenderState *state)
 
 static inline void gpu3dsSetAttributeBuffers(SVertexList *list)
 {
-    if (GPU3DS.currentVboId != list->id)
+    if (GPU3DS.currentVboId != (SGPU_VBO_ID) list->id)
     {
 	    C3D_SetAttrInfo(&list->attrInfo);
 
 	    C3D_BufInfo *bufInfo = C3D_GetBufInfo();
 	    BufInfo_Init(bufInfo);
 	    BufInfo_Add(bufInfo, list->data, list->vertexSize, list->attrInfo.attrCount, list->attrInfo.permutation);
-	    GPU3DS.currentVboId = list->id;
+	    GPU3DS.currentVboId = (SGPU_VBO_ID) list->id;
     }
 }
 

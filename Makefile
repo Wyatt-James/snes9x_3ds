@@ -70,7 +70,7 @@ APP_ROMFS         := $(TOPDIR)/$(ROMFS)
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-WARNINGS           := -Wall -Wextra -Wreturn-type -Wwrite-strings -Wno-implicit-fallthrough -Wno-unused-parameter -Wno-missing-field-initializers -Wno-register
+WARNINGS           := -Wall -Wextra -Wreturn-type -Wwrite-strings -Wno-implicit-fallthrough -Wno-unused-parameter -Wno-missing-field-initializers -Wno-register -Wno-pointer-arith
 STRICT_WARNINGS    ?= 1
 
 ifeq ($(STRICT_WARNINGS),1)
